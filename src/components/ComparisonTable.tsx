@@ -56,8 +56,8 @@ export default function ComparisonTable({ products, latestScrapeDate }: Props) {
             className={scrapeIsStale ? `${styles.caption} ${styles.captionStale}` : styles.caption}
           >
             {scrapeIsStale
-              ? `Os preços podem estar desatualizados — última atualização a ${formatDay(latestScrapeDate)} (há ${scrapeAgeDays} dia${scrapeAgeDays === 1 ? "" : "s"})`
-              : `Última atualização: ${formatDay(latestScrapeDate)}`}
+              ? `Os preços podem estar desactualizados — última actualização a ${formatDay(latestScrapeDate)} (há ${scrapeAgeDays} dia${scrapeAgeDays === 1 ? "" : "s"})`
+              : `Última actualização: ${formatDay(latestScrapeDate)}`}
           </caption>
         )}
         <thead>
@@ -149,7 +149,7 @@ export default function ComparisonTable({ products, latestScrapeDate }: Props) {
                       {isStale && (
                         <div
                           className={styles.stale}
-                          title={`Este preço foi verificado pela última vez a ${formatDay(latest.date)}; os restantes foram atualizados mais recentemente.`}
+                          title={`Este preço foi verificado pela última vez a ${formatDay(latest.date)}; os restantes foram actualizados mais recentemente.`}
                         >
                           de {formatDay(latest.date)}
                         </div>
