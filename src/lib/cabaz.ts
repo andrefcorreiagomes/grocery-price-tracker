@@ -61,6 +61,8 @@ export interface CabazRow {
   counted: boolean;
   /** contributes to every store's total (counted, and no blockers) */
   included: boolean;
+  /** stores showing the row's cheapest price; empty when nothing was beaten */
+  lowestStores: Store[];
 }
 
 export interface CabazExclusion {
@@ -121,6 +123,46 @@ function isUsable(cell: CabazCell, allowStale: boolean): boolean {
   return cell.state === "current" || (allowStale && cell.state === "stale");
 }
 
+/**
+ * A row at quantity 0 still shows each store's price - the price of one - so
+ * the row stays informative while counting toward nothing. Shared with the
+ * table so the highlight and the rendered figure can never disagree.
+ */
+export function shownQuantity(quantity: number): number {
+  return quantity === 0 ? 1 : quantity;
+}
+
+/**
+ * Which stores get the cheapest-in-row marker.
+ *
+ * Only cells that actually render a price are eligible - a stale price held
+ * back behind the toggle shows as a dash, and marking a dash as cheapest would
+ * be nonsense.
+ *
+ * The marker means "this beat something". So it appears only when at least one
+ * other eligible price is strictly higher: a three-way tie highlights nothing,
+ * two tied at the bottom with a third above highlights both, and a row with
+ * only one price highlights nothing, because none of those beat anything.
+ *
+ * Compared in whole cents, on the same figure the cell renders. Comparing raw
+ * floats would leave two cells both reading 1.49€ with only one marked.
+ */
+function lowestInRow(
+  cells: CabazCell[],
+  quantity: number,
+  allowStale: boolean
+): Store[] {
+  const shown = shownQuantity(quantity);
+  const cents = cells.map((cell) =>
+    isUsable(cell, allowStale) ? Math.round((cell.unitPrice as number) * shown * 100) : null
+  );
+  const values = cents.filter((value): value is number => value !== null);
+  if (values.length === 0) return [];
+  const lowest = Math.min(...values);
+  if (!values.some((value) => value > lowest)) return [];
+  return STORE_ORDER.filter((_, i) => cents[i] === lowest);
+}
+
 export function buildCabaz(
   products: CabazProduct[],
   selection: SelectedItem[],
@@ -144,6 +186,7 @@ export function buildCabaz(
       blockers,
       counted,
       included: counted && blockers.length === 0,
+      lowestStores: lowestInRow(cells, item.quantity, allowStale),
     });
   }
 

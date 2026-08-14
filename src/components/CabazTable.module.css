@@ -151,9 +151,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* One green for "cheapest", used for both the per-row winner and the winning
+   total, and matching the comparison table's marker. */
+.table {
+  --cabaz-cheapest: #1a7f37;
+}
+
+.lowest {
+  font-weight: 700;
+  color: var(--cabaz-cheapest);
+}
+
 .cheapestTotal {
   font-weight: 700;
-  color: #1a7f37; /* same green as the comparison table's cheapest marker */
+  color: var(--cabaz-cheapest);
   font-variant-numeric: tabular-nums;
 }
 
@@ -218,8 +229,9 @@
     color: #fca5a5;
   }
 
-  .cheapestTotal {
-    color: #4ade80;
+  .table {
+    /* the light-mode green is too dark to read on the near-black background */
+    --cabaz-cheapest: #4ade80;
   }
 }
 

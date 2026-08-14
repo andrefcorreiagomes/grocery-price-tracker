@@ -1,4 +1,4 @@
-import type { Cabaz, CabazCell, CellState } from "@/lib/cabaz";
+import { shownQuantity, type Cabaz, type CabazCell, type CellState } from "@/lib/cabaz";
 import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
 import styles from "./CabazTable.module.css";
 
@@ -36,10 +36,11 @@ function blockerPhrase(state: CellState, storeLabel: string): string {
   }
 }
 
-function Cell({ cell, quantity, allowStale }: {
+function Cell({ cell, quantity, allowStale, isLowest }: {
   cell: CabazCell;
   quantity: number;
   allowStale: boolean;
+  isLowest: boolean;
 }) {
   if (cell.unitPrice === null) {
     const label =
@@ -59,10 +60,10 @@ function Cell({ cell, quantity, allowStale }: {
   const captured = cell.capturedOn ? formatDay(cell.capturedOn) : null;
   // At quantity 0 the row is kept on screen precisely so its prices stay
   // readable, so show the price of one rather than a useless 0.00€.
-  const shown = quantity === 0 ? 1 : quantity;
+  const shown = shownQuantity(quantity);
 
   return (
-    <td>
+    <td className={isLowest ? styles.lowest : undefined}>
       {withheld ? (
         <span className={styles.withheld} title="Preço desactualizado — active a opção acima para o usar.">
           —
@@ -146,7 +147,13 @@ export default function CabazTable({
                   </div>
                 </td>
                 {row.cells.map((cell, i) => (
-                  <Cell key={i} cell={cell} quantity={row.quantity} allowStale={allowStale} />
+                  <Cell
+                    key={i}
+                    cell={cell}
+                    quantity={row.quantity}
+                    allowStale={allowStale}
+                    isLowest={row.lowestStores.includes(STORE_ORDER[i])}
+                  />
                 ))}
                 <td>
                   {/* deliberately not a ✕: that glyph already means "esta loja
