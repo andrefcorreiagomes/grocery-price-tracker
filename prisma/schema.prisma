@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  category    String? // top-level menu entry, e.g. "Carne"
+  subcategory String? // e.g. "Frango" - optional, product still shows under category if empty
+  unit        String? // canonical comparison base, e.g. "L" or "kg" - prices are normalized to this for fair comparison across stores
+  ean         String? // set only when identical across all listings (national-brand case)
+
+  listings StoreListing[]
+}
+
+model StoreListing {
+  id             String @id @default(cuid())
+  product        Product @relation(fields: [productId], references: [id])
+  productId      String
+  store          Store
+  storeProductId String // sku/id at that store
+  url            String // product page URL used to scrape
+  ean            String? // barcode as scraped from this store; null if unavailable
+  packageSize    Float   @default(1) // this store's package size, expressed in Product.unit (e.g. 0.75 for 750ml when unit is "L")
+
+  snapshots PriceSnapshot[]
+
+  @@unique([store, storeProductId])
+}
+
+model PriceSnapshot {
+  id             String   @id @default(cuid())
+  storeListing   StoreListing @relation(fields: [storeListingId], references: [id])
+  storeListingId String
+  date           DateTime // truncated to day
+  price          Float
+
+  // Promotion state as published on the day. Note the three stores expose very
+  // different amounts of this, so two of the fields are frequently null:
+  //   Continente - publishes the pre-promo price, but no end date
+  //   Pingo Doce - publishes an end date (day/month only), but no pre-promo price
+  //   Auchan     - publishes an end date, but no pre-promo price
+  //
+  // `false` on any row written before this field existed means "unknown, never
+  // captured" - NOT "verified not on promotion". A page only ever shows today's
+  // state, so historical promo status cannot be backfilled.
+  onPromotion  Boolean   @default(false)
+  regularPrice Float?    // price before the discount; Continente only
+  promoEndsAt  DateTime? // Auchan gives a full date; Pingo Doce gives day/month and the year is inferred
+
+  capturedAt     DateTime @default(now())
+
+  @@unique([storeListingId, date])
+}
+
+enum Store {
+  CONTINENTE
+  PINGO_DOCE
+  AUCHAN
+}

@@ -1,0 +1,496 @@
+<!--
+  Product-discovery review artifact template.
+
+  This is a starting point, not a fill-in-the-blanks form - adapt wording,
+  section count, and which examples apply to the actual search term. Keep
+  the overall shape (masthead with counts, "Proposed groups", "Didn't make
+  it into a group" ledger, optional "Flagged" section, footnote) since
+  that's the structure the workflow in SKILL.md assumes, but write real
+  prose for the group notes and ledger reasons - don't leave placeholder
+  text in the published artifact.
+
+  Swap the <title> and the H1 for the actual search term. Delete this
+  comment block before publishing.
+-->
+<title>Carapau — Product Discovery Review</title>
+<style>
+  :root {
+    --bg: #eef2f1;
+    --surface: #ffffff;
+    --surface-2: #f5f8f7;
+    --ink: #16211f;
+    --ink-soft: #4b5b58;
+    --ink-faint: #7c8d89;
+    --border: #d8dfda;
+    --border-soft: #e6ebe8;
+    --accent: #0c6e68;
+    --accent-ink: #06413d;
+    --accent-soft: #dcefec;
+    --warn: #a8631e;
+    --warn-soft: #f5e6d3;
+    --warn-ink: #5c380d;
+    --mute-soft: #eceeec;
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1614;
+      --surface: #161f1c;
+      --surface-2: #131b19;
+      --ink: #e7eeea;
+      --ink-soft: #9aaca6;
+      --ink-faint: #6c8079;
+      --border: #2a3733;
+      --border-soft: #212b28;
+      --accent: #4fbfb3;
+      --accent-ink: #bdeae4;
+      --accent-soft: #16302d;
+      --warn: #e0a85c;
+      --warn-soft: #3a2c18;
+      --warn-ink: #f2d3a4;
+      --mute-soft: #1c2522;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1614;
+    --surface: #161f1c;
+    --surface-2: #131b19;
+    --ink: #e7eeea;
+    --ink-soft: #9aaca6;
+    --ink-faint: #6c8079;
+    --border: #2a3733;
+    --border-soft: #212b28;
+    --accent: #4fbfb3;
+    --accent-ink: #bdeae4;
+    --accent-soft: #16302d;
+    --warn: #e0a85c;
+    --warn-soft: #3a2c18;
+    --warn-ink: #f2d3a4;
+    --mute-soft: #1c2522;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef2f1;
+    --surface: #ffffff;
+    --surface-2: #f5f8f7;
+    --ink: #16211f;
+    --ink-soft: #4b5b58;
+    --ink-faint: #7c8d89;
+    --border: #d8dfda;
+    --border-soft: #e6ebe8;
+    --accent: #0c6e68;
+    --accent-ink: #06413d;
+    --accent-soft: #dcefec;
+    --warn: #a8631e;
+    --warn-soft: #f5e6d3;
+    --warn-ink: #5c380d;
+    --mute-soft: #eceeec;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+
+  /* ---------- header / ledger stamp ---------- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-bottom: 1.75rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 400;
+    letter-spacing: 0.005em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent-ink);
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .masthead-meta strong {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- section headings ---------- */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 2.75rem 0 1rem;
+  }
+  .section-head h2 {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 400;
+    margin: 0;
+  }
+  .section-note {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+  .section-note.top {
+    margin: -0.5rem 0 1.5rem;
+  }
+
+  /* ---------- group card ---------- */
+  .group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 1.1rem 1.3rem 1.3rem;
+    margin-bottom: 1rem;
+  }
+  .group.flagged { border-left-color: var(--warn); }
+  .group.solo { border-left-color: var(--ink-faint); }
+
+  .group-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    margin-bottom: 0.15rem;
+  }
+  .group-name {
+    font-family: var(--font-display);
+    font-size: 1.18rem;
+  }
+  .status-pill {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.55rem;
+    border-radius: 99px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+  .status-pill.warn { background: var(--warn-soft); color: var(--warn-ink); }
+  .status-pill.solo { background: var(--mute-soft); color: var(--ink-faint); }
+
+  .group-note {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    margin: 0.3rem 0 0.9rem;
+    max-width: 68ch;
+  }
+
+  .stores {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  @media (max-width: 640px) {
+    .stores { grid-template-columns: 1fr; }
+  }
+
+  .store-slot {
+    border: 1px solid var(--border-soft);
+    border-radius: 3px;
+    padding: 0.7rem 0.8rem;
+    background: var(--surface-2);
+    min-width: 0;
+  }
+  .store-slot.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    font-style: italic;
+    border-style: dashed;
+    min-height: 4.6rem;
+  }
+  .store-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.35rem;
+  }
+  .store-slot .item-name {
+    font-size: 0.88rem;
+    line-height: 1.3;
+    margin-bottom: 0.4rem;
+    min-height: 2.3em;
+  }
+  .item-name a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .item-name a:hover { border-color: var(--ink); }
+  .item-name a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .price {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.03em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+
+  /* ---------- ledger table (orphans / excluded / alternates) ---------- */
+  .ledger {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .ledger-wrap { overflow-x: auto; }
+  .ledger th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 400;
+    padding: 0 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .ledger td {
+    padding: 0.55rem 0.6rem;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+  }
+  .ledger tr:last-child td { border-bottom: none; }
+  .ledger .store-cell {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .ledger .price-cell {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .ledger a {
+    color: var(--ink);
+  }
+  .ledger .reason {
+    color: var(--ink-soft);
+    max-width: 30ch;
+  }
+
+  .footnote {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    max-width: 70ch;
+  }
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <span class="eyebrow">Search-term review — grocery price tracker</span>
+    <!-- H1: the search term, optionally with a plain-English gloss in <em> -->
+    <h1>Carapau <em>— horse mackerel</em></h1>
+    <div class="masthead-meta">
+      <span>Continente · Pingo Doce · Auchan</span>
+      <span><strong>N</strong> results found</span>
+      <span><strong>N</strong> groups ready</span>
+      <span><strong>N</strong> set aside</span>
+    </div>
+  </div>
+
+  <p class="section-note top">
+    Below: every result the search-page extractors pulled back for “<em>term</em>” at
+    each store, sorted into proposed comparison groups. Nothing here is
+    written to <code>tracked-products.ts</code> yet — this is the checkpoint
+    before that happens.
+  </p>
+
+  <div class="section-head">
+    <h2>Proposed groups</h2>
+    <span class="section-note">ready to track as-is</span>
+  </div>
+
+  <!--
+    One .group per candidate product. Copy this block per group.
+    - status-pill text: "N / 3 stores"
+    - group-note: only needed when something about the grouping isn't
+      obvious at a glance (a missing store, a form-split decision, etc.)
+    - one .store-slot per store in a fixed order (Continente, Pingo Doce,
+      Auchan) - use `.store-slot.empty` with the text "not carried" when a
+      store doesn't have a match, don't just omit the slot
+    - .tag: brand/form info that matters for judging the match at a glance
+      ("own brand", "frozen · Filmar", etc.)
+  -->
+  <div class="group">
+    <div class="group-top">
+      <span class="group-name">Example Group Name</span>
+      <span class="status-pill">3 / 3 stores</span>
+    </div>
+    <p class="group-note">Optional one-line note on why this grouping is what it is.</p>
+    <div class="stores">
+      <div class="store-slot">
+        <div class="store-label">Continente</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+      <div class="store-slot">
+        <div class="store-label">Pingo Doce</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+      <div class="store-slot">
+        <div class="store-label">Auchan</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Example of a 2-store group with one store missing -->
+  <div class="group">
+    <div class="group-top">
+      <span class="group-name">Example Partial Group</span>
+      <span class="status-pill">2 / 3 stores</span>
+    </div>
+    <p class="group-note">Say plainly why the missing store is missing (doesn't carry it, vs. genuinely not checked).</p>
+    <div class="stores">
+      <div class="store-slot">
+        <div class="store-label">Continente</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+      <div class="store-slot empty">not carried</div>
+      <div class="store-slot">
+        <div class="store-label">Auchan</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Only include this section when there's a genuine judgment call left
+    after applying the form-splitting and price-sanity-check principles -
+    not as a default dumping ground. Delete the whole section if unused.
+  -->
+  <div class="section-head">
+    <h2>Flagged — needs your call</h2>
+    <span class="section-note">a match exists, but something about it is off</span>
+  </div>
+
+  <div class="group flagged">
+    <div class="group-top">
+      <span class="group-name">Example Flagged Group</span>
+      <span class="status-pill warn">reason for the flag</span>
+    </div>
+    <p class="group-note">Explain exactly what's off and what you'd recommend, but let the user decide.</p>
+    <div class="stores">
+      <div class="store-slot">
+        <div class="store-label">Continente</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">own brand</span></div>
+      </div>
+      <div class="store-slot empty">not carried</div>
+      <div class="store-slot">
+        <div class="store-label">Auchan</div>
+        <div class="item-name"><a href="#" target="_blank" rel="noopener">Product name</a></div>
+        <div class="price-row"><span class="price">0,00&nbsp;€/kg</span><span class="tag">flag detail here</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Didn't make it into a group</h2>
+    <span class="section-note">shown so nothing searched is invisible</span>
+  </div>
+
+  <!--
+    One row per leftover result. Every "reason" should be specific enough
+    that the user could disagree with it - "excluded" alone isn't a reason.
+    Common reason categories seen so far: single-store hit, wrong category,
+    duplicate SKU at the same store (name the one that was kept), mismatched
+    form (fresh vs. frozen etc.), price anomaly worth a second look.
+  -->
+  <div class="ledger-wrap">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Store</th>
+          <th>Price</th>
+          <th>Why it's here</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="#" target="_blank" rel="noopener">Product name</a></td>
+          <td class="store-cell">Store</td>
+          <td class="price-cell">0,00&nbsp;€/kg</td>
+          <td class="reason">Specific reason it was set aside.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="footnote">
+    Extraction pulled straight from each store's server-rendered search
+    results (no browser automation). Grouping and any flags above are a
+    judgment call, not an algorithm; nothing here touches the database
+    until you say go.
+  </p>
+
+</div>

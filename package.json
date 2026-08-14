@@ -6,12 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "tsx src/scripts/seed.ts",
+    "scrape": "tsx src/scripts/scrape-daily.ts"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "better-sqlite3": "^12.11.1",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
     "next": "16.2.10",
+    "prisma": "^7.8.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "recharts": "^3.9.2",
+    "tsx": "^4.23.1"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -20,5 +30,13 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true,
+    "prisma@7.8.0": true,
+    "@prisma/engines@7.8.0": true,
+    "esbuild@0.28.1": true,
+    "better-sqlite3@12.11.1": true
   }
 }

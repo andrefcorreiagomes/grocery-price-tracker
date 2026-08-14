@@ -1,0 +1,54 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.nameButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nameButton:hover {
+  text-decoration: underline;
+}
+
+.historyLink {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  text-decoration: none;
+}
+
+.historyLink:hover {
+  opacity: 1;
+}
+
+.unit {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.storeLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.storeButton {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  color: inherit;
+  text-decoration: none;
+}
+
+.storeButton:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}

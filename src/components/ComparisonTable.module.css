@@ -1,0 +1,148 @@
+/*
+ * The table is four columns of prices and cannot honestly be squeezed into a
+ * phone screen, so it scrolls sideways inside its own container instead. This
+ * wrapper is what makes that possible: globals.css sets `overflow-x: hidden` on
+ * html/body to stop the *page* scrolling sideways, which would otherwise clip
+ * the table with no way to reach the hidden columns. A descendant scroll
+ * container is unaffected by that rule.
+ */
+.scroller {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  /* Forces the scroller to actually scroll rather than crushing four columns
+     into 375px. Below this width the columns stop being readable. */
+  min-width: 34rem;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.table th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/*
+ * Pins the product name while the three store columns scroll under it - without
+ * this the sideways scroll is unusable, because you lose track of which row you
+ * are reading. The explicit background is load-bearing, not decoration: a
+ * transparent sticky cell lets the scrolling cells show straight through it.
+ */
+.productColumn {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--background);
+}
+
+.caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/*
+ * The whole dataset is old - every price on screen is suspect, so this one is
+ * allowed to be loud. Red is reserved for exactly this case.
+ */
+.captionStale {
+  --stale-warning: #b91c1c;
+  font-weight: 600;
+  color: var(--stale-warning);
+}
+
+@media (prefers-color-scheme: dark) {
+  .captionStale {
+    --stale-warning: #fca5a5;
+  }
+}
+
+.cheapest {
+  font-weight: 700;
+  color: #1a7f37;
+}
+
+.noData {
+  color: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.unitPrice {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/*
+ * A single listing lagging behind the others - shown deliberately in neutral
+ * grey rather than a third accent colour. Green already means "cheapest" and
+ * amber already means "on promotion"; a third hue competing in the same cell
+ * would make all three harder to read. The loud case (nothing scraped for
+ * days) is the caption's job, not this one's.
+ */
+.stale {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  border-bottom: 1px dotted color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.empty {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/*
+ * Promotion marker. Deliberately amber rather than another green: a cell can be
+ * both the cheapest price AND discounted, and those are two different claims
+ * that need to stay separately readable. The badge also carries the word
+ * "promo" rather than relying on colour alone.
+ */
+.promoBadge {
+  --promo-accent: #b45309;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--promo-accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .promoBadge {
+    /* the light-mode amber is too dark to read on the near-black background */
+    --promo-accent: #fbbf24;
+  }
+}
+
+/* the struck-through old price / end date sitting beside the badge */
+.promoDetail {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+@media (max-width: 600px) {
+  .table th,
+  .table td {
+    padding: 0.6rem 0.7rem;
+  }
+}
