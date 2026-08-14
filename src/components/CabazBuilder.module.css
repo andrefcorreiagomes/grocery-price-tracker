@@ -1,0 +1,160 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.crumb {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.crumb:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+.crumbCurrent {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.categoryCard {
+  padding: 1.5rem 1rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  background: transparent;
+  color: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.categoryCard:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.chipActive {
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+}
+
+.productList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.productRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  cursor: pointer;
+}
+
+.productRow:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.productName {
+  flex: 1;
+}
+
+.productUnit {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.resultsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.resultsTitle {
+  font-size: 1.25rem;
+}
+
+.clear {
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.clear:hover {
+  color: var(--foreground);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  cursor: pointer;
+}

@@ -1,14 +1,11 @@
 import { prisma } from "./db";
 import { unitPrice } from "./pricing";
-import type { Store } from "@/generated/prisma/client";
+import { STORE_ORDER } from "./stores";
 
-export const STORE_LABELS: Record<Store, string> = {
-  CONTINENTE: "Continente",
-  PINGO_DOCE: "Pingo Doce",
-  AUCHAN: "Auchan",
-};
-
-export const STORE_ORDER: Store[] = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"];
+// Re-exported so the many existing `from "@/lib/queries"` imports keep working;
+// the definitions themselves live in ./stores so database-free modules can use
+// them without importing Prisma.
+export { STORE_LABELS, STORE_ORDER } from "./stores";
 
 export async function getCategories(): Promise<string[]> {
   const rows = await prisma.product.findMany({

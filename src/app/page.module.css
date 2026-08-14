@@ -10,6 +10,36 @@
   margin: 0.5rem 0 2rem;
 }
 
+/*
+ * Deliberately not one of the category cards: it is a different kind of action,
+ * so it sits above the grid, spans the full width and is the only filled
+ * element on the page.
+ */
+.cabazCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.4rem 1.5rem;
+  margin-bottom: 2rem;
+  border-radius: 12px;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.cabazCard:hover {
+  background: color-mix(in srgb, var(--foreground) 85%, var(--background));
+}
+
+.cabazTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.cabazSubtitle {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

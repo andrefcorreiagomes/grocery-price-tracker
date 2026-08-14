@@ -1,0 +1,231 @@
+/* Same scroll-container pattern as ComparisonTable: globals.css hides overflow
+   on html/body, so a wide table needs its own scroller or it is simply clipped. */
+.scroller {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 40rem; /* wider than the comparison table: extra quantity + remove columns */
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.table thead th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/* Pins the product name while the store columns scroll under it. The explicit
+   background is load-bearing - a transparent sticky cell is scrolled through. */
+.productColumn {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--background);
+}
+
+.unit {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.excludedRow {
+  /* still fully readable - the row is informative, not disabled */
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.excludedRow .productColumn {
+  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+}
+
+/*
+ * Quantity 0. Deliberately a different treatment from .excludedRow: that one
+ * means "the data cannot compare this", this one means "you chose not to buy
+ * it". Same-looking rows would blur the distinction the feature is built on, so
+ * this fades rather than tints - the prices stay legible, the row reads as
+ * switched off.
+ */
+.uncountedRow {
+  opacity: 0.45;
+}
+
+.missing {
+  color: var(--cabaz-missing);
+}
+
+.cross {
+  --cabaz-missing: #b91c1c;
+  color: var(--cabaz-missing);
+  font-weight: 700;
+  cursor: help;
+}
+
+.withheld {
+  color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  cursor: help;
+}
+
+.staleNote {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  border-bottom: 1px dotted color-mix(in srgb, var(--foreground) 35%, transparent);
+  display: inline-block;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stepper button {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.quantity {
+  min-width: 1.2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.remove,
+.inlineRemove {
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  cursor: pointer;
+  padding: 0.2rem;
+}
+
+.remove:hover,
+.inlineRemove:hover {
+  color: var(--foreground);
+}
+
+.inlineRemove {
+  text-decoration: underline;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.table tfoot th,
+.table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  font-size: 1.05rem;
+}
+
+.total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cheapestTotal {
+  font-weight: 700;
+  color: #1a7f37; /* same green as the comparison table's cheapest marker */
+  font-variant-numeric: tabular-nums;
+}
+
+.scope,
+.staleWarning,
+.noComparison {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.scope {
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+}
+
+.staleWarning {
+  color: #b45309;
+}
+
+.noComparison {
+  color: #b91c1c;
+}
+
+.exclusions {
+  margin-top: 1.5rem;
+  padding: 1rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.exclusionsTitle {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  margin-bottom: 0.6rem;
+}
+
+.exclusions ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.empty {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .cross {
+    --cabaz-missing: #fca5a5;
+  }
+
+  .staleWarning {
+    color: #fbbf24;
+  }
+
+  .noComparison {
+    color: #fca5a5;
+  }
+
+  .cheapestTotal {
+    color: #4ade80;
+  }
+}
+
+@media (max-width: 600px) {
+  .table th,
+  .table td {
+    padding: 0.55rem 0.6rem;
+  }
+}

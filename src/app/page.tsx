@@ -16,6 +16,13 @@ export default async function Home() {
         Escolha uma categoria para comparar.
       </p>
 
+      <Link href="/cabaz" className={styles.cabazCard}>
+        <span className={styles.cabazTitle}>Montar o meu cabaz</span>
+        <span className={styles.cabazSubtitle}>
+          Escolha vários produtos e compare o total nas três lojas
+        </span>
+      </Link>
+
       <div className={styles.grid}>
         {categories.map((category) => (
           <Link

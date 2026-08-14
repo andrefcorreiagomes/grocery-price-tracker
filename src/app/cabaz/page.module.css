@@ -1,0 +1,25 @@
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  width: 100%;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.intro {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+  margin: 0.5rem 0 2rem;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+@media (max-width: 600px) {
+  .main {
+    padding: 1.5rem 1rem;
+  }
+}
