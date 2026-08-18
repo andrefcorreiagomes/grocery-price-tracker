@@ -6,23 +6,13 @@ import type { SearchHit } from "./types";
 /** Auchan honours `start`/`sz` directly on the public search URL. */
 const SEARCH_URL = "https://www.auchan.pt/pt/pesquisa";
 
-export async function searchAuchan(
-  term: string,
-  limit = SEARCH_LIMIT
-): Promise<SearchHit[]> {
-  // asking for `sz = limit` means one request covers the whole cap
-  return collectHits(
-    (start) => fetchPage(term, start, limit),
-    (hit) => hit.id,
-    limit,
-    limit
-  );
-}
-
-async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
-  const html = await fetchHtml(
-    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
-  );
+/**
+ * Parse Auchan product tiles out of a grid/search HTML fragment. Shared by the
+ * search extractor here and the catalogue crawler. Each tile carries its data
+ * split across two JSON attributes: `data-gtm` (id/name/price/brand/category)
+ * and `data-urls` (the absolute product url).
+ */
+export function parseAuchanTiles(html: string): SearchHit[] {
   const $ = cheerio.load(html);
   const hits: SearchHit[] = [];
 
@@ -52,4 +42,24 @@ async function fetchPage(term: string, start: number, size: number): Promise<Sea
   });
 
   return hits;
+}
+
+export async function searchAuchan(
+  term: string,
+  limit = SEARCH_LIMIT
+): Promise<SearchHit[]> {
+  // asking for `sz = limit` means one request covers the whole cap
+  return collectHits(
+    (start) => fetchPage(term, start, limit),
+    (hit) => hit.id,
+    limit,
+    limit
+  );
+}
+
+async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
+  const html = await fetchHtml(
+    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
+  );
+  return parseAuchanTiles(html);
 }
