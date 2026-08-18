@@ -155,7 +155,7 @@ export function matchableEan(raw: string | null | undefined): string | null {
 // Candidate classification
 // ---------------------------------------------------------------------------
 
-export type Rung = "ean" | "exact" | "fuzzy" | "reject";
+export type Rung = "ean" | "exact" | "cross-size" | "fuzzy" | "reject";
 
 export interface Candidate {
   name: string;
@@ -171,16 +171,23 @@ export interface Classification {
   nameSimilarity: number;
   sizeKnown: boolean;
   sizeMatches: boolean;
+  /** larger total / smaller total when both sizes are known (1 = equal); null otherwise */
+  sizeRatio: number | null;
   /** relative euro-per-base-unit gap, when both unit prices are known */
   priceGap: number | null;
-  /** false when a hard signal contradicts the match (EAN, or price divergence) */
+  /** false when a hard signal contradicts the match (same-size EAN clash, or price divergence) */
   vetoed: boolean;
   reason: string;
 }
 
 const EXACT_NAME = 0.7;
 const FUZZY_NAME = 0.45;
-/** euro-per-kg this far apart is evidence they are not the same product. */
+/**
+ * euro-per-kg this far apart is evidence the two are not the same product. This
+ * is the guard that still bites on cross-size matches: two Nutella jars of
+ * different sizes should have SIMILAR euro/kg, so a wide gap there is suspicious
+ * even though the pack prices differ.
+ */
 const PRICE_GUARD = 0.4;
 
 function brandsEqual(a: string, b: string): boolean {
@@ -188,16 +195,38 @@ function brandsEqual(a: string, b: string): boolean {
 }
 
 /**
- * Score a candidate pair. Never returns a decision to ship - "ean"/"exact" mean
- * "safe to auto-track unless vetoed", "fuzzy" means "send to review", "reject"
- * means "not the same product". The price guard and a real EAN conflict set
- * `vetoed`, which a caller must treat as overriding the rung however good the
+ * Score a candidate pair.
+ *
+ * Two different questions hide inside "do these match", and this project cares
+ * about both:
+ *   - same SKU?         the identical 400 g jar. EAN-confirmable, sizes equal.
+ *   - same product?     Nutella at whatever size each store stocks. Compared on
+ *                       euro/kg, which is the whole point of the app's unit
+ *                       pricing - a store selling only the 800 g jar should
+ *                       still be comparable to one selling only the 400 g.
+ *
+ * So a size mismatch is NOT a rejection - it demotes the pair to "cross-size",
+ * which goes to review carrying the size ratio, never auto-tracked. And an EAN
+ * conflict only vetoes when the sizes are EQUAL (same size + different barcode =
+ * genuinely different products, e.g. two coffees a manufacturer numbers
+ * separately); different size + different barcode is expected and must not veto.
+ *
+ * Rungs: "ean"/"exact" = safe to auto-track unless vetoed; "cross-size"/"fuzzy"
+ * = send to review; "reject" = not the same product. `vetoed` (a same-size EAN
+ * clash, or euro/unit divergence) overrides a positive rung however good the
  * name looks.
  */
 export function classifyCandidate(a: Candidate, b: Candidate): Classification {
   const nameSimilarity = tokenSimilarity(a.name, b.name);
   const sizeKnown = a.size !== null && b.size !== null;
   const sizeMatches = sizeKnown && sizesMatch(a.size as ParsedSize, b.size as ParsedSize);
+
+  let sizeRatio: number | null = null;
+  if (sizeKnown) {
+    const x = (a.size as ParsedSize).total;
+    const y = (b.size as ParsedSize).total;
+    sizeRatio = Math.min(x, y) > 0 ? Math.max(x, y) / Math.min(x, y) : null;
+  }
 
   let priceGap: number | null = null;
   if (a.unitPrice !== null && b.unitPrice !== null) {
@@ -211,44 +240,47 @@ export function classifyCandidate(a: Candidate, b: Candidate): Classification {
   const eanAgree = ea !== null && eb !== null && ea === eb;
   const eanConflict = ea !== null && eb !== null && ea !== eb;
 
-  // A real barcode conflict is the strongest signal there is: different products.
-  if (eanConflict) {
-    return {
-      rung: "reject", nameSimilarity, sizeKnown, sizeMatches, priceGap,
-      vetoed: true, reason: "barcodes differ",
-    };
-  }
-
+  const base = { nameSimilarity, sizeKnown, sizeMatches, sizeRatio, priceGap };
   const priceVeto = priceGap !== null && priceGap > PRICE_GUARD;
+
+  // Same-size (or size-unknown) barcode clash = genuinely different products.
+  // A cross-size clash is expected, so it falls through to the size logic below.
+  if (eanConflict && !(sizeKnown && !sizeMatches)) {
+    return { ...base, rung: "reject", vetoed: true, reason: "same-size barcodes differ" };
+  }
 
   if (eanAgree) {
     return {
-      rung: "ean", nameSimilarity, sizeKnown, sizeMatches, priceGap,
-      vetoed: priceVeto,
+      ...base, rung: "ean", vetoed: priceVeto,
       reason: priceVeto ? "barcodes agree but euro/unit diverges" : "barcodes agree",
     };
   }
 
   const sameBrand = brandsEqual(a.brand, b.brand);
 
+  // Clean same-size match: safe to auto-track.
   if (sameBrand && sizeMatches && nameSimilarity >= EXACT_NAME) {
     return {
-      rung: "exact", nameSimilarity, sizeKnown, sizeMatches, priceGap,
-      vetoed: priceVeto,
+      ...base, rung: "exact", vetoed: priceVeto,
       reason: priceVeto ? "exact match but euro/unit diverges" : "brand+size+name",
     };
   }
 
-  if (nameSimilarity >= FUZZY_NAME && (!sizeKnown || sizeMatches)) {
+  // Same product line, different pack size: compare on euro/kg, but a human
+  // confirms it (packaging economies make big size gaps quietly misleading).
+  if (nameSimilarity >= FUZZY_NAME && sizeKnown && !sizeMatches) {
     return {
-      rung: "fuzzy", nameSimilarity, sizeKnown, sizeMatches, priceGap,
-      vetoed: false, reason: "needs review",
+      ...base, rung: "cross-size", vetoed: priceVeto,
+      reason: priceVeto
+        ? `different size (${sizeRatio?.toFixed(1)}x) and euro/unit diverges`
+        : `same product, different size (${sizeRatio?.toFixed(1)}x)`,
     };
   }
 
-  return {
-    rung: "reject", nameSimilarity, sizeKnown, sizeMatches, priceGap,
-    vetoed: false,
-    reason: sizeKnown && !sizeMatches ? "different size" : "low name similarity",
-  };
+  // Decent name, size matches or unknown: uncertain, review.
+  if (nameSimilarity >= FUZZY_NAME) {
+    return { ...base, rung: "fuzzy", vetoed: priceVeto, reason: "needs review" };
+  }
+
+  return { ...base, rung: "reject", vetoed: false, reason: "low name similarity" };
 }
