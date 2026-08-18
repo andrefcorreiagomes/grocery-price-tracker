@@ -24,7 +24,7 @@ model Product {
 }
 
 model StoreListing {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   product        Product @relation(fields: [productId], references: [id])
   productId      String
   store          Store
@@ -39,7 +39,7 @@ model StoreListing {
 }
 
 model PriceSnapshot {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   storeListing   StoreListing @relation(fields: [storeListingId], references: [id])
   storeListingId String
   date           DateTime // truncated to day
@@ -55,10 +55,10 @@ model PriceSnapshot {
   // captured" - NOT "verified not on promotion". A page only ever shows today's
   // state, so historical promo status cannot be backfilled.
   onPromotion  Boolean   @default(false)
-  regularPrice Float?    // price before the discount; Continente only
+  regularPrice Float? // price before the discount; Continente only
   promoEndsAt  DateTime? // Auchan gives a full date; Pingo Doce gives day/month and the year is inferred
 
-  capturedAt     DateTime @default(now())
+  capturedAt DateTime @default(now())
 
   @@unique([storeListingId, date])
 }
@@ -67,4 +67,39 @@ enum Store {
   CONTINENTE
   PINGO_DOCE
   AUCHAN
+}
+
+/// Raw per-store catalogue built by the discovery crawl: every food product a
+/// store lists, before any cross-store matching. Deliberately separate from
+/// Product / StoreListing, which are the *curated, tracked* comparisons the site
+/// shows - this table is the wide, messy input the matcher reads from, not
+/// output anyone sees. A crawler (not built yet) upserts into it.
+model CatalogueProduct {
+  id             String  @id @default(cuid())
+  store          Store
+  storeProductId String // the store's own SKU / id
+  name           String
+  brand          String? // as listed; own-brand / empty is handled by the matcher, not here
+  categoryPath   String? // the store's OWN path, e.g. "mercearia/conservas/..."; not the app taxonomy
+  url            String // product page URL
+
+  // last-crawled listing price - feeds the matcher's unit-price guard, and is
+  // NOT authoritative price history (that stays in PriceSnapshot for tracked products)
+  price Float?
+
+  // Size and barcode come from candidate ENRICHMENT (a product-page fetch), not
+  // the listing crawl - tiles carry neither reliably. Null until enriched.
+  packageSize   Float? // total base quantity in `unit`, e.g. 0.4 for 400 g when unit is "kg"
+  unit          String? // "kg" or "l"
+  ean           String? // raw barcode as scraped; may be a GS1 prefix-2 scale ticket
+  eanNormalized String? // GTIN-14, and null whenever `ean` is restricted-circulation or invalid - the ONLY field safe to match on
+
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  enrichedAt  DateTime? // when the product page was last fetched for size/EAN; null = never enriched
+
+  @@unique([store, storeProductId])
+  @@index([store, brand]) // brand blocking
+  @@index([store, categoryPath]) // category blocking
+  @@index([eanNormalized]) // EAN match / veto
 }
