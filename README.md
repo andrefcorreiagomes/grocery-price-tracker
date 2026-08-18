@@ -204,8 +204,11 @@ product's current URL and updating `data/tracked-products.ts`.
 
 ## Notes
 
-- EAN (barcode) is captured when available, but not guaranteed for every
-  store/listing (e.g. Continente only exposes it once a delivery store is
-  selected in-session, and Pingo Doce doesn't appear to expose it at all on
-  the product page). It's a nice-to-have sanity check, not required for
-  price tracking to work.
+- EAN (barcode) is captured when available, but coverage varies by store.
+  Continente publishes it on every product page (as an `?ean=` value in the
+  page HTML) and Auchan in its `ld+json` (`gtin`); Pingo Doce does not appear
+  to expose it at all. A caveat when comparing across stores: weighed and
+  counter goods carry GS1 restricted-circulation codes (prefix `2`) that each
+  retailer mints for itself, so they identify a scale ticket rather than a
+  product and must not be matched between stores. EAN is a sanity check and a
+  cross-store match signal, not required for price tracking to work.
