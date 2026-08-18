@@ -17,23 +17,14 @@ interface GtmItem {
 const SEARCH_URL =
   "https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Search-Show";
 
-export async function searchPingoDoce(
-  term: string,
-  limit = SEARCH_LIMIT
-): Promise<SearchHit[]> {
-  // asking for `sz = limit` means one request covers the whole cap
-  return collectHits(
-    (start) => fetchPage(term, start, limit),
-    (hit) => hit.id,
-    limit,
-    limit
-  );
-}
-
-async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
-  const html = await fetchHtml(
-    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
-  );
+/**
+ * Parse Pingo Doce product tiles out of a Search-Show HTML fragment. Shared by
+ * the search extractor here and the catalogue crawler. Each tile carries its
+ * data in a `data-gtm-info` JSON attribute whose `items[0]` holds the fields;
+ * in-house department labels ("Nossa Peixaria" etc.) are folded to "Pingo Doce"
+ * by `normalizePingoDoceBrand`.
+ */
+export function parsePingoDoceTiles(html: string): SearchHit[] {
   const $ = cheerio.load(html);
   const hits: SearchHit[] = [];
 
@@ -64,4 +55,24 @@ async function fetchPage(term: string, start: number, size: number): Promise<Sea
   });
 
   return hits;
+}
+
+export async function searchPingoDoce(
+  term: string,
+  limit = SEARCH_LIMIT
+): Promise<SearchHit[]> {
+  // asking for `sz = limit` means one request covers the whole cap
+  return collectHits(
+    (start) => fetchPage(term, start, limit),
+    (hit) => hit.id,
+    limit,
+    limit
+  );
+}
+
+async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
+  const html = await fetchHtml(
+    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
+  );
+  return parsePingoDoceTiles(html);
 }

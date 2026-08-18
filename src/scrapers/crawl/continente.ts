@@ -1,7 +1,8 @@
 import { fetchHtml } from "../http";
 import { parseContinenteTiles } from "../search/continente";
 import type { SearchHit } from "../search/types";
-import { CONTINENTE_FOOD_CATEGORIES, type CrawlCategory } from "./continente-categories";
+import { CONTINENTE_FOOD_CATEGORIES } from "./continente-categories";
+import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
 
 /**
  * Catalogue crawler for Continente. Walks a food category's grid endpoint page
@@ -13,12 +14,6 @@ import { CONTINENTE_FOOD_CATEGORIES, type CrawlCategory } from "./continente-cat
 const GRID_URL =
   "https://www.continente.pt/on/demandware.store/Sites-continente-Site/default/Search-UpdateGrid";
 const PAGE_SIZE = 35; // Continente clamps `sz` to 35 whatever we ask; walk `start`
-
-export interface CrawlProgress {
-  category: CrawlCategory;
-  page: number;
-  collected: number;
-}
 
 /**
  * Fetch every product in one category. Pages `start` by 35 until a page brings
@@ -56,21 +51,28 @@ export async function crawlContinenteCategory(
   return [...byId.values()];
 }
 
-export interface CategoryResult {
-  category: CrawlCategory;
-  products: SearchHit[];
-}
-
 /** Crawl several categories in sequence (defaults to all Continente food). */
 export async function crawlContinente(
   opts: { categories?: CrawlCategory[]; maxPages?: number; onProgress?: (p: CrawlProgress) => void } = {}
 ): Promise<CategoryResult[]> {
   const categories = opts.categories ?? CONTINENTE_FOOD_CATEGORIES;
+  // One product can appear in more than one section (an organic rice in both
+  // Mercearia and Bio e Saudável). Dedup across the whole run so each product is
+  // kept once, attributed to the FIRST section that lists it - which is why the
+  // overlapping "biologicos" section is ordered last, contributing only what is
+  // genuinely new.
+  const seen = new Set<string>();
   const results: CategoryResult[] = [];
   for (const category of categories) {
-    const products = await crawlContinenteCategory(category, {
-      maxPages: opts.maxPages,
-      onProgress: opts.onProgress,
+    const products = (
+      await crawlContinenteCategory(category, {
+        maxPages: opts.maxPages,
+        onProgress: opts.onProgress,
+      })
+    ).filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
     });
     results.push({ category, products });
   }

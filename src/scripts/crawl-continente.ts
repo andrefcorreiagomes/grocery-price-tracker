@@ -1,11 +1,12 @@
 import { prisma } from "../lib/db";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { CONTINENTE_FOOD_CATEGORIES } from "../scrapers/crawl/continente-categories";
+import { persistCatalogue } from "../scrapers/crawl/persist";
 
 /**
  * Crawl Continente's food catalogue into the CatalogueProduct table.
  *
- *   npm run crawl:continente                       # all food sections (~19k, ~540 requests)
+ *   npm run crawl:continente                       # all food sections (~19k)
  *   npm run crawl:continente -- --category=laticinios
  *   npm run crawl:continente -- --category=laticinios --max-pages=3   # smoke test
  *
@@ -41,45 +42,16 @@ async function main() {
   );
 
   const results = await crawlContinente({ categories, maxPages });
+  const summaries = await persistCatalogue("CONTINENTE", results);
 
   let grandTotal = 0;
-  for (const { category, products } of results) {
-    let created = 0;
-    let updated = 0;
-    for (const p of products) {
-      const existing = await prisma.catalogueProduct.findUnique({
-        where: { store_storeProductId: { store: "CONTINENTE", storeProductId: p.id } },
-        select: { id: true },
-      });
-      await prisma.catalogueProduct.upsert({
-        where: { store_storeProductId: { store: "CONTINENTE", storeProductId: p.id } },
-        create: {
-          store: "CONTINENTE",
-          storeProductId: p.id,
-          name: p.name,
-          brand: p.brand,
-          categoryPath: p.category || null,
-          price: p.price,
-          url: p.url,
-        },
-        update: {
-          name: p.name,
-          brand: p.brand,
-          categoryPath: p.category || null,
-          price: p.price,
-          url: p.url,
-          lastSeenAt: new Date(),
-        },
-      });
-      if (existing) updated++;
-      else created++;
-    }
-    grandTotal += products.length;
+  for (const s of summaries) {
+    grandTotal += s.total;
     console.log(
-      `  ${category.label.padEnd(22)} ${String(products.length).padStart(5)} products  (${created} new, ${updated} updated)`
+      `  ${s.label.padEnd(22)} ${String(s.total).padStart(5)} products  (${s.created} new, ${s.updated} updated)`
     );
   }
-  console.log(`Done: ${grandTotal} products across ${results.length} section(s).`);
+  console.log(`Done: ${grandTotal} products across ${summaries.length} section(s).`);
 }
 
 main()
