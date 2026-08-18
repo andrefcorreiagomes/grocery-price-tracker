@@ -19,22 +19,13 @@ const GRID_URL =
  */
 const PAGE_SIZE = 35;
 
-export async function searchContinente(
-  term: string,
-  limit = SEARCH_LIMIT
-): Promise<SearchHit[]> {
-  return collectHits(
-    (start) => fetchPage(term, start),
-    (hit) => hit.id,
-    PAGE_SIZE,
-    limit
-  );
-}
-
-async function fetchPage(term: string, start: number): Promise<SearchHit[]> {
-  const html = await fetchHtml(
-    `${GRID_URL}?cgid=col-produtos&q=${encodeURIComponent(term)}&pmin=0.01&start=${start}&sz=${PAGE_SIZE}`
-  );
+/**
+ * Parse Continente product tiles out of a grid/search HTML fragment. Shared by
+ * the search extractor here and the catalogue crawler, so both read tiles the
+ * same way. Each tile carries its data in a `data-product-tile-impression` JSON
+ * attribute; the link is the first `.html` anchor inside the tile.
+ */
+export function parseContinenteTiles(html: string): SearchHit[] {
   const $ = cheerio.load(html);
   const hits: SearchHit[] = [];
 
@@ -66,4 +57,23 @@ async function fetchPage(term: string, start: number): Promise<SearchHit[]> {
   });
 
   return hits;
+}
+
+export async function searchContinente(
+  term: string,
+  limit = SEARCH_LIMIT
+): Promise<SearchHit[]> {
+  return collectHits(
+    (start) => fetchPage(term, start),
+    (hit) => hit.id,
+    PAGE_SIZE,
+    limit
+  );
+}
+
+async function fetchPage(term: string, start: number): Promise<SearchHit[]> {
+  const html = await fetchHtml(
+    `${GRID_URL}?cgid=col-produtos&q=${encodeURIComponent(term)}&pmin=0.01&start=${start}&sz=${PAGE_SIZE}`
+  );
+  return parseContinenteTiles(html);
 }
