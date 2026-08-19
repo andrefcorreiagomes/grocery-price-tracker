@@ -3,6 +3,7 @@ import { crawlContinente } from "../scrapers/crawl/continente";
 import { CONTINENTE_FOOD_CATEGORIES } from "../scrapers/crawl/continente-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport } from "../scrapers/crawl/report";
+import { formatHttpStats } from "../scrapers/http";
 
 /**
  * Crawl Continente's food catalogue into the CatalogueProduct table.
@@ -49,6 +50,9 @@ async function main() {
   // collected here or already collected by an earlier section.
   const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
   for (const line of lines) console.log(line);
+
+  console.log("\nrequests:");
+  for (const line of formatHttpStats()) console.log(line);
 
   console.log(`Done: ${total} products across ${summaries.length} section(s).`);
   if (short.length > 0) {

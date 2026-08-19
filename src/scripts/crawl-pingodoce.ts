@@ -3,6 +3,7 @@ import { crawlPingoDoce } from "../scrapers/crawl/pingodoce";
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport } from "../scrapers/crawl/report";
+import { formatHttpStats } from "../scrapers/http";
 
 /**
  * Crawl Pingo Doce's food catalogue into the CatalogueProduct table.
@@ -48,6 +49,9 @@ async function main() {
   // collected here or already collected by an earlier department.
   const { lines, total, short } = coverageReport(results, summaries, 30, maxPages !== undefined);
   for (const line of lines) console.log(line);
+
+  console.log("\nrequests:");
+  for (const line of formatHttpStats()) console.log(line);
 
   console.log(`Done: ${total} products across ${summaries.length} department(s).`);
   if (short.length > 0) {

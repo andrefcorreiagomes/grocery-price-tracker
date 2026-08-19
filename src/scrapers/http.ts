@@ -16,6 +16,61 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export interface HostStats {
+  host: string;
+  /** requests that returned a body, i.e. not counting retried attempts */
+  requests: number;
+  /** attempts that failed and were retried (429, 5xx, socket errors) */
+  retries: number;
+  bytes: number;
+  /** milliseconds spent inside fetch, waiting on the server */
+  fetchMs: number;
+  /** milliseconds spent holding back to honour the per-host delay */
+  waitMs: number;
+}
+
+/**
+ * Per-host request accounting. Working out why the first full crawl took 57
+ * minutes needed a dozen ad-hoc probes afterwards, because nothing was
+ * recorded; a crawl should be able to say where its own time went. Reading
+ * these is what turns "Auchan felt slow" into "Auchan serves 13 products/sec".
+ */
+const stats = new Map<string, HostStats>();
+
+function statsFor(host: string): HostStats {
+  let entry = stats.get(host);
+  if (!entry) {
+    entry = { host, requests: 0, retries: 0, bytes: 0, fetchMs: 0, waitMs: 0 };
+    stats.set(host, entry);
+  }
+  return entry;
+}
+
+/** Snapshot of per-host totals, busiest first. */
+export function httpStats(): HostStats[] {
+  return [...stats.values()].sort((a, b) => b.fetchMs - a.fetchMs);
+}
+
+export function resetHttpStats(): void {
+  stats.clear();
+}
+
+/** Format the totals as printable lines, for a runner to log at the end. */
+export function formatHttpStats(): string[] {
+  return httpStats().map((s) => {
+    const mb = s.bytes / 1024 / 1024;
+    const seconds = s.fetchMs / 1000;
+    return (
+      `  ${s.host.padEnd(22)} ${String(s.requests).padStart(5)} requests  ` +
+      `${mb.toFixed(0).padStart(5)} MB  ` +
+      `${(seconds / 60).toFixed(1).padStart(5)} min fetching  ` +
+      `${(s.waitMs / 60000).toFixed(1).padStart(5)} min throttled  ` +
+      `${s.retries} retries  ` +
+      `(${seconds > 0 ? (mb / seconds).toFixed(2) : "-"} MB/s)`
+    );
+  });
+}
+
 const lastRequestAt = new Map<string, number>();
 /** Per-host promise chain, so concurrent callers queue instead of all firing at once. */
 const hostChains = new Map<string, Promise<void>>();
@@ -38,7 +93,11 @@ function takeTurn(host: string): Promise<void> {
   const previous = hostChains.get(host) ?? Promise.resolve();
   const turn = previous.then(async () => {
     const waited = Date.now() - (lastRequestAt.get(host) ?? 0);
-    if (waited < MIN_DELAY_MS) await sleep(MIN_DELAY_MS - waited);
+    if (waited < MIN_DELAY_MS) {
+      const holdBack = MIN_DELAY_MS - waited;
+      statsFor(host).waitMs += holdBack;
+      await sleep(holdBack);
+    }
     lastRequestAt.set(host, Date.now());
   });
   // Keep the chain alive even if a link rejects, or one failure stalls the host forever.
@@ -66,6 +125,7 @@ export async function fetchHtml(url: string): Promise<string> {
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     await takeTurn(host);
+    const startedAt = Date.now();
     let res: Response;
     try {
       res = await fetch(url, {
@@ -76,18 +136,31 @@ export async function fetchHtml(url: string): Promise<string> {
       });
     } catch (error) {
       // Network-level failure (DNS, socket) - worth one more try.
+      statsFor(host).fetchMs += Date.now() - startedAt;
+      statsFor(host).retries++;
       lastError = error instanceof Error ? error : new Error(String(error));
       if (attempt < MAX_ATTEMPTS - 1) await sleep(MIN_DELAY_MS * 2 ** attempt);
       continue;
     }
 
-    if (res.ok) return res.text();
+    if (res.ok) {
+      const body = await res.text();
+      const entry = statsFor(host);
+      entry.requests++;
+      entry.bytes += body.length;
+      entry.fetchMs += Date.now() - startedAt;
+      return body;
+    }
+
+    statsFor(host).fetchMs += Date.now() - startedAt;
 
     // A 404 means the listing is gone; retrying cannot help and the caller
-    // needs to hear about it straight away.
+    // needs to hear about it straight away. It is not counted as a retry.
     if (!isRetryable(res.status)) {
       throw new Error(`Fetch failed (${res.status}) for ${url}`);
     }
+
+    statsFor(host).retries++;
 
     lastError = new Error(`Fetch failed (${res.status}) for ${url}`);
     if (attempt < MAX_ATTEMPTS - 1) await sleep(retryAfterMs(res, attempt));

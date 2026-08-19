@@ -1,15 +1,17 @@
 import { prisma } from "../lib/db";
-import { crawlAuchan } from "../scrapers/crawl/auchan";
+import { crawlAuchan, DEFAULT_AUCHAN_MODE, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { crawlPingoDoce } from "../scrapers/crawl/pingodoce";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
-import { coverageReport } from "../scrapers/crawl/report";
+import { coverageReport, isMeaningfulShortfall } from "../scrapers/crawl/report";
+import { formatHttpStats } from "../scrapers/http";
 
 /**
  * Crawl all three catalogues at once.
  *
  *   npm run crawl:all
+ *   npm run crawl:all -- --mode=root      # Auchan walks its whole catalogue
  *   npm run crawl:all -- --max-pages=2    # smoke test, applies to every store
  *
  * The stores are crawled CONCURRENTLY. This is safe and it is not impolite:
@@ -69,31 +71,63 @@ async function runPingoDoce(maxPages: number | undefined, startedAt: number) {
   };
 }
 
-async function runAuchan(maxPages: number | undefined, startedAt: number) {
-  const { food, segmentTally, crawled, expected } = await crawlAuchan({ maxPages });
+async function runAuchan(
+  mode: AuchanCrawlMode,
+  maxPages: number | undefined,
+  startedAt: number
+) {
+  const { food, segmentTally, segmentSamples, crawled, walks, failedDepartments } =
+    await crawlAuchan({ mode, maxPages });
   const summaries = await queueWrite(() => persistCatalogue("AUCHAN", food));
   console.log(`[${minutesSince(startedAt)}] Auchan finished`);
 
   const { lines, total } = coverageReport(food, summaries, 28, maxPages !== undefined);
 
-  // Auchan is walked as one catalogue rather than per department, so
-  // completeness is judged against the catalogue-wide count; the store never
-  // states a department's size here. The full segment tally is printed so a food
-  // department wrongly dropped by the whitelist is visible rather than lost.
+  // Coverage is judged per category walked, against the count each publishes for
+  // itself - not per food department, whose size Auchan never states.
   const short: string[] = [];
-  if (expected !== null && crawled < expected && maxPages === undefined) {
-    short.push(`catalogue (walked ${crawled} of ${expected})`);
+  const walkLines = ["", "  categories walked:"];
+  for (const w of walks) {
+    let coverage = "";
+    if (w.expected !== null) {
+      const gap = w.expected - w.fetched;
+      coverage = ` of ${w.expected} listed`;
+      if (gap > 0 && maxPages === undefined) {
+        if (isMeaningfulShortfall(gap, w.expected)) {
+          coverage += `  SHORT by ${gap}`;
+          short.push(w.label);
+        } else {
+          coverage += `  short by ${gap}`;
+        }
+      }
+    }
+    walkLines.push(
+      `    ${w.label.padEnd(26)} ${String(w.fetched).padStart(6)} fetched` +
+        `, ${String(w.added).padStart(6)} new${coverage}`
+    );
+  }
+  for (const slug of failedDepartments) {
+    short.push(`${slug} (id unreadable)`);
   }
 
-  const tally = [...segmentTally]
-    .sort((a, b) => b[1] - a[1])
-    .map((entry) => `    ${isFoodSegment(entry[0]) ? "keep" : "drop"}  ${String(entry[1]).padStart(6)}  ${entry[0]}`);
+  // Every top segment seen, with examples, so a food department wrongly dropped
+  // by the whitelist is visible rather than lost silently.
+  const tally = ["", "  all top segments seen:"];
+  for (const [segment, n] of [...segmentTally].sort((a, b) => b[1] - a[1])) {
+    const keep = isFoodSegment(segment);
+    tally.push(`    ${keep ? "keep" : "drop"}  ${String(n).padStart(6)}  ${segment}`);
+    if (!keep) {
+      for (const sample of segmentSamples.get(segment) ?? []) {
+        tally.push(`              ${sample.slice(0, 66)}`);
+      }
+    }
+  }
 
   return {
     title:
-      `AUCHAN - ${total} food products across ${summaries.length} department(s)` +
-      `, walked ${crawled}${expected === null ? "" : ` of ${expected}`} catalogue-wide`,
-    lines: [...lines, "", "  all top segments seen:", ...tally],
+      `AUCHAN [${mode}] - ${total} food products across ${summaries.length} department(s)` +
+      `, ${crawled} products walked`,
+    lines: [...lines, ...walkLines, ...tally],
     short,
     total,
   };
@@ -103,15 +137,21 @@ async function main() {
   const args = process.argv.slice(2);
   const maxPagesRaw = args.find((a) => a.startsWith("--max-pages="))?.split("=")[1];
   const maxPages = maxPagesRaw ? Number(maxPagesRaw) : undefined;
+  const modeRaw = args.find((a) => a.startsWith("--mode="))?.split("=")[1];
 
   if (maxPagesRaw && (!Number.isInteger(maxPages) || (maxPages as number) < 1)) {
     console.error(`--max-pages must be a positive integer, got "${maxPagesRaw}"`);
     process.exit(1);
   }
+  if (modeRaw !== undefined && modeRaw !== "root" && modeRaw !== "departments") {
+    console.error(`--mode must be "root" or "departments", got "${modeRaw}"`);
+    process.exit(1);
+  }
+  const mode: AuchanCrawlMode = modeRaw ?? DEFAULT_AUCHAN_MODE;
 
   const startedAt = Date.now();
   console.log(
-    `Crawling Continente, Pingo Doce and Auchan concurrently` +
+    `Crawling Continente, Pingo Doce and Auchan [${mode}] concurrently` +
       `${maxPages ? ` (max ${maxPages} pages each)` : ""}...\n`
   );
 
@@ -119,7 +159,7 @@ async function main() {
   const settled = await Promise.allSettled([
     runContinente(maxPages, startedAt),
     runPingoDoce(maxPages, startedAt),
-    runAuchan(maxPages, startedAt),
+    runAuchan(mode, maxPages, startedAt),
   ]);
 
   let grandTotal = 0;
@@ -139,7 +179,12 @@ async function main() {
     for (const line of outcome.value.lines) console.log(line);
   }
 
-  console.log(`\nDone in ${minutesSince(startedAt)}: ${grandTotal} products across ${settled.length - failed.length} store(s).`);
+  console.log("\nrequests:");
+  for (const line of formatHttpStats()) console.log(line);
+
+  console.log(
+    `\nDone in ${minutesSince(startedAt)}: ${grandTotal} products across ${settled.length - failed.length} store(s).`
+  );
   if (short.length > 0) {
     console.log(`\nWARNING: came up short: ${short.join(", ")}`);
   }
