@@ -44,13 +44,33 @@ async function main() {
   const summaries = await persistCatalogue("PINGO_DOCE", results);
 
   let grandTotal = 0;
-  for (const s of summaries) {
+  const short: string[] = [];
+
+  for (const [i, s] of summaries.entries()) {
     grandTotal += s.total;
+    const { expected, duplicates = 0 } = results[i];
+
+    // The store's own count is the yardstick: everything it lists should be
+    // either collected here or already collected by an earlier department.
+    let coverage = "";
+    if (expected !== undefined) {
+      const accounted = s.total + duplicates;
+      coverage = ` of ${expected} listed${duplicates ? ` (+${duplicates} seen earlier)` : ""}`;
+      if (accounted < expected) {
+        coverage += `  SHORT by ${expected - accounted}`;
+        short.push(s.label);
+      }
+    }
+
     console.log(
-      `  ${s.label.padEnd(30)} ${String(s.total).padStart(5)} products  (${s.created} new, ${s.updated} updated)`
+      `  ${s.label.padEnd(30)} ${String(s.total).padStart(5)} products  (${s.created} new, ${s.updated} updated)${coverage}`
     );
   }
+
   console.log(`Done: ${grandTotal} products across ${summaries.length} department(s).`);
+  if (short.length > 0) {
+    console.log(`\nWARNING: ${short.length} department(s) came up short: ${short.join(", ")}`);
+  }
 }
 
 main()
