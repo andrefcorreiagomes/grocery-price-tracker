@@ -28,8 +28,21 @@ async function main() {
     `Crawling Auchan (root, food-filtered)${maxPages ? ` max ${maxPages} pages` : ""}...`
   );
 
-  const { food, segmentTally } = await crawlAuchan({ maxPages });
+  const { food, segmentTally, crawled, expected } = await crawlAuchan({ maxPages });
   const summaries = await persistCatalogue("AUCHAN", food);
+
+  // The walk covers the whole catalogue, so completeness is judged against
+  // Auchan's own catalogue-wide count - not against any one department, whose
+  // size the store never states here.
+  if (expected === null) {
+    console.log(`\ncatalogue: ${crawled} products walked (store published no count)`);
+  } else {
+    const short = crawled < expected && maxPages === undefined;
+    console.log(
+      `\ncatalogue: ${crawled} of ${expected} products walked` +
+        (short ? `  SHORT by ${expected - crawled}` : "")
+    );
+  }
 
   let grandTotal = 0;
   console.log("\nfood departments kept:");

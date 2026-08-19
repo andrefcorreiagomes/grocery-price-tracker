@@ -44,6 +44,24 @@ export function parseAuchanTiles(html: string): SearchHit[] {
   return hits;
 }
 
+/**
+ * How many products the result set holds, from the grid's own counter ("1 - 64
+ * de 54,859 resultados"). The crawler paginates against this rather than
+ * guessing from page length, since a full page need not parse to a full page of
+ * products and stopping on a short one silently truncates the crawl.
+ *
+ * Only the `Search-Show` page carries this counter - the `Search-UpdateGrid`
+ * fragment the crawler pages through does not - so the crawler reads it from its
+ * first request and pages on from there. The message has several shapes ("13
+ * resultados", "1 - 64 de 54,859 resultados"), and the total is the last number
+ * in all of them.
+ */
+export function parseAuchanTotal(html: string): number | null {
+  const text = cheerio.load(html)(".auc-js-search-results-count").first().text();
+  const numbers = text.replace(/[.,\s]/g, "").match(/\d+/g);
+  return numbers ? Number(numbers[numbers.length - 1]) : null;
+}
+
 export async function searchAuchan(
   term: string,
   limit = SEARCH_LIMIT

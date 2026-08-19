@@ -1,5 +1,5 @@
 import { fetchHtml } from "../http";
-import { parseAuchanTiles } from "../search/auchan";
+import { parseAuchanTiles, parseAuchanTotal } from "../search/auchan";
 import type { SearchHit } from "../search/types";
 import { isFoodSegment } from "./auchan-categories";
 import type { CategoryResult, CrawlProgress } from "./types";
@@ -16,6 +16,13 @@ import type { CategoryResult, CrawlProgress } from "./types";
 
 const GRID_URL =
   "https://www.auchan.pt/on/demandware.store/Sites-AuchanPT-Site/pt_PT/Search-UpdateGrid";
+/**
+ * The grid fragment carries no product counter, so the first page is taken from
+ * the full search page, which does. It serves the same tiles, at the cost of a
+ * heavier response once per crawl.
+ */
+const SHOW_URL =
+  "https://www.auchan.pt/on/demandware.store/Sites-AuchanPT-Site/pt_PT/Search-Show";
 const PAGE_SIZE = 64; // Auchan caps the grid at ~64/page
 
 /** First segment of a category path ("produtos-frescos/talho/..." -> "produtos-frescos"). */
@@ -28,6 +35,14 @@ export interface AuchanCrawlResult {
   food: CategoryResult[];
   /** every top segment seen mapped to its distinct product count (food + non-food) */
   segmentTally: Map<string, number>;
+  /** distinct products walked, food and non-food together */
+  crawled: number;
+  /**
+   * Size of the whole catalogue as Auchan reports it. Because this crawl walks
+   * `root` rather than per-department ids, the count is catalogue-wide - it
+   * proves the walk was complete, but says nothing about any one department.
+   */
+  expected: number | null;
 }
 
 export async function crawlAuchan(
@@ -36,11 +51,17 @@ export async function crawlAuchan(
   const seen = new Set<string>();
   const segmentTally = new Map<string, number>();
   const foodBySegment = new Map<string, SearchHit[]>();
+  let expected: number | null = null;
 
   for (let page = 0; opts.maxPages === undefined || page < opts.maxPages; page++) {
     const start = page * PAGE_SIZE;
-    const html = await fetchHtml(`${GRID_URL}?cgid=root&start=${start}&sz=${PAGE_SIZE}`);
+    const html = await fetchHtml(
+      page === 0
+        ? `${SHOW_URL}?cgid=root&start=0&sz=${PAGE_SIZE}`
+        : `${GRID_URL}?cgid=root&start=${start}&sz=${PAGE_SIZE}`
+    );
     const tiles = parseAuchanTiles(html);
+    if (page === 0) expected = parseAuchanTotal(html);
     if (tiles.length === 0) break; // ran off the end of the catalogue
 
     let fresh = 0;
@@ -64,7 +85,15 @@ export async function crawlAuchan(
     });
 
     if (fresh === 0) break; // pagination wrapped onto already-seen products
-    if (tiles.length < PAGE_SIZE) break; // short page: the last one
+
+    if (expected !== null) {
+      // Drive pagination from Auchan's own count. A page of 64 tiles need not
+      // parse to 64 products, so ending on a short page cuts the walk off early
+      // - that bug cost more than half the Pingo Doce catalogue.
+      if (start + PAGE_SIZE >= expected) break;
+    } else if (tiles.length < PAGE_SIZE) {
+      break; // no published count to steer by: fall back to the short page
+    }
   }
 
   const food: CategoryResult[] = [...foodBySegment.entries()].map(([segment, products]) => ({
@@ -72,5 +101,5 @@ export async function crawlAuchan(
     products,
   }));
 
-  return { food, segmentTally };
+  return { food, segmentTally, crawled: seen.size, expected };
 }
