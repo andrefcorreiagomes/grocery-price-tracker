@@ -1,5 +1,5 @@
 import { fetchHtml } from "../http";
-import { parseContinenteTiles } from "../search/continente";
+import { parseContinenteTiles, parseContinenteTotal } from "../search/continente";
 import type { SearchHit } from "../search/types";
 import { CONTINENTE_FOOD_CATEGORIES } from "./continente-categories";
 import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
@@ -15,17 +15,24 @@ const GRID_URL =
   "https://www.continente.pt/on/demandware.store/Sites-continente-Site/default/Search-UpdateGrid";
 const PAGE_SIZE = 35; // Continente clamps `sz` to 35 whatever we ask; walk `start`
 
+export interface CategoryCrawl {
+  products: SearchHit[];
+  /** the store's own product count for the category, when published */
+  expected: number | null;
+}
+
 /**
- * Fetch every product in one category. Pages `start` by 35 until a page brings
- * nothing new (wrapped onto already-seen results) or comes up short (the last
- * page). `maxPages` caps the walk - used to smoke-test against a handful of
- * requests without pulling a whole 5,000-product section.
+ * Fetch every product in one category. Pages `start` by 35 until the store's own
+ * product count is covered, or a page brings nothing new (wrapped onto
+ * already-seen results). `maxPages` caps the walk - used to smoke-test against a
+ * handful of requests without pulling a whole 5,000-product section.
  */
 export async function crawlContinenteCategory(
   category: CrawlCategory,
   opts: { maxPages?: number; onProgress?: (p: CrawlProgress) => void } = {}
-): Promise<SearchHit[]> {
+): Promise<CategoryCrawl> {
   const byId = new Map<string, SearchHit>();
+  let expected: number | null = null;
 
   for (let page = 0; opts.maxPages === undefined || page < opts.maxPages; page++) {
     const start = page * PAGE_SIZE;
@@ -33,6 +40,7 @@ export async function crawlContinenteCategory(
       `${GRID_URL}?cgid=${encodeURIComponent(category.cgid)}&start=${start}&sz=${PAGE_SIZE}`
     );
     const hits = parseContinenteTiles(html);
+    if (page === 0) expected = parseContinenteTotal(html);
     if (hits.length === 0) break; // ran off the end of the category
 
     let fresh = 0;
@@ -45,10 +53,18 @@ export async function crawlContinenteCategory(
     opts.onProgress?.({ category, page: page + 1, collected: byId.size });
 
     if (fresh === 0) break; // every id already seen: pagination has wrapped
-    if (hits.length < PAGE_SIZE) break; // short page: the last one
+
+    if (expected !== null) {
+      // Drive pagination from the count the grid publishes. A page of 35 tiles
+      // need not parse to 35 products, so ending on a short page cuts the crawl
+      // off early - that bug cost more than half the Pingo Doce catalogue.
+      if (start + PAGE_SIZE >= expected) break;
+    } else if (hits.length < PAGE_SIZE) {
+      break; // no published count to steer by: fall back to the short page
+    }
   }
 
-  return [...byId.values()];
+  return { products: [...byId.values()], expected };
 }
 
 /** Crawl several categories in sequence (defaults to all Continente food). */
@@ -64,17 +80,21 @@ export async function crawlContinente(
   const seen = new Set<string>();
   const results: CategoryResult[] = [];
   for (const category of categories) {
-    const products = (
-      await crawlContinenteCategory(category, {
-        maxPages: opts.maxPages,
-        onProgress: opts.onProgress,
-      })
-    ).filter((p) => {
-      if (seen.has(p.id)) return false;
+    const { products, expected } = await crawlContinenteCategory(category, {
+      maxPages: opts.maxPages,
+      onProgress: opts.onProgress,
+    });
+
+    let duplicates = 0;
+    const fresh = products.filter((p) => {
+      if (seen.has(p.id)) {
+        duplicates++;
+        return false;
+      }
       seen.add(p.id);
       return true;
     });
-    results.push({ category, products });
+    results.push({ category, products: fresh, expected: expected ?? undefined, duplicates });
   }
   return results;
 }

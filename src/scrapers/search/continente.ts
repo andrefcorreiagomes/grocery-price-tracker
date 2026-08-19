@@ -59,6 +59,18 @@ export function parseContinenteTiles(html: string): SearchHit[] {
   return hits;
 }
 
+/**
+ * The grid states how many products the category holds, in a `data-total-count`
+ * attribute. The crawler paginates against this rather than guessing from page
+ * length: a full page does not always yield a full page of parseable products,
+ * and treating a short page as the last one silently truncates the crawl.
+ */
+export function parseContinenteTotal(html: string): number | null {
+  const raw = cheerio.load(html)("[data-total-count]").first().attr("data-total-count");
+  const total = Number(raw);
+  return raw && Number.isFinite(total) ? total : null;
+}
+
 export async function searchContinente(
   term: string,
   limit = SEARCH_LIMIT
