@@ -2,6 +2,7 @@ import { prisma } from "../lib/db";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { CONTINENTE_FOOD_CATEGORIES } from "../scrapers/crawl/continente-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
+import { coverageReport } from "../scrapers/crawl/report";
 
 /**
  * Crawl Continente's food catalogue into the CatalogueProduct table.
@@ -44,31 +45,12 @@ async function main() {
   const results = await crawlContinente({ categories, maxPages });
   const summaries = await persistCatalogue("CONTINENTE", results);
 
-  let grandTotal = 0;
-  const short: string[] = [];
+  // The store's own count is the yardstick: everything it lists should be either
+  // collected here or already collected by an earlier section.
+  const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
+  for (const line of lines) console.log(line);
 
-  for (const [i, s] of summaries.entries()) {
-    grandTotal += s.total;
-    const { expected, duplicates = 0 } = results[i];
-
-    // The store's own count is the yardstick: everything it lists should be
-    // either collected here or already collected by an earlier section.
-    let coverage = "";
-    if (expected !== undefined) {
-      const accounted = s.total + duplicates;
-      coverage = ` of ${expected} listed${duplicates ? ` (+${duplicates} seen earlier)` : ""}`;
-      if (accounted < expected) {
-        coverage += `  SHORT by ${expected - accounted}`;
-        short.push(s.label);
-      }
-    }
-
-    console.log(
-      `  ${s.label.padEnd(22)} ${String(s.total).padStart(5)} products  (${s.created} new, ${s.updated} updated)${coverage}`
-    );
-  }
-
-  console.log(`Done: ${grandTotal} products across ${summaries.length} section(s).`);
+  console.log(`Done: ${total} products across ${summaries.length} section(s).`);
   if (short.length > 0) {
     console.log(`\nWARNING: ${short.length} section(s) came up short: ${short.join(", ")}`);
   }

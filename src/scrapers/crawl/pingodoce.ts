@@ -13,11 +13,12 @@ const SEARCH_URL =
   "https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Search-Show";
 
 /**
- * Pingo Doce honours a large `sz`, but sz=1000 returned a 10 MB response, so we
- * page at 100 - a small category comes in one request, a large one in a handful,
- * and each response stays light.
+ * Pingo Doce honours a large `sz`. Measured: 500 products arrive in one 5.4 MB
+ * response in 1.8 s, against 1.2 s for 100 - so paging at 500 takes the whole
+ * catalogue in ~15 requests instead of ~90 for almost no extra time. Not raised
+ * to 1000, which returned a 10 MB response.
  */
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 500;
 
 export interface CategoryCrawl {
   products: SearchHit[];

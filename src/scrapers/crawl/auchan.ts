@@ -23,7 +23,14 @@ const GRID_URL =
  */
 const SHOW_URL =
   "https://www.auchan.pt/on/demandware.store/Sites-AuchanPT-Site/pt_PT/Search-Show";
-const PAGE_SIZE = 64; // Auchan caps the grid at ~64/page
+/**
+ * Auchan honours `sz` far past the ~64 first assumed - measured, asking for 200
+ * returns 200 tiles - which cuts the whole-catalogue walk from ~858 requests to
+ * ~275. Not raised further: sz=500 also works but took 22 s against 1.2 s for
+ * 200, so it is asking too much of them for no gain, since the bytes per product
+ * are the same either way and only the per-request delay is saved.
+ */
+const PAGE_SIZE = 200;
 
 /** First segment of a category path ("produtos-frescos/talho/..." -> "produtos-frescos"). */
 function topSegment(category: string): string {
