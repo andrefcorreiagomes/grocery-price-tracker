@@ -38,8 +38,20 @@ export const AUCHAN_FOOD_SEGMENTS = new Set(
     "congelados",
     "biológicos-e-alternativas",
     "gelados", // included defensively; may appear under another segment
+    // Auchan's local-produce line, filed outside the food departments. Small
+    // (2-4 products) and unambiguously food - "COUVE BRÓCOLOS LOCAL KG",
+    // "BATATA DOCE PRODUTO LOCAL KG" - found by the dropped-segment samples.
+    "produtos-locais",
   ].map(normalizeSegment)
 );
+
+/**
+ * Deliberately NOT whitelisted, though it holds food: `o-mundo-do-bebé` mixes
+ * ordinary biscuits (Artiach Dinosaurus, Gullón Magic, Cuétara Flakes) in with
+ * nappies and bottles, so keeping the whole segment would feed non-food to the
+ * matcher. It needs a sub-path rule keeping only its alimentação branch, which
+ * is tracked with the rest of the baby-food work.
+ */
 
 export function isFoodSegment(segment: string): boolean {
   return AUCHAN_FOOD_SEGMENTS.has(normalizeSegment(segment));
