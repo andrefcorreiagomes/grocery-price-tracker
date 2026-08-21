@@ -5,6 +5,13 @@ export interface ScrapeResult {
   ean: string | null;
   /** Pack size in base unit (kg or L). Extracted from the product page when available; null when not found. */
   packageSize: number | null;
+  /**
+   * Which base unit `packageSize` is in. Weight and volume are both collapsed
+   * to a single number, so without this a 1.5 of water and a 1.5 of rice are
+   * indistinguishable - and comparing them would be nonsense. Null exactly when
+   * `packageSize` is.
+   */
+  packageUnit: "kg" | "l" | null;
 
   /**
    * Whether `price` is a promotional price. Every store publishes this, but via

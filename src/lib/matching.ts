@@ -164,6 +164,12 @@ export interface Candidate {
   size: ParsedSize | null;
   /** price per base unit (kg or L); null when size is unknown */
   unitPrice: number | null;
+  /**
+   * Whether this is the selling chain's own label. Supplied by the caller,
+   * which knows the store; this module stays store-agnostic. It matters only
+   * for barcodes - see `classifyCandidate`.
+   */
+  ownBrand?: boolean;
 }
 
 export interface Classification {
@@ -243,9 +249,24 @@ export function classifyCandidate(a: Candidate, b: Candidate): Classification {
   const base = { nameSimilarity, sizeKnown, sizeMatches, sizeRatio, priceGap };
   const priceVeto = priceGap !== null && priceGap > PRICE_GUARD;
 
+  /**
+   * Two chains' own labels ALWAYS carry different barcodes - they are different
+   * SKUs made for different companies - so a clash between them is guaranteed in
+   * advance and therefore proves nothing. Vetoing on it rejected 34 of 64
+   * own-brand pairs in a measured slice, including "MORANGO AUCHAN 500 G"
+   * against "Morango Continente", which is exactly the comparison a shopper
+   * wants.
+   *
+   * Such pairs fall through to name, size and euro/unit instead. They can still
+   * be rejected on that evidence, and they can never reach "ean" or "exact"
+   * (the brands differ), so they land in review rather than being auto-tracked -
+   * which is right, since nothing available can confirm them outright.
+   */
+  const bothOwnBrand = a.ownBrand === true && b.ownBrand === true;
+
   // Same-size (or size-unknown) barcode clash = genuinely different products.
   // A cross-size clash is expected, so it falls through to the size logic below.
-  if (eanConflict && !(sizeKnown && !sizeMatches)) {
+  if (eanConflict && !bothOwnBrand && !(sizeKnown && !sizeMatches)) {
     return { ...base, rung: "reject", vetoed: true, reason: "same-size barcodes differ" };
   }
 

@@ -1,3 +1,4 @@
+import { parseSize } from "../lib/matching";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
 import { validDateOrNull, type ScrapeResult } from "./types";
 
@@ -23,12 +24,19 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
     throw new Error(`Auchan: could not find product/price data at ${url}`);
   }
 
+  const name = product.name ?? "";
+
   return {
-    name: product.name ?? "",
+    name,
     brand: product.brand?.name ?? null,
     price: Number(product.offers.price),
     ean: product.gtin ?? null,
-    packageSize: null,
+    // Auchan writes the size into the product name itself - "BACON EXTRA CUBOS
+    // AUCHAN 2X75G" - and does so for 86% of its catalogue, where Continente
+    // and Pingo Doce do it for essentially none. So the name is the size
+    // source here, and no separate label needs parsing.
+    packageSize: parseSize(name)?.total ?? null,
+    packageUnit: parseSize(name)?.unit ?? null,
     ...parsePromotion(product.offers.priceValidUntil),
   };
 }

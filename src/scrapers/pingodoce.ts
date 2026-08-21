@@ -33,16 +33,63 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
     );
   }
 
-  const eanMatch = html.match(/[?&]ean=(\d+)/i);
+  const size = parsePackageSize($("h1.product-unit-measure").first().text());
+  // The barcode rides on a nutritional-info URL in the page, and that URL is
+  // HTML-escaped: "...?pid=4696048&amp;ean=8435250297955". So the character
+  // before "ean=" is a semicolon, not an "&", and a plain /[?&]ean=/ misses
+  // every one of them - measured, 0 of 124 products until this was allowed for.
+  const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
 
   return {
     name: product.name ?? "",
     brand: normalizePingoDoceBrand(product.brand?.name),
     price,
     ean: eanMatch ? eanMatch[1] : null,
-    packageSize: null,
+    packageSize: size?.total ?? null,
+    packageUnit: size?.unit ?? null,
     ...parsePromotion($),
   };
+}
+
+/**
+ * Pingo Doce publishes the pack size in an `h1.product-unit-measure`, which
+ * reads either "0.4 Kg" or "0.1 Kg | 13,9 €/Kg" - the size, optionally followed
+ * by the unit price.
+ *
+ * This is the only place Pingo Doce gives a size at all: unlike Auchan it keeps
+ * the size out of the product name (parseable from just 14 of its 7,191
+ * catalogue names), and unlike Continente and Auchan it publishes no barcode.
+ * So this label is the ONLY evidence available for comparing a Pingo Doce
+ * product against another store's, which is why it is worth parsing carefully.
+ *
+ * Volumes are returned in litres and weights in kilograms, matching
+ * `ScrapeResult.packageSize` and the app's comparison base.
+ */
+function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
+  const match = text
+    .trim()
+    .match(/^([\d.,]+)\s*(kg|g|gr|l|lt|ml|cl)\b/i);
+  if (!match) return null;
+
+  const qty = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+
+  switch (match[2].toLowerCase()) {
+    case "kg":
+      return { total: qty, unit: "kg" };
+    case "l":
+    case "lt":
+      return { total: qty, unit: "l" };
+    case "g":
+    case "gr":
+      return { total: qty / 1000, unit: "kg" };
+    case "ml":
+      return { total: qty / 1000, unit: "l" };
+    case "cl":
+      return { total: qty / 100, unit: "l" };
+    default:
+      return null;
+  }
 }
 
 /**

@@ -135,11 +135,23 @@ export function productTokens(name: string, store: string): Set<string> {
   return new Set([...nameTokens(normalized)].map(foldPlural));
 }
 
+/**
+ * No third-party brand: either the chain's own label, or no brand at all.
+ *
+ * The two cases behave identically wherever it matters. Auchan leaves the brand
+ * empty on 1,267 products, mostly loose fresh produce, and Continente's empty
+ * brand means "our own fresh-food range" rather than "unbranded". Neither has a
+ * manufacturer behind it, so neither can share a barcode with another chain's
+ * equivalent - the codes are assigned by the retailer.
+ */
+export function isOwnBrand(brand: string | null | undefined, store: string): boolean {
+  return normalizeBrand(brand) === "" || isHouseBrand(brand, store);
+}
+
 /** A brand usable as a block key: present, and not the store's own label. */
 export function blockableBrand(entry: CatalogueEntry): string | null {
-  const normalized = normalizeBrand(entry.brand);
-  if (!normalized || isHouseBrand(entry.brand, entry.store)) return null;
-  return normalized;
+  if (isOwnBrand(entry.brand, entry.store)) return null;
+  return normalizeBrand(entry.brand);
 }
 
 /** Jaccard overlap of two prepared token sets. */

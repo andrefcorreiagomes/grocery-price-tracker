@@ -24,7 +24,12 @@ export async function scrapeContinente(url: string): Promise<ScrapeResult> {
   }
 
   const $ = cheerio.load(html);
-  const eanMatch = html.match(/[?&]ean=(\d+)/i);
+  const size = parsePackageSize($(".ct-pdp--unit").first().text().trim());
+  // The barcode rides on a nutritional-info URL in the page, and that URL is
+  // HTML-escaped: "...?pid=4696048&amp;ean=8435250297955". So the character
+  // before "ean=" is a semicolon, not an "&", and a plain /[?&]ean=/ misses
+  // every one of them - measured, 0 of 124 products until this was allowed for.
+  const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
   const price = Number(product.offers.price);
 
   return {
@@ -34,7 +39,8 @@ export async function scrapeContinente(url: string): Promise<ScrapeResult> {
     brand: product.brand?.name || "Continente",
     price,
     ean: eanMatch ? eanMatch[1] : null,
-    packageSize: parsePackageSize($(".ct-pdp--unit").first().text().trim()),
+    packageSize: size?.total ?? null,
+    packageUnit: size?.unit ?? null,
     ...parsePromotion(html, price),
   };
 }
@@ -79,7 +85,7 @@ function parsePromotion(html: string, price: number): Pick<
  * 400 gr)" - which is the drained weight, deliberately not returned here: the
  * caller decides which basis a group uses (see the product-discovery skill).
  */
-function parsePackageSize(text: string): number | null {
+function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   const match = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|g|l|ml|cl)/i);
   if (!match) return null;
 
@@ -89,9 +95,10 @@ function parsePackageSize(text: string): number | null {
 
   const total = count * qty;
   switch (match[3].toLowerCase()) {
-    case "g":  return total / 1000;
-    case "ml": return total / 1000;
-    case "cl": return total / 100;
-    default:   return total; // kg, L
+    case "g":  return { total: total / 1000, unit: "kg" };
+    case "ml": return { total: total / 1000, unit: "l" };
+    case "cl": return { total: total / 100, unit: "l" };
+    case "l":  return { total, unit: "l" };
+    default:   return { total, unit: "kg" };
   }
 }
