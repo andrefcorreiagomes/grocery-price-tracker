@@ -47,17 +47,28 @@ export interface RunRequestStats {
   retries: number;
 }
 
-/** Save this run so the next one has something to compare against. */
+/**
+ * Save this run so the next one has something to compare against.
+ *
+ * `seenAt` must be the instant the crawl stamped on the products it saw, NOT
+ * the moment this is called. They differ by however long saving took, and that
+ * gap is enough to break the next run's comparison: a product's `lastSeenAt`
+ * would be fractionally EARLIER than the run that wrote it, so the next run
+ * reads every product as having been absent and returned. Measured once as
+ * "returned: 17090" - the entire catalogue.
+ */
 export async function recordRun(
   store: Store,
   total: number,
   sections: RunSection[],
-  http?: RunRequestStats
+  http?: RunRequestStats,
+  seenAt?: Date
 ) {
   await prisma.crawlRun.create({
     data: {
       store,
       total,
+      startedAt: seenAt,
       requests: http?.requests ?? null,
       bytes: http?.bytes ?? null,
       fetchMs: http?.fetchMs ?? null,
