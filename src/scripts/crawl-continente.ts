@@ -24,6 +24,7 @@ import { renderReport, writeReport } from "../scrapers/crawl/render-report";
  *
  *   npm run crawl:continente                       # all food sections (~19k)
  *   npm run crawl:continente -- --category=laticinios
+ *   npm run crawl:continente -- --brief              # report without the explanations
  *   npm run crawl:continente -- --category=laticinios --max-pages=3   # smoke test
  *
  * Listing data only - name, brand, price, store category, url. Barcode and size
@@ -100,10 +101,8 @@ async function main() {
       baseline: { runs: baseline.runs, since: baseline.since },
     });
     const where = await writeReport(failure);
-    console.error(`
-${renderReport(failure)}`);
-    console.error(`
-report written to ${where.text}`);
+    console.error(`\n${renderReport(failure)}`);
+    console.error(`\nreport written to ${where.text}`);
     process.exitCode = 1;
     return;
   }
@@ -158,8 +157,12 @@ report written to ${where.text}`);
     previousRun,
   });
 
-  const written = await writeReport(report);
-  console.log(`\n${renderReport(report)}`);
+  // Explanations are on by default: whoever reads this has usually not thought
+  // about the crawler in weeks, and a bare number is one they learn to skip.
+  // --brief drops them once the checks are familiar.
+  const explain = !args.includes("--brief");
+  const written = await writeReport(report, { explain });
+  console.log(`\n${renderReport(report, { explain })}`);
   console.log(`\nreport written to ${written.text} and ${written.json}`);
 
   await recordRun("CONTINENTE", total, sections, {
