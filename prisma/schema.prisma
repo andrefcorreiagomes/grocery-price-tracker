@@ -102,4 +102,42 @@ model CatalogueProduct {
   @@index([store, brand]) // brand blocking
   @@index([store, categoryPath]) // category blocking
   @@index([eanNormalized]) // EAN match / veto
+  candidatesA MatchCandidate[] @relation("CandidateA")
+  candidatesB MatchCandidate[] @relation("CandidateB")
+}
+
+/// A guess that two catalogue products, at different stores, are the same
+/// product. Guesses only: generated from name and brand alone, before any
+/// product page has been fetched, so nothing here is a decision.
+///
+/// Stored as unordered PAIRS rather than groups. A group is what we eventually
+/// want, but it is not what can be judged: group sizes vary (of the 95
+/// hand-made ones, 82 span three stores, 12 span two, and one holds five
+/// listings), similarity is not transitive, and a reviewer can answer "are
+/// these two the same?" far more reliably than a three-way question. Groups are
+/// formed later by clustering the CONFIRMED pairs, which is also what lets a
+/// fourth or fifth store be added without changing the model.
+///
+/// Derived data: the generator wipes and rebuilds the table, so re-running with
+/// a different threshold is a re-run rather than a migration.
+model MatchCandidate {
+  id String @id @default(cuid())
+
+  // canonical order (store, then id) so one pair is never stored twice
+  a      CatalogueProduct @relation("CandidateA", fields: [aId], references: [id], onDelete: Cascade)
+  aId    String
+  b      CatalogueProduct @relation("CandidateB", fields: [bId], references: [id], onDelete: Cascade)
+  bId    String
+  storeA Store // denormalised so the review queue can filter by store pair
+  storeB Store
+
+  nameSimilarity Float // token overlap, the score that got this pair in
+  block          String // "brand" or "token": which pass found it. Token-only is the weaker claim
+  priceRatio     Float? // larger listing price over smaller. NOT euro/kg - that needs a package size we do not have yet
+
+  generatedAt DateTime @default(now())
+
+  @@unique([aId, bId])
+  @@index([nameSimilarity]) // the review queue sorts on this
+  @@index([storeA, storeB])
 }
