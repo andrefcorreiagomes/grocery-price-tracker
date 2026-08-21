@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/db";
+import { matchableEan } from "../../lib/matching";
 import type { Store } from "@/generated/prisma/client";
 import { recordPrices, type PriceHistorySummary } from "./price-history";
 import type { CategoryResult } from "./types";
@@ -27,6 +28,29 @@ export interface PersistResult {
    * which products did this crawl NOT see?
    */
   seenAt: Date;
+}
+
+/**
+ * Barcode and size, but only from a source that could actually know them.
+ *
+ * A listing crawl leaves these `undefined`, and undefined fields are omitted
+ * from the write - so a fast crawl cannot erase a barcode that a product-page
+ * crawl established. A product-page crawl sets them, including to null, because
+ * there it means "this page has no barcode" rather than "I did not look".
+ */
+function enrichment(p: {
+  ean?: string | null;
+  packageSize?: number | null;
+  unit?: string | null;
+}) {
+  if (p.ean === undefined && p.packageSize === undefined) return {};
+  return {
+    ean: p.ean ?? null,
+    eanNormalized: matchableEan(p.ean),
+    packageSize: p.packageSize ?? null,
+    unit: p.unit ?? null,
+    enrichedAt: new Date(),
+  };
 }
 
 /**
@@ -95,6 +119,7 @@ export async function persistCatalogue(
               url: p.url,
               firstSeenAt: seenAt,
               lastSeenAt: seenAt,
+              ...enrichment(p),
             },
             update: {
               name: p.name,
@@ -103,6 +128,7 @@ export async function persistCatalogue(
               price: p.price,
               url: p.url,
               lastSeenAt: seenAt,
+              ...enrichment(p),
             },
             select: { id: true, price: true },
           })

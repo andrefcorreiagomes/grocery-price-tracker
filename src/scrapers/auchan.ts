@@ -35,6 +35,8 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
     // AUCHAN 2X75G" - and does so for 86% of its catalogue, where Continente
     // and Pingo Doce do it for essentially none. So the name is the size
     // source here, and no separate label needs parsing.
+    // only Continente has a product-page crawl so far; see continente.ts
+    categoryPath: null,
     packageSize: parseSize(name)?.total ?? null,
     packageUnit: parseSize(name)?.unit ?? null,
     ...parsePromotion(product.offers.priceValidUntil),

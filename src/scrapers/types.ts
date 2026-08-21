@@ -3,6 +3,14 @@ export interface ScrapeResult {
   brand: string | null;
   price: number;
   ean: string | null;
+  /**
+   * The store's own category path for this product, when the page carries it.
+   * A listing tile always has one; a product page does not always, which is why
+   * this is nullable. Needed so a product-page crawl can produce the same rows
+   * as a listing crawl.
+   */
+  categoryPath: string | null;
+
   /** Pack size in base unit (kg or L). Extracted from the product page when available; null when not found. */
   packageSize: number | null;
   /**

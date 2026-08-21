@@ -229,6 +229,15 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         ...(report.categories.missing.length
           ? ["", `  configured here but no longer published: ${report.categories.missing.join(", ")}`]
           : []),
+        ...(report.categories.sitemapSlugs > 0
+          ? [
+              "",
+              `  sitemap cross-check: ${report.categories.sitemapSlugs} top-level categories published` +
+                (report.categories.sitemapUnknown.length
+                  ? `, ${report.categories.sitemapUnknown.length} unrecognised: ${report.categories.sitemapUnknown.join(", ")}`
+                  : ", all recognised"),
+            ]
+          : ["", "  sitemap cross-check: could not be read"]),
         ...(report.categories.publishedCountChanges.length
           ? [
               "",

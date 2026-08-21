@@ -14,6 +14,7 @@
     "backfill:prices": "tsx src/scripts/backfill-price-history.ts",
     "crawl:all": "tsx src/scripts/crawl-all.ts",
     "crawl:continente": "tsx src/scripts/crawl-continente.ts",
+    "crawl:continente:products": "tsx src/scripts/crawl-continente-products.ts",
     "crawl:pingodoce": "tsx src/scripts/crawl-pingodoce.ts",
     "crawl:auchan": "tsx src/scripts/crawl-auchan.ts"
   },

@@ -157,3 +157,93 @@ export function auditCategories(discovered: DiscoveredCategory[]): CategoryAudit
 export async function discoverCategories(): Promise<DiscoveredCategory[]> {
   return parseCategoryTree(await fetchHtml("https://www.continente.pt/"));
 }
+
+/**
+ * Continente's category sitemap: 1,974 category URLs, every depth, with a
+ * `lastmod` on each. Its `robots.txt` points at it, so reading it is invited.
+ *
+ * A SECOND source for the audit, not a replacement. The homepage tree is
+ * better - it carries the cgids we actually crawl by, and each category's
+ * product count - where the sitemap carries neither. What the sitemap adds:
+ *
+ *   - it survives a homepage markup change, which would otherwise leave the
+ *     audit silently auditing nothing
+ *   - it covers sub-categories too, so a new branch below the top level is
+ *     visible rather than hidden inside a department we already crawl
+ *   - it is 361 KB against the homepage's 2 MB
+ *
+ * It speaks in URL slugs rather than cgids, and the two do not match
+ * (`mercearia` against `mercearias`, `laticinios-e-ovos` against `laticinios`),
+ * so the correspondence is kept below as data. Guessing at it - prefix matching,
+ * fuzzy comparison - would be a silent failure waiting to happen, and the point
+ * of this check is to catch silent failures.
+ */
+const CATEGORY_SITEMAP = "https://www.continente.pt/sitemap-custom_sitemap_23-category.xml";
+
+/**
+ * Every top-level slug we recognise, and why. Anything published that is not
+ * here is reported, exactly as with the cgid audit.
+ */
+export const CONTINENTE_KNOWN_SLUGS: ReadonlyMap<string, string> = new Map([
+  // the six we crawl
+  ["frescos", "crawled"],
+  ["laticinios-e-ovos", "crawled"],
+  ["congelados", "crawled"],
+  ["mercearia", "crawled"],
+  ["bebidas-e-garrafeira", "crawled"],
+  ["bio-e-saudavel", "crawled"],
+  // non-food, deliberately skipped
+  ["limpeza", "non-food"],
+  ["bebe", "non-food, holds baby food - see the baby-food note"],
+  ["beleza-e-higiene", "non-food"],
+  ["animais", "non-food"],
+  ["casa-e-jardim", "non-food"],
+  ["brinquedos-e-jogos", "non-food"],
+  ["livros", "non-food"],
+  ["papelaria", "non-food"],
+  ["desporto-e-viagem", "non-food"],
+  ["negocios", "non-food, business supplies"],
+  // cross-cutting or seasonal shelves: they re-list products the food sections
+  // already carry, so crawling them would add duplicates rather than products
+  ["marcas", "own-brand shelf, re-lists food we already crawl"],
+  ["novidades", "promotional shelf"],
+  ["oportunidades", "promotional shelf"],
+  ["verao", "seasonal shelf"],
+  ["black-friday", "seasonal shelf"],
+  ["cyber-monday", "seasonal shelf"],
+  ["singles-day", "seasonal shelf"],
+]);
+
+/**
+ * The six food sections as the PRODUCTS spell them, which is not how the cgids
+ * spell them (`Laticínios e Ovos` against `laticinios`, `Mercearia` against
+ * `mercearias`). The product-page crawler has only the product's own category
+ * path to judge by, so it needs these rather than the ids.
+ */
+export const CONTINENTE_FOOD_SECTIONS: ReadonlySet<string> = new Set([
+  "Frescos",
+  "Laticínios e Ovos",
+  "Congelados",
+  "Mercearia",
+  "Bebidas e Garrafeira",
+  "Bio e Saudável",
+]);
+
+/** Top-level slugs published in the category sitemap. */
+export function parseCategorySlugs(xml: string): string[] {
+  const slugs = new Set<string>();
+  for (const match of xml.matchAll(/<loc>https:\/\/www\.continente\.pt\/([^<]+)<\/loc>/g)) {
+    const path = match[1].replace(/\/$/, "");
+    if (path && !path.includes("/")) slugs.add(path);
+  }
+  return [...slugs];
+}
+
+export async function discoverCategorySlugs(): Promise<string[]> {
+  return parseCategorySlugs(await fetchHtml(CATEGORY_SITEMAP));
+}
+
+/** Published slugs we do not recognise - the same question the cgid audit asks. */
+export function auditCategorySlugs(slugs: string[]): string[] {
+  return slugs.filter((s) => !CONTINENTE_KNOWN_SLUGS.has(s));
+}

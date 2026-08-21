@@ -45,6 +45,8 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
     brand: normalizePingoDoceBrand(product.brand?.name),
     price,
     ean: eanMatch ? eanMatch[1] : null,
+    // only Continente has a product-page crawl so far; see continente.ts
+    categoryPath: null,
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
     ...parsePromotion($),

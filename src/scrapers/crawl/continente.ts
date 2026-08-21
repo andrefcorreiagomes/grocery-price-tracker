@@ -5,7 +5,16 @@ import { CONTINENTE_FOOD_CATEGORIES } from "./continente-categories";
 import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
 
 /**
- * Catalogue crawler for Continente. Walks a food category's grid endpoint page
+ * The FAST Continente crawler: a whole category grid per request.
+ *
+ * NOTE ON robots.txt. Continente disallows `/*?cgid`, `/*?start=` and `/*?sz`,
+ * which is exactly how this crawler paginates, and points crawlers at its
+ * sitemap instead. So this route is not compliant, and it is kept because it is
+ * ~30x cheaper: 562 requests and 14 minutes against ~17,000 requests and about
+ * five hours for the compliant one in `continente-products.ts`. Choose between
+ * them deliberately; both are wired to their own npm script.
+ *
+ * Walks a food category's grid endpoint page
  * by page and returns the deduplicated products. Deliberately DB-free - it
  * fetches and parses; the runner script persists - mirroring how the search
  * extractors return `SearchHit[]` for a caller to store.

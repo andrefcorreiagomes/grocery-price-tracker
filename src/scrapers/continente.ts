@@ -39,6 +39,7 @@ export async function scrapeContinente(url: string): Promise<ScrapeResult> {
     brand: product.brand?.name || "Continente",
     price,
     ean: eanMatch ? eanMatch[1] : null,
+    categoryPath: parseCategoryPath(html),
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
     ...parsePromotion(html, price),
@@ -70,6 +71,30 @@ function parsePromotion(html: string, price: number): Pick<
     return { onPromotion: false, regularPrice: null, promoEndsAt: null };
   }
   return { onPromotion: true, regularPrice, promoEndsAt: null };
+}
+
+/**
+ * The category a product page claims for itself, from the analytics dataLayer:
+ * `"item_category":"Frescos","item_category2":"Frutas","item_category3":"..."`.
+ *
+ * Joined with "/" to match exactly what the listing tiles produce, so rows built
+ * from a product page and rows built from a grid are indistinguishable
+ * downstream. The JSON is HTML-escaped in the page source, hence the unescape -
+ * the same trap as the pre-discount price below.
+ */
+function parseCategoryPath(html: string): string | null {
+  const source = html.replace(/&quot;/g, '"');
+  const parts: string[] = [];
+  for (const key of ["item_category", "item_category2", "item_category3"]) {
+    const match = source.match(new RegExp(`"${key}"\s*:\s*"([^"]*)"`));
+    if (match?.[1]) parts.push(decodeEntities(match[1]));
+  }
+  return parts.length > 0 ? parts.join("/") : null;
+}
+
+/** The dataLayer double-escapes accents (`Ma&ccedil;&atilde;`). */
+function decodeEntities(text: string): string {
+  return cheerio.load(`<i>${text}</i>`)("i").text();
 }
 
 /**

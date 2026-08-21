@@ -130,6 +130,13 @@ export interface DailyReport {
     missing: string[];
     /** the store's OWN published counts, versus what it published last run */
     publishedCountChanges: { label: string; was: number; now: number }[];
+    /**
+     * Cross-check against the category sitemap, a second and independent source.
+     * If the homepage markup ever changes, the primary audit goes quiet - this
+     * is what notices.
+     */
+    sitemapSlugs: number;
+    sitemapUnknown: string[];
   };
 
   live: {
@@ -185,6 +192,8 @@ export interface ReportInput {
   http: HostStats[];
   drift: string[];
   shortSections: string[];
+  sitemapSlugs: string[];
+  sitemapUnknown: string[];
   baseline: { runs: number; since: Date | null };
   previousRun: {
     startedAt: Date;
@@ -455,6 +464,8 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
       unknown: audit.unknown.map((c) => ({ cgid: c.cgid, label: c.label, hitCount: c.hitCount })),
       missing: audit.missing,
       publishedCountChanges,
+      sitemapSlugs: input.sitemapSlugs.length,
+      sitemapUnknown: input.sitemapUnknown,
     },
     live: { trackedListingsMissing, candidatePairsAffected },
     drift: input.drift,
@@ -546,6 +557,8 @@ export function buildFailureReport(input: {
       unknown: input.audit?.unknown.map((c) => ({ cgid: c.cgid, label: c.label, hitCount: c.hitCount })) ?? [],
       missing: input.audit?.missing ?? [],
       publishedCountChanges: [],
+      sitemapSlugs: 0,
+      sitemapUnknown: [],
     },
     live: { trackedListingsMissing: [], candidatePairsAffected: 0 },
     drift: [],

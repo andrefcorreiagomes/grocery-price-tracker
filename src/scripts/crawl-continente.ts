@@ -4,6 +4,8 @@ import {
   CONTINENTE_FOOD_CATEGORIES,
   auditCategories,
   discoverCategories,
+  discoverCategorySlugs,
+  auditCategorySlugs,
   type CategoryAudit,
 } from "../scrapers/crawl/continente-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
@@ -74,6 +76,17 @@ async function main() {
     published = new Map(discovered.map((c) => [c.label, c.hitCount]));
   } catch (error) {
     console.error(`could not read the published category tree: ${(error as Error).message}`);
+  }
+
+  // Second, independent source. Cheap (361 KB), invited by robots.txt, and it
+  // sees sub-categories the homepage nav does not.
+  let sitemapSlugs: string[] = [];
+  let sitemapUnknown: string[] = [];
+  try {
+    sitemapSlugs = await discoverCategorySlugs();
+    sitemapUnknown = auditCategorySlugs(sitemapSlugs);
+  } catch (error) {
+    console.error(`could not read the category sitemap: ${(error as Error).message}`);
   }
 
   // The previous run has to be read BEFORE this one is recorded, and the
@@ -153,6 +166,8 @@ async function main() {
     http,
     drift,
     shortSections: short,
+    sitemapSlugs,
+    sitemapUnknown,
     baseline: { runs: baseline.runs, since: baseline.since },
     previousRun,
   });
