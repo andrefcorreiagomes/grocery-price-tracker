@@ -31,6 +31,7 @@ import {
   recordRun,
   rollingBaseline,
 } from "../scrapers/crawl/history";
+import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
 import type { SearchHit } from "../scrapers/search/types";
@@ -517,7 +518,7 @@ async function main() {
 main()
   .then(() => prisma.$disconnect())
   .catch(async (e) => {
-    console.error(e);
+    await writeCrashReport(STORE, e);
     await prisma.$disconnect();
     process.exit(1);
   });
