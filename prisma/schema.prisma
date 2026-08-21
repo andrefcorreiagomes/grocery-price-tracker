@@ -141,3 +141,33 @@ model MatchCandidate {
   @@index([nameSimilarity]) // the review queue sorts on this
   @@index([storeA, storeB])
 }
+
+/// One crawl of one store, with what each section returned. Kept so a run can
+/// be compared against the one before it: a category that quietly halves, or
+/// stops being crawled at all, is invisible to any single run's own checks -
+/// those only ask whether the store's published count was met, not whether the
+/// store is still publishing what it did yesterday.
+model CrawlRun {
+  id        String         @id @default(cuid())
+  store     Store
+  startedAt DateTime       @default(now())
+  /// distinct products kept across the whole run
+  total     Int
+  sections  CrawlSection[]
+
+  @@index([store, startedAt])
+}
+
+model CrawlSection {
+  id        String   @id @default(cuid())
+  run       CrawlRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId     String
+  cgid      String
+  label     String
+  /// distinct products this section contributed, after run-wide dedup
+  collected Int
+  /// what the store said the section held, when it said
+  expected  Int?
+
+  @@index([runId])
+}
