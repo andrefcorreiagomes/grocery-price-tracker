@@ -47,6 +47,27 @@ export interface ProductCrawlResult {
 }
 
 /**
+ * The product id a Continente URL ends with: `...-2597619.html` gives
+ * `2597619`.
+ *
+ * Not every id is numeric, which cost us 170 of the 101,398 published URLs when
+ * this only matched digits. Variant SKUs append a suffix and percent-encode the
+ * separating hyphen so the id survives (`...-glade-4505195%2D1.html` is
+ * `4505195-1`), and curated products carry a word id (`...-t%C3%A1bua1.html` is
+ * `tábua1`). Taking the last hyphen-separated segment and decoding it handles
+ * all three, and matches the id the listing tiles report for the same products.
+ */
+export function productIdFromUrl(url: string): string | null {
+  const tail = url.match(/-([^-/]+)\.html$/)?.[1];
+  if (!tail) return null;
+  try {
+    return decodeURIComponent(tail);
+  } catch {
+    return tail;
+  }
+}
+
+/**
  * Every product URL Continente publishes, keyed by the id embedded in the URL
  * (`...-2597619.html`). Six requests.
  *
@@ -64,7 +85,7 @@ export async function discoverProductUrls(): Promise<Map<string, string>> {
   for (const map of maps) {
     const xml = await fetchHtml(map);
     for (const entry of xml.matchAll(/<loc>(https:\/\/www\.continente\.pt\/produto\/[^<]+)<\/loc>/g)) {
-      const id = entry[1].match(/-(\d+)\.html$/)?.[1];
+      const id = productIdFromUrl(entry[1]);
       if (id) byId.set(id, entry[1]);
     }
   }
