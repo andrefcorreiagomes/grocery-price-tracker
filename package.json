@@ -11,6 +11,7 @@
     "scrape": "tsx src/scripts/scrape-daily.ts",
     "candidates": "tsx src/scripts/generate-candidates.ts",
     "enrich": "tsx src/scripts/enrich-candidates.ts",
+    "backfill:prices": "tsx src/scripts/backfill-price-history.ts",
     "crawl:all": "tsx src/scripts/crawl-all.ts",
     "crawl:continente": "tsx src/scripts/crawl-continente.ts",
     "crawl:pingodoce": "tsx src/scripts/crawl-pingodoce.ts",

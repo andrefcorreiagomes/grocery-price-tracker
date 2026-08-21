@@ -24,12 +24,44 @@ export interface RunSection {
   expected?: number | null;
 }
 
+/** The run before this one, for anything that needs to diff against it. */
+export async function previousRunFor(store: Store) {
+  const run = await prisma.crawlRun.findFirst({
+    where: { store },
+    orderBy: { startedAt: "desc" },
+    include: { sections: true },
+  });
+  if (!run) return null;
+  return {
+    startedAt: run.startedAt,
+    requests: run.requests,
+    fetchMs: run.fetchMs,
+    sections: run.sections.map((s) => ({ label: s.label, expected: s.expected })),
+  };
+}
+
+export interface RunRequestStats {
+  requests: number;
+  bytes: number;
+  fetchMs: number;
+  retries: number;
+}
+
 /** Save this run so the next one has something to compare against. */
-export async function recordRun(store: Store, total: number, sections: RunSection[]) {
+export async function recordRun(
+  store: Store,
+  total: number,
+  sections: RunSection[],
+  http?: RunRequestStats
+) {
   await prisma.crawlRun.create({
     data: {
       store,
       total,
+      requests: http?.requests ?? null,
+      bytes: http?.bytes ?? null,
+      fetchMs: http?.fetchMs ?? null,
+      retries: http?.retries ?? null,
       sections: {
         create: sections.map((s) => ({
           cgid: s.cgid,

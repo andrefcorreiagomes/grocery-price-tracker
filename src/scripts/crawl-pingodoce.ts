@@ -16,6 +16,10 @@ import { formatHttpStats } from "../scrapers/http";
  * publishes no barcode, so ean stays null; size also comes later from
  * enrichment. Idempotent: upserts by (store, storeProductId).
  */
+const priceLine = (p: { unchanged: number; changed: number; opened: number; skipped: number }) =>
+  `prices: ${p.changed} changed, ${p.unchanged} held, ${p.opened} new` +
+  (p.skipped ? `, ${p.skipped} without a price` : "");
+
 async function main() {
   const args = process.argv.slice(2);
   const cgid = args.find((a) => a.startsWith("--category="))?.split("=")[1];
@@ -43,7 +47,7 @@ async function main() {
   );
 
   const results = await crawlPingoDoce({ categories, maxPages });
-  const summaries = await persistCatalogue("PINGO_DOCE", results);
+  const { summaries, prices } = await persistCatalogue("PINGO_DOCE", results);
 
   // The store's own count is the yardstick: everything it lists should be either
   // collected here or already collected by an earlier department.
@@ -53,6 +57,7 @@ async function main() {
   console.log("\nrequests:");
   for (const line of formatHttpStats()) console.log(line);
 
+  console.log(`\n${priceLine(prices)}`);
   console.log(`Done: ${total} products across ${summaries.length} department(s).`);
   if (short.length > 0) {
     console.log(`\nWARNING: ${short.length} department(s) came up short: ${short.join(", ")}`);

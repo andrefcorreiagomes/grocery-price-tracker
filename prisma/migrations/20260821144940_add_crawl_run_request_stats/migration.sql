@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "CrawlRun" ADD COLUMN "bytes" INTEGER;
+ALTER TABLE "CrawlRun" ADD COLUMN "fetchMs" INTEGER;
+ALTER TABLE "CrawlRun" ADD COLUMN "requests" INTEGER;
+ALTER TABLE "CrawlRun" ADD COLUMN "retries" INTEGER;

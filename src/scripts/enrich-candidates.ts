@@ -84,7 +84,12 @@ async function enrichStore(
             eanNormalized: usable,
             packageSize: result.packageSize,
             unit: result.packageUnit,
-            price: result.price,
+            // Deliberately does NOT write `price`. The crawl owns the price
+            // series: it reads every product, uniformly, on a schedule.
+            // Enrichment covers an arbitrary subset on no schedule, so letting
+            // it write prices too would inject an apparent price change wherever
+            // a product page and its listing tile disagree - noise that could
+            // not be told apart from a real one.
             enrichedAt: new Date(),
           },
         })

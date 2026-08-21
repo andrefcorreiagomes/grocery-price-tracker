@@ -20,6 +20,10 @@ import { formatHttpStats } from "../scrapers/http";
  *
  * Listing data only; ean/size stay null for enrichment. Idempotent.
  */
+const priceLine = (p: { unchanged: number; changed: number; opened: number; skipped: number }) =>
+  `prices: ${p.changed} changed, ${p.unchanged} held, ${p.opened} new` +
+  (p.skipped ? `, ${p.skipped} without a price` : "");
+
 function parseMode(raw: string | undefined): AuchanCrawlMode {
   if (raw === undefined) return DEFAULT_AUCHAN_MODE;
   if (raw === "root" || raw === "departments") return raw;
@@ -44,7 +48,7 @@ async function main() {
 
   const { food, segmentTally, segmentSamples, crawled, walks, failedDepartments } =
     await crawlAuchan({ mode, maxPages });
-  const summaries = await persistCatalogue("AUCHAN", food);
+  const { summaries, prices } = await persistCatalogue("AUCHAN", food);
 
   const { lines, total } = coverageReport(food, summaries, 28, maxPages !== undefined);
 
@@ -92,7 +96,8 @@ async function main() {
   for (const line of formatHttpStats()) console.log(line);
 
   console.log(
-    `\nDone: ${total} food products across ${summaries.length} department(s), ` +
+    `\n${priceLine(prices)}` +
+      `\nDone: ${total} food products across ${summaries.length} department(s), ` +
       `${crawled} products walked.`
   );
   if (failedDepartments.length > 0) {

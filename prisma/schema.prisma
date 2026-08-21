@@ -104,6 +104,7 @@ model CatalogueProduct {
   @@index([eanNormalized]) // EAN match / veto
   candidatesA MatchCandidate[] @relation("CandidateA")
   candidatesB MatchCandidate[] @relation("CandidateB")
+  prices      CataloguePrice[]
 }
 
 /// A guess that two catalogue products, at different stores, are the same
@@ -153,6 +154,14 @@ model CrawlRun {
   startedAt DateTime       @default(now())
   /// distinct products kept across the whole run
   total     Int
+  /// Request stats for the run, so "the site is behaving normally" can be
+  /// judged against previous runs rather than asserted. A crawl that suddenly
+  /// takes three times longer, or starts retrying, is being throttled - and
+  /// that is the warning that arrives before a block, not after.
+  requests  Int?
+  bytes     Int?
+  fetchMs   Int?
+  retries   Int?
   sections  CrawlSection[]
 
   @@index([store, startedAt])
@@ -170,4 +179,38 @@ model CrawlSection {
   expected  Int?
 
   @@index([runId])
+}
+
+/// The price of a catalogue product over time, as one row per PRICE rather than
+/// one per day.
+///
+/// Every crawl already reads every product's price off its listing tile, so this
+/// costs no extra requests - it only stops us overwriting yesterday's reading.
+/// A row per product per day would be ~15 million rows a year and still could
+/// not distinguish "the price held steady" from "we missed a crawl"; a period
+/// answers both, and costs a row only when the price actually moves.
+///
+/// Gaps are deliberately left visible. A product that disappears for a week and
+/// comes back at the same price keeps ONE period, and the silence between the
+/// old lastSeenAt and the new one is there for anyone reading the series. There
+/// is no need to record "we did not see this" when the absence says it.
+///
+/// Fed only by the crawl (via persistCatalogue). Enrichment deliberately does
+/// not write prices: it covers an arbitrary subset on no schedule, and mixing
+/// two sources would inject apparent price changes wherever a product page and
+/// its listing tile disagree.
+model CataloguePrice {
+  id          String           @id @default(cuid())
+  product     CatalogueProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  price       Float
+  firstSeenAt DateTime
+  lastSeenAt  DateTime
+  /// Exactly one period per product is open. A denormalisation - the open one is
+  /// also the one with the greatest firstSeenAt - kept because this lookup runs
+  /// 42,000 times per crawl and wants a single indexed query.
+  isOpen      Boolean          @default(true)
+
+  @@index([productId, isOpen])
+  @@index([productId, firstSeenAt])
 }

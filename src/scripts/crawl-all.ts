@@ -45,12 +45,12 @@ function minutesSince(startedAt: number): string {
 
 async function runContinente(maxPages: number | undefined, startedAt: number) {
   const results = await crawlContinente({ maxPages });
-  const summaries = await queueWrite(() => persistCatalogue("CONTINENTE", results));
+  const { summaries, prices } = await queueWrite(() => persistCatalogue("CONTINENTE", results));
   console.log(`[${minutesSince(startedAt)}] Continente finished`);
 
   const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
   return {
-    title: `CONTINENTE - ${total} products across ${summaries.length} section(s)`,
+    title: `CONTINENTE - ${total} products across ${summaries.length} section(s), ${prices.changed} price change(s)`,
     lines,
     short,
     total,
@@ -59,12 +59,12 @@ async function runContinente(maxPages: number | undefined, startedAt: number) {
 
 async function runPingoDoce(maxPages: number | undefined, startedAt: number) {
   const results = await crawlPingoDoce({ maxPages });
-  const summaries = await queueWrite(() => persistCatalogue("PINGO_DOCE", results));
+  const { summaries, prices } = await queueWrite(() => persistCatalogue("PINGO_DOCE", results));
   console.log(`[${minutesSince(startedAt)}] Pingo Doce finished`);
 
   const { lines, total, short } = coverageReport(results, summaries, 30, maxPages !== undefined);
   return {
-    title: `PINGO DOCE - ${total} products across ${summaries.length} department(s)`,
+    title: `PINGO DOCE - ${total} products across ${summaries.length} department(s), ${prices.changed} price change(s)`,
     lines,
     short,
     total,
@@ -78,7 +78,7 @@ async function runAuchan(
 ) {
   const { food, segmentTally, segmentSamples, crawled, walks, failedDepartments } =
     await crawlAuchan({ mode, maxPages });
-  const summaries = await queueWrite(() => persistCatalogue("AUCHAN", food));
+  const { summaries, prices } = await queueWrite(() => persistCatalogue("AUCHAN", food));
   console.log(`[${minutesSince(startedAt)}] Auchan finished`);
 
   const { lines, total } = coverageReport(food, summaries, 28, maxPages !== undefined);
@@ -126,6 +126,7 @@ async function runAuchan(
   return {
     title:
       `AUCHAN [${mode}] - ${total} food products across ${summaries.length} department(s)` +
+      `, ${prices.changed} price change(s)` +
       `, ${crawled} products walked`,
     lines: [...lines, ...walkLines, ...tally],
     short,

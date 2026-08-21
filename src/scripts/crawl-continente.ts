@@ -7,8 +7,10 @@ import {
 } from "../scrapers/crawl/continente-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport } from "../scrapers/crawl/report";
-import { formatHttpStats } from "../scrapers/http";
-import { compareWithPrevious, recordRun } from "../scrapers/crawl/history";
+import { formatHttpStats, httpStats } from "../scrapers/http";
+import { compareWithPrevious, previousRunFor, recordRun } from "../scrapers/crawl/history";
+import { buildDailyReport, snapshotBefore } from "../scrapers/crawl/daily-report";
+import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 
 /**
  * Crawl Continente's food catalogue into the CatalogueProduct table.
@@ -22,6 +24,10 @@ import { compareWithPrevious, recordRun } from "../scrapers/crawl/history";
  * upserts by (store, storeProductId), so re-running refreshes prices rather than
  * duplicating.
  */
+const priceLine = (p: { unchanged: number; changed: number; opened: number; skipped: number }) =>
+  `prices: ${p.changed} changed, ${p.unchanged} held, ${p.opened} new` +
+  (p.skipped ? `, ${p.skipped} without a price` : "");
+
 async function main() {
   const args = process.argv.slice(2);
   const cgid = args.find((a) => a.startsWith("--category="))?.split("=")[1];
@@ -52,31 +58,29 @@ async function main() {
   // renamed already fails loudly - its grid answers HTTP 500 and the crawl
   // throws - but a NEW food department would otherwise be invisible, because we
   // would simply never ask for it.
-  const audit = auditCategories(await discoverCategories());
-  if (audit.unknown.length > 0 || audit.missing.length > 0) {
-    console.log("\ncategory audit:");
-    for (const c of audit.unknown) {
-      console.log(`  UNKNOWN  ${c.cgid.padEnd(24)} ${String(c.hitCount).padStart(6)} products  ${c.label}`);
-    }
-    for (const cgid of audit.missing) {
-      console.log(`  MISSING  ${cgid.padEnd(24)} configured here, no longer published by the store`);
-    }
-  }
+  const discovered = await discoverCategories();
+  const audit = auditCategories(discovered);
+  const published = new Map(discovered.map((c) => [c.label, c.hitCount]));
+
+  // The previous run has to be read BEFORE this one is recorded, and the
+  // catalogue has to be read before the crawl saves over it: name, category,
+  // price and lastSeenAt are all overwritten in place, so this is the only
+  // moment their previous values still exist.
+  const previousRun = await previousRunFor("CONTINENTE");
+  const before = await snapshotBefore("CONTINENTE");
 
   const results = await crawlContinente({ categories, maxPages });
-  const summaries = await persistCatalogue("CONTINENTE", results);
+  const { summaries, prices, seenAt } = await persistCatalogue("CONTINENTE", results);
 
   // The store's own count is the yardstick: everything it lists should be either
   // collected here or already collected by an earlier section.
   const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
   for (const line of lines) console.log(line);
+  console.log(`\n${priceLine(prices)}`);
 
-  console.log("\nrequests:");
-  for (const line of formatHttpStats()) console.log(line);
-
-  // Comparing against the previous run catches what a single run cannot see:
-  // the store itself changing under us. Skipped for partial runs, which are not
-  // comparable to a full one by construction.
+  // A partial run is not comparable to a full one by construction, so it is
+  // neither recorded as history nor reported on - recording it would poison the
+  // next comparison.
   const partial = maxPages !== undefined || cgid !== undefined;
   const sections = results.map((r, i) => ({
     cgid: r.category.cgid,
@@ -84,28 +88,46 @@ async function main() {
     collected: summaries[i]?.total ?? r.products.length,
     expected: r.expected,
   }));
-  let drift: string[] = [];
-  if (!partial) {
-    drift = await compareWithPrevious("CONTINENTE", total, sections);
-    await recordRun("CONTINENTE", total, sections);
+
+  if (partial) {
+    console.log("\nrequests:");
+    for (const line of formatHttpStats()) console.log(line);
+    console.log(`\nDone: ${total} products across ${summaries.length} section(s).`);
+    console.log("(partial run: no report written, no history recorded)");
+    return;
   }
 
-  console.log(`Done: ${total} products across ${summaries.length} section(s).`);
-  if (short.length > 0) {
-    console.log(`\nWARNING: ${short.length} section(s) came up short: ${short.join(", ")}`);
-  }
-  if (audit.unknown.length > 0) {
-    console.log(
-      `\nWARNING: ${audit.unknown.length} category(ies) published but neither crawled nor ` +
-        `known to be non-food: ${audit.unknown.map((c) => c.cgid).join(", ")}`
-    );
-  }
-  if (audit.missing.length > 0) {
-    console.log(`\nWARNING: configured but no longer published: ${audit.missing.join(", ")}`);
-  }
-  for (const warning of drift) {
-    console.log(`\nWARNING: ${warning}`);
-  }
+  const drift = await compareWithPrevious("CONTINENTE", total, sections);
+  const http = httpStats();
+
+  const report = await buildDailyReport({
+    store: "CONTINENTE",
+    seenAt,
+    before,
+    results,
+    audit,
+    publishedCounts: published,
+    prices,
+    http,
+    drift,
+    shortSections: short,
+    previousRun,
+  });
+
+  const written = await writeReport(report);
+  console.log(`\n${renderReport(report)}`);
+  console.log(`\nreport written to ${written.text} and ${written.json}`);
+
+  await recordRun("CONTINENTE", total, sections, {
+    requests: http.reduce((n, h) => n + h.requests, 0),
+    bytes: http.reduce((n, h) => n + h.bytes, 0),
+    fetchMs: http.reduce((n, h) => n + h.fetchMs, 0),
+    retries: http.reduce((n, h) => n + h.retries, 0),
+  });
+
+  // The verdict is the machine-readable half: a scheduler should not have to
+  // read prose to find out that a crawl went wrong.
+  if (report.verdict === "FAIL") process.exitCode = 1;
 }
 
 main()
