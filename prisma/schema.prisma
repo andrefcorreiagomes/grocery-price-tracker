@@ -196,6 +196,18 @@ model CrawlRun {
   /// cannot: the files need not be equally sized, so losing a small one can
   /// move the address count by less than the 5% that looks suspicious.
   sitemapFiles   Int?
+
+  /// Whether the two figures above were BELIEVED, as opposed to merely
+  /// observed. They are recorded either way.
+  ///
+  /// Recording only trusted runs looks safer and is not: if the store
+  /// legitimately reorganises from six sitemap files to five, every future run
+  /// compares against the last trusted six, distrusts the sitemap, and skips
+  /// discovery - forever. The catalogue stops growing and the only symptom is a
+  /// warning that never resolves. Keeping the disbelieved observations is what
+  /// lets a persistent change be told apart from a one-night glitch, and
+  /// eventually accepted as the new normal.
+  sitemapTrusted Boolean?
   sections       CrawlSection[]
 
   @@index([store, startedAt])

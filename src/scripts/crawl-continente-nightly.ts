@@ -23,6 +23,7 @@ import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { buildDailyReport, snapshotBefore, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
+import { RUNS_BEFORE_ACCEPTING, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
 import {
   compareWithBaseline,
   compareWithPrevious,
@@ -58,9 +59,6 @@ import type { SearchHit } from "../scrapers/search/types";
  */
 
 const STORE = "CONTINENTE" as const;
-
-/** Below this share of the previous sitemap, assume the file is broken. */
-const SITEMAP_SHRINK_LIMIT = 0.95;
 
 /** Verdicts re-checked per night, on top of the backlog budget. */
 const RECHECK_PER_NIGHT = 300;
@@ -134,30 +132,45 @@ async function main() {
     console.log("  skipping discovery for tonight; the price refresh continues");
   }
 
-  const previousSitemap = await prisma.crawlRun.findFirst({
-    where: { store: STORE, sitemapEntries: { not: null } },
+  // The last sitemap we BELIEVED is the baseline; everything since then is
+  // evidence about whether a change is a glitch or the new normal. Both are
+  // needed - see sitemap-trust.ts for why recording only trusted runs stalls
+  // discovery permanently after a legitimate reorganisation.
+  const lastTrusted = await prisma.crawlRun.findFirst({
+    where: { store: STORE, sitemapTrusted: true },
     orderBy: { startedAt: "desc" },
-    select: { sitemapEntries: true, sitemapFiles: true },
+    select: { sitemapEntries: true, sitemapFiles: true, startedAt: true },
   });
-  const sitemapPrevious = previousSitemap?.sitemapEntries ?? null;
-  const filesPrevious = previousSitemap?.sitemapFiles ?? null;
+  const recentRuns = await prisma.crawlRun.findMany({
+    where: {
+      store: STORE,
+      sitemapEntries: { not: null },
+      ...(lastTrusted ? { startedAt: { gt: lastTrusted.startedAt } } : {}),
+    },
+    orderBy: { startedAt: "desc" },
+    take: RUNS_BEFORE_ACCEPTING,
+    select: { sitemapEntries: true, sitemapFiles: true, sitemapTrusted: true },
+  });
 
-  // Three ways to distrust it, and the reason is worth keeping because they
-  // call for different responses. Unreadable fixes itself; a file that stopped
-  // being listed does not.
-  let distrust: string | null = null;
-  if (sitemapError !== null) {
-    distrust = `could not be read (${sitemapError})`;
-  } else if (sitemapFiles === 0) {
-    distrust = "the index listed no product sitemap files at all";
-  } else if (filesPrevious !== null && sitemapFiles < filesPrevious) {
-    // Deliberately independent of the address count: an unevenly small file
-    // could disappear without moving the count by the 5% below.
-    distrust = `the index listed ${sitemapFiles} product file(s), down from ${filesPrevious}`;
-  } else if (sitemapPrevious !== null && published.size < sitemapPrevious * SITEMAP_SHRINK_LIMIT) {
-    distrust = `it shrank from ${sitemapPrevious.toLocaleString()} to ${published.size.toLocaleString()} entries`;
-  }
-  const sitemapTrusted = distrust === null;
+  const sitemapBaseline =
+    lastTrusted?.sitemapEntries != null && lastTrusted.sitemapFiles != null
+      ? { entries: lastTrusted.sitemapEntries, files: lastTrusted.sitemapFiles }
+      : null;
+  const sitemapPrevious = sitemapBaseline?.entries ?? null;
+  const filesPrevious = sitemapBaseline?.files ?? null;
+
+  const trust = judgeSitemap({
+    entries: published.size,
+    files: sitemapFiles,
+    error: sitemapError,
+    baseline: sitemapBaseline,
+    recent: recentRuns.map((r) => ({
+      entries: r.sitemapEntries ?? 0,
+      files: r.sitemapFiles ?? 0,
+      trusted: r.sitemapTrusted ?? false,
+    })),
+  });
+  const { trusted: sitemapTrusted, distrust, accepted } = trust;
 
   const catalogue = await prisma.catalogueProduct.findMany({
     where: { store: STORE },
@@ -186,6 +199,7 @@ async function main() {
         `, ${unexamined.length.toLocaleString()} never opened`
     );
   }
+  if (accepted !== null) console.log(`  note: ${accepted}`);
   if (!sitemapTrusted) {
     console.log(`  not trusting the sitemap: ${distrust}`);
     console.log(`  skipping discovery; ${catalogueIds.size.toLocaleString()} tracked products are unaffected`);
@@ -344,6 +358,7 @@ async function main() {
     sitemapPrevious,
     sitemapTrusted,
     sitemapDistrust: distrust,
+    sitemapAccepted: accepted,
     sitemapFiles,
     sitemapFilesPrevious: filesPrevious,
     examined: fromBacklog.length,
@@ -438,8 +453,11 @@ async function main() {
       sections,
       { ...stats, wireBytes: stats.wireBytes || null },
       seenAt,
-      sitemapTrusted ? published.size : null,
-      sitemapTrusted ? sitemapFiles : null
+      // Recorded whether or not we believed them: a disbelieved observation is
+      // what lets the next run tell a persistent change from a one-night glitch.
+      published.size,
+      sitemapFiles,
+      sitemapTrusted
     );
   }
 
@@ -450,6 +468,14 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
+  if (accepted !== null) {
+    report = {
+      ...report,
+      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
+      problems: [`sitemap baseline moved: ${accepted}`, ...report.problems],
+    };
+  }
+
   if (!sitemapTrusted) {
     report = {
       ...report,

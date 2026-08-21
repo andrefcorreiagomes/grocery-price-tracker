@@ -74,7 +74,13 @@ export async function recordRun(
    */
   sitemapEntries?: number | null,
   /** how many product sitemap files the index listed, alongside the entries */
-  sitemapFiles?: number | null
+  sitemapFiles?: number | null,
+  /**
+   * Whether those figures were BELIEVED. Recorded either way: keeping the
+   * disbelieved ones is what lets the next run tell a persistent change from a
+   * one-night glitch, instead of distrusting a reorganised sitemap forever.
+   */
+  sitemapTrusted?: boolean | null
 ) {
   await prisma.crawlRun.create({
     data: {
@@ -86,6 +92,7 @@ export async function recordRun(
       wireBytes: http?.wireBytes ?? null,
       sitemapEntries: sitemapEntries ?? null,
       sitemapFiles: sitemapFiles ?? null,
+      sitemapTrusted: sitemapTrusted ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

@@ -6,6 +6,7 @@ import {
   staleDelisted,
   touchChecked,
 } from "../scrapers/crawl/product-checks";
+import { verifySitemapTrust } from "./verify-sitemap-trust";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -218,6 +219,12 @@ async function main() {
   );
 
   await cleanup();
+
+  // Pure logic, no database - but it belongs behind the same command, because a
+  // check nobody remembers to run is not a check.
+  console.log("\n9. sitemap trust, across a sequence of runs");
+  failures += verifySitemapTrust();
+
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;
 }

@@ -27,6 +27,13 @@ export interface DiscoveryExtras {
    * outage fixes itself, a file that stopped being listed does not.
    */
   sitemapDistrust: string | null;
+  /**
+   * Set when figures that looked wrong have now persisted long enough to be
+   * treated as the new normal. Reported loudly rather than absorbed quietly:
+   * the baseline moved, and that is exactly the kind of change that should
+   * never happen without somebody being told.
+   */
+  sitemapAccepted: string | null;
   /** product sitemap files the index listed, and what it listed last run */
   sitemapFiles: number;
   sitemapFilesPrevious: number | null;

@@ -220,6 +220,13 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               ? " (no previous run to compare)"
               : ` (was ${d.sitemapFilesPrevious})`),
           `  sitemap trusted:           ${d.sitemapTrusted ? "yes" : "NO"}`,
+          ...(d.sitemapAccepted === null
+            ? []
+            : [
+                `     NOTE: ${d.sitemapAccepted}`,
+                `     The baseline has moved. If this was not a deliberate change at the`,
+                `     store, it is worth looking at what happened.`,
+              ]),
           ...(d.sitemapTrusted
             ? []
             : [
