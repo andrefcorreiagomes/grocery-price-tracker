@@ -13,8 +13,25 @@ import type { ProductNote } from "./daily-report";
 export interface DiscoveryExtras {
   /** product ids the sitemap published this run */
   sitemapEntries: number;
-  /** what it published last run, for the shrink guard */
+  /**
+   * What the last BELIEVED run saw, which is what both guards measure against -
+   * and when, because after a distrusted night that baseline can be several
+   * days old and "was 101,398" alone hides which day it means.
+   */
   sitemapPrevious: number | null;
+  sitemapBaselineAt: string | null;
+
+  /**
+   * The immediately previous run, believed or not. A separate figure from the
+   * baseline: night-over-night movement is what a reader actually wants to see,
+   * while the baseline is what the guard is entitled to compare against.
+   */
+  sitemapLastRun: {
+    entries: number;
+    files: number;
+    at: string;
+    trusted: boolean;
+  } | null;
   /**
    * False when the sitemap came back suspiciously smaller than last time. A
    * truncated file is far likelier than a store losing thousands of products

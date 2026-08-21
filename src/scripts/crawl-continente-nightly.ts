@@ -141,6 +141,15 @@ async function main() {
     orderBy: { startedAt: "desc" },
     select: { sitemapEntries: true, sitemapFiles: true, startedAt: true },
   });
+  // The immediately previous run, believed or not. Night-over-night movement is
+  // what a reader wants; the trusted baseline is what the guards are entitled
+  // to measure against, and after a bad night the two are different days.
+  const lastRun = await prisma.crawlRun.findFirst({
+    where: { store: STORE, sitemapEntries: { not: null } },
+    orderBy: { startedAt: "desc" },
+    select: { sitemapEntries: true, sitemapFiles: true, sitemapTrusted: true, startedAt: true },
+  });
+
   const recentRuns = await prisma.crawlRun.findMany({
     where: {
       store: STORE,
@@ -356,6 +365,15 @@ async function main() {
   const discovery: DiscoveryExtras = {
     sitemapEntries: published.size,
     sitemapPrevious,
+    sitemapBaselineAt: lastTrusted?.startedAt.toISOString() ?? null,
+    sitemapLastRun: lastRun
+      ? {
+          entries: lastRun.sitemapEntries ?? 0,
+          files: lastRun.sitemapFiles ?? 0,
+          at: lastRun.startedAt.toISOString(),
+          trusted: lastRun.sitemapTrusted ?? false,
+        }
+      : null,
     sitemapTrusted,
     sitemapDistrust: distrust,
     sitemapAccepted: accepted,

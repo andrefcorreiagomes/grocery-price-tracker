@@ -211,14 +211,26 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "on, and the count is not recorded - believing a bad one would make tomorrow read the " +
           "recovery as an enormous increase.",
         [
-          `  published in the sitemap:  ${d.sitemapEntries.toLocaleString()}` +
-            (d.sitemapPrevious === null
-              ? " (no previous run to compare)"
-              : ` (was ${d.sitemapPrevious.toLocaleString()}, ${signedPercent(d.sitemapEntries, d.sitemapPrevious)})`),
-          `  spread across:             ${d.sitemapFiles} file(s)` +
-            (d.sitemapFilesPrevious === null
-              ? " (no previous run to compare)"
-              : ` (was ${d.sitemapFilesPrevious})`),
+          `  published in the sitemap:  ${d.sitemapEntries.toLocaleString()} address(es) in ${d.sitemapFiles} file(s)`,
+          ...(d.sitemapLastRun === null
+            ? ["    vs last run:            no previous run to compare against"]
+            : [
+                `    vs last run (${d.sitemapLastRun.at.slice(0, 10)}):` +
+                  `  ${d.sitemapLastRun.entries.toLocaleString()} in ${d.sitemapLastRun.files} file(s)` +
+                  `   ${signedPercent(d.sitemapEntries, d.sitemapLastRun.entries)}` +
+                  (d.sitemapLastRun.trusted ? "" : "   (that run was not trusted)"),
+              ]),
+          // Shown only when it is a different run from the one above, so a
+          // normal night does not print the same line twice.
+          ...(d.sitemapPrevious === null ||
+          (d.sitemapLastRun !== null && d.sitemapLastRun.at === d.sitemapBaselineAt)
+            ? []
+            : [
+                `    vs trusted baseline (${d.sitemapBaselineAt?.slice(0, 10) ?? "?"}):` +
+                  `  ${d.sitemapPrevious.toLocaleString()} in ${d.sitemapFilesPrevious ?? "?"} file(s)` +
+                  `   ${signedPercent(d.sitemapEntries, d.sitemapPrevious)}` +
+                  "   <- what the guards measure against",
+              ]),
           `  sitemap trusted:           ${d.sitemapTrusted ? "yes" : "NO"}`,
           ...(d.sitemapAccepted === null
             ? []
