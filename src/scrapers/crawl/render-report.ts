@@ -34,6 +34,18 @@ function section(title: string, note: string, lines: string[], explain: boolean)
   return [`## ${title}`, "", ...(explain ? [`> ${note}`, ""] : []), ...lines, ""];
 }
 
+/**
+ * Movement against a previous figure, signed. The direction is the point: a
+ * sitemap that grew and one that shrank read identically as a bare count, and
+ * only one of them is a reason to look.
+ */
+function signedPercent(now: number, before: number): string {
+  if (before === 0) return "no previous total";
+  const delta = (100 * (now - before)) / before;
+  if (Math.abs(delta) < 0.005) return "unchanged";
+  return `${delta > 0 ? "+" : ""}${delta.toFixed(2)}%`;
+}
+
 function notes(items: ProductNote[], indent = "  "): string[] {
   return items.map((n) => `${indent}${n.name.slice(0, 52).padEnd(52)}${n.detail ? `  ${n.detail}` : ""}`);
 }
@@ -188,21 +200,34 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "each night we subtract what we track and what we have already judged, and open whatever is " +
           "left. The answer is written down permanently, which is what stops this costing 24 hours " +
           "every single night. Until 'never opened' reaches zero, a newly listed product may wait its " +
-          "turn in that queue.",
+          "turn in that queue. " +
+          "EVERYTHING HERE DEPENDS ON THE SITEMAP BEING SOUND, so it is checked before it is used, " +
+          "on the entry count AND on the number of files it came in. Both, because the files are not " +
+          "equally sized: the index dropping a small one can move the entry count by a fraction of a " +
+          "percent - measured at 0.20% for a 200-entry file - and slip past a threshold entirely, " +
+          "while a slice of the store silently stops being published as far as we can tell. A file " +
+          "count also means something on a first run, when there is no previous entry count to " +
+          "compare against. When the sitemap is not trusted, discovery is skipped rather than acted " +
+          "on, and the count is not recorded - believing a bad one would make tomorrow read the " +
+          "recovery as an enormous increase.",
         [
           `  published in the sitemap:  ${d.sitemapEntries.toLocaleString()}` +
             (d.sitemapPrevious === null
               ? " (no previous run to compare)"
-              : ` (was ${d.sitemapPrevious.toLocaleString()})`),
+              : ` (was ${d.sitemapPrevious.toLocaleString()}, ${signedPercent(d.sitemapEntries, d.sitemapPrevious)})`),
           `  spread across:             ${d.sitemapFiles} file(s)` +
-            (d.sitemapFilesPrevious === null ? "" : ` (was ${d.sitemapFilesPrevious})`),
+            (d.sitemapFilesPrevious === null
+              ? " (no previous run to compare)"
+              : ` (was ${d.sitemapFilesPrevious})`),
+          `  sitemap trusted:           ${d.sitemapTrusted ? "yes" : "NO"}`,
           ...(d.sitemapTrusted
             ? []
             : [
-                `  !! the sitemap was NOT trusted - discovery skipped this run.`,
                 `     ${d.sitemapDistrust}`,
-                `     Prices were still refreshed: phase 2 works from our own stored addresses.`,
+                `     Discovery was skipped. Prices were still refreshed: phase 2 works from`,
+                `     our own stored addresses and never needs the sitemap.`,
               ]),
+          "",
           `  opened for the first time: ${d.examined.toLocaleString()}`,
           `  re-opened, verdict stale:  ${d.rechecked.toLocaleString()}`,
           `  of those, food added:      ${d.newFoodCount.toLocaleString()}`,
