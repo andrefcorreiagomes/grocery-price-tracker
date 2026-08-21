@@ -80,7 +80,11 @@ export async function recordRun(
    * disbelieved ones is what lets the next run tell a persistent change from a
    * one-night glitch, instead of distrusting a reorganised sitemap forever.
    */
-  sitemapTrusted?: boolean | null
+  sitemapTrusted?: boolean | null,
+  /** entries per sitemap file, so the next run can compare each against itself */
+  sitemapPerFile?: { url: string; entries: number }[] | null,
+  /** `<loc>` entries we could not turn into a product id; should be 0 */
+  sitemapUnparseable?: number | null
 ) {
   await prisma.crawlRun.create({
     data: {
@@ -93,6 +97,8 @@ export async function recordRun(
       sitemapEntries: sitemapEntries ?? null,
       sitemapFiles: sitemapFiles ?? null,
       sitemapTrusted: sitemapTrusted ?? null,
+      sitemapPerFile: sitemapPerFile ? JSON.stringify(sitemapPerFile) : null,
+      sitemapUnparseable: sitemapUnparseable ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

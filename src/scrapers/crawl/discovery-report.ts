@@ -55,6 +55,21 @@ export interface DiscoveryExtras {
   sitemapFiles: number;
   sitemapFilesPrevious: number | null;
 
+  /** entries in each file this run, in the order the index listed them */
+  sitemapPerFile: { url: string; entries: number }[];
+  /**
+   * Files that shrank sharply against their own previous size. Reported, not
+   * acted on - see FILE_SHRINK_LIMIT for why.
+   */
+  sitemapFileWarnings: string[];
+
+  /**
+   * `<loc>` entries whose product id could not be extracted, so they were
+   * dropped. Should be zero; it was 170 for months without anyone knowing.
+   */
+  sitemapUnparseable: number;
+  sitemapUnparseableSamples: string[];
+
   /** ids opened for the FIRST time this run, drawn from the backlog */
   examined: number;
   /** ids re-opened because their verdict had gone stale */

@@ -209,7 +209,14 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "count also means something on a first run, when there is no previous entry count to " +
           "compare against. When the sitemap is not trusted, discovery is skipped rather than acted " +
           "on, and the count is not recorded - believing a bad one would make tomorrow read the " +
-          "recovery as an enormous increase.",
+          "recovery as an enormous increase. " +
+          "Two figures below exist because silence is the dangerous failure. Per-file entries catch " +
+          "partial damage the total hides - a file truncated at 90% loses about 1.5% of the " +
+          "addresses, comfortably under any sensible threshold on the total - and are reported " +
+          "rather than acted on, since we do not yet know whether the store repartitions its files " +
+          "between regenerations. 'Addresses with no id' should be zero: it was 170 for months, " +
+          "dropped without a word, because the id pattern matched digits only. Anything above zero " +
+          "means the URL shape changed and we are quietly discarding products.",
         [
           `  published in the sitemap:  ${d.sitemapEntries.toLocaleString()} address(es) in ${d.sitemapFiles} file(s)`,
           ...(d.sitemapLastRun === null
@@ -231,6 +238,21 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
                   `   ${signedPercent(d.sitemapEntries, d.sitemapPrevious)}` +
                   "   <- what the guards measure against",
               ]),
+          ...(d.sitemapPerFile.length === 0
+            ? []
+            : [
+                "    per file:",
+                ...d.sitemapPerFile.map(
+                  (f) =>
+                    `      ${(f.url.split("/").pop() ?? f.url).slice(0, 40).padEnd(40)} ${f.entries.toLocaleString().padStart(8)}`
+                ),
+              ]),
+          ...(d.sitemapFileWarnings.length === 0
+            ? []
+            : ["    !! a file shrank sharply:", ...d.sitemapFileWarnings.map((w) => `       ${w}`)]),
+          `  addresses with no id:      ${d.sitemapUnparseable.toLocaleString()}` +
+            (d.sitemapUnparseable === 0 ? "  (as it should be)" : "  <- the URL shape may have changed"),
+          ...d.sitemapUnparseableSamples.map((u) => `       ${u.replace("https://www.continente.pt", "")}`),
           `  sitemap trusted:           ${d.sitemapTrusted ? "yes" : "NO"}`,
           ...(d.sitemapAccepted === null
             ? []

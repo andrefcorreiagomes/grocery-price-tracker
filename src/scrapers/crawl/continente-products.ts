@@ -121,7 +121,35 @@ export interface SitemapResult {
    * listing zero product files is wrong on its face.
    */
   files: number;
+
+  /**
+   * Entries found in each file, in the order the index listed them.
+   *
+   * The aggregate count hides partial damage. A file truncated at 90% loses
+   * about 1.5% of the addresses - comfortably under the 5% that makes a
+   * shrunken sitemap suspicious, so nothing fires - while a file that suddenly
+   * yields 200 entries instead of 20,000 is unambiguous on its own. Comparing
+   * each file against itself catches what comparing the total cannot.
+   */
+  perFile: { url: string; entries: number }[];
+
+  /**
+   * `<loc>` entries we could not turn into a product id, and so silently
+   * dropped.
+   *
+   * This is not hypothetical: the id pattern once matched digits only, which
+   * discarded 170 of the 101,398 published URLs without a word, and it surfaced
+   * only because someone audited the sitemap by hand months later. A count that
+   * should be zero is the cheapest possible alarm for the next time the URL
+   * shape changes.
+   */
+  unparseable: number;
+  /** a few of them, so the report can show what the new shape looks like */
+  unparseableSamples: string[];
 }
+
+/** Examples of dropped URLs carried for the report. */
+const UNPARSEABLE_SAMPLES = 5;
 
 /**
  * Every product URL Continente publishes, keyed by the id embedded in the URL
@@ -142,14 +170,29 @@ export async function discoverProductUrls(): Promise<SitemapResult> {
     .filter((u) => u.includes("product"));
 
   const urls = new Map<string, string>();
+  const perFile: { url: string; entries: number }[] = [];
+  const unparseableSamples: string[] = [];
+  let unparseable = 0;
+
   for (const map of maps) {
     const xml = await fetchHtml(map);
+    let entries = 0;
     for (const entry of xml.matchAll(/<loc>(https:\/\/www\.continente\.pt\/produto\/[^<]+)<\/loc>/g)) {
+      entries++;
       const id = productIdFromUrl(entry[1]);
-      if (id) urls.set(id, entry[1]);
+      if (id) {
+        urls.set(id, entry[1]);
+      } else {
+        // Counted rather than skipped in silence: this is how 170 URLs went
+        // missing for months.
+        unparseable++;
+        if (unparseableSamples.length < UNPARSEABLE_SAMPLES) unparseableSamples.push(entry[1]);
+      }
     }
+    perFile.push({ url: map, entries });
   }
-  return { urls, files: maps.length };
+
+  return { urls, files: maps.length, perFile, unparseable, unparseableSamples };
 }
 
 /** Top segment of a category path ("Frescos/Frutas/..." gives "Frescos"). */

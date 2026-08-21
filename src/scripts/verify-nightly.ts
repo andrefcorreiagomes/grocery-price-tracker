@@ -7,6 +7,7 @@ import {
   touchChecked,
 } from "../scrapers/crawl/product-checks";
 import { verifySitemapTrust } from "./verify-sitemap-trust";
+import { verifySitemapParse } from "./verify-sitemap-parse";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -224,6 +225,9 @@ async function main() {
   // check nobody remembers to run is not a check.
   console.log("\n9. sitemap trust, across a sequence of runs");
   failures += verifySitemapTrust();
+
+  console.log("\n10. sitemap parsing: per-file counts and unreadable ids");
+  failures += await verifySitemapParse();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

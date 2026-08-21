@@ -23,7 +23,7 @@ import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { buildDailyReport, snapshotBefore, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
-import { RUNS_BEFORE_ACCEPTING, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
+import { RUNS_BEFORE_ACCEPTING, comparePerFile, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
 import {
   compareWithBaseline,
   compareWithPrevious,
@@ -122,11 +122,17 @@ async function main() {
   // abandon the price refresh that is the point of the run.
   let published = new Map<string, string>();
   let sitemapFiles = 0;
+  let perFile: { url: string; entries: number }[] = [];
+  let unparseable = 0;
+  let unparseableSamples: string[] = [];
   let sitemapError: string | null = null;
   try {
     const sitemap = await discoverProductUrls();
     published = sitemap.urls;
     sitemapFiles = sitemap.files;
+    perFile = sitemap.perFile;
+    unparseable = sitemap.unparseable;
+    unparseableSamples = sitemap.unparseableSamples;
   } catch (error) {
     sitemapError = (error as Error).message.slice(0, 120);
     console.log(`  could not read the sitemap: ${sitemapError}`);
@@ -168,6 +174,25 @@ async function main() {
       : null;
   const sitemapPrevious = sitemapBaseline?.entries ?? null;
   const filesPrevious = sitemapBaseline?.files ?? null;
+
+  // Per-file comparison against the last run that reported any, believed or
+  // not: a truncated file is damage whether or not the totals looked fine.
+  const lastPerFileRun = await prisma.crawlRun.findFirst({
+    where: { store: STORE, sitemapPerFile: { not: null } },
+    orderBy: { startedAt: "desc" },
+    select: { sitemapPerFile: true },
+  });
+  let previousPerFile: { url: string; entries: number }[] = [];
+  try {
+    previousPerFile = lastPerFileRun?.sitemapPerFile
+      ? (JSON.parse(lastPerFileRun.sitemapPerFile) as { url: string; entries: number }[])
+      : [];
+  } catch {
+    // Unreadable history is not worth failing a run over; it just means no
+    // comparison this time.
+    previousPerFile = [];
+  }
+  const fileWarnings = sitemapError === null ? comparePerFile(perFile, previousPerFile) : [];
 
   const trust = judgeSitemap({
     entries: published.size,
@@ -380,6 +405,10 @@ async function main() {
     sitemapAccepted: accepted,
     sitemapFiles,
     sitemapFilesPrevious: filesPrevious,
+    sitemapPerFile: perFile,
+    sitemapFileWarnings: fileWarnings,
+    sitemapUnparseable: unparseable,
+    sitemapUnparseableSamples: unparseableSamples,
     examined: fromBacklog.length,
     rechecked,
     verdictNotFood: totals.notFood,
@@ -464,8 +493,6 @@ async function main() {
       }),
       { requests: 0, bytes: 0, wireBytes: 0, fetchMs: 0, retries: 0 }
     );
-    // Only a sitemap we believed gets recorded: storing a truncated count would
-    // make tomorrow read the recovery as an enormous increase.
     await recordRun(
       STORE,
       total,
@@ -476,7 +503,9 @@ async function main() {
       // what lets the next run tell a persistent change from a one-night glitch.
       published.size,
       sitemapFiles,
-      sitemapTrusted
+      sitemapTrusted,
+      perFile,
+      unparseable
     );
   }
 
@@ -487,6 +516,28 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
+  if (unparseable > 0) {
+    report = {
+      ...report,
+      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
+      problems: [
+        `${unparseable.toLocaleString()} sitemap address(es) had no extractable product id and were dropped - the URL shape may have changed`,
+        ...report.problems,
+      ],
+    };
+  }
+
+  if (fileWarnings.length > 0) {
+    report = {
+      ...report,
+      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
+      problems: [
+        `${fileWarnings.length} sitemap file(s) shrank sharply: ${fileWarnings[0]}`,
+        ...report.problems,
+      ],
+    };
+  }
+
   if (accepted !== null) {
     report = {
       ...report,

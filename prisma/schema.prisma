@@ -208,6 +208,21 @@ model CrawlRun {
   /// lets a persistent change be told apart from a one-night glitch, and
   /// eventually accepted as the new normal.
   sitemapTrusted Boolean?
+
+  /// Entries per sitemap file, as JSON `[{url, entries}]`.
+  ///
+  /// The aggregate count hides partial damage: a file truncated at 90% loses
+  /// ~1.5% of the addresses, well under the 5% that looks suspicious, so
+  /// nothing fires. Comparing each file against its own previous size catches
+  /// what comparing the total cannot.
+  sitemapPerFile String?
+
+  /// `<loc>` entries whose product id could not be extracted, so they were
+  /// dropped. Should be 0. It was 170 for months, silently, when the id pattern
+  /// matched digits only - this is the alarm for the next time the URL shape
+  /// changes.
+  sitemapUnparseable Int?
+
   sections       CrawlSection[]
 
   @@index([store, startedAt])

@@ -30,6 +30,59 @@ export const SHRINK_LIMIT = 0.95;
  */
 export const RUNS_BEFORE_ACCEPTING = 3;
 
+/**
+ * How far a single file may shrink before it is worth mentioning.
+ *
+ * Looser than the aggregate's 5% deliberately. We do not know how Continente
+ * partitions products across its six files, and if it repartitions on each
+ * regeneration then one file shrinking while another grows is routine rather
+ * than damage. Until several weeks of real figures say otherwise, a per-file
+ * drop is REPORTED and does not affect trust - a guard that cries wolf is worse
+ * than no guard, because it teaches the reader to ignore the report.
+ */
+export const FILE_SHRINK_LIMIT = 0.8;
+
+export interface FileCount {
+  url: string;
+  entries: number;
+}
+
+/**
+ * Files that shrank sharply against their own previous size, as readable lines.
+ *
+ * Matched by URL. A file the previous run did not have is skipped rather than
+ * reported as new: the file COUNT guard already covers files appearing and
+ * disappearing, and reporting it twice in different words would suggest two
+ * problems where there is one.
+ */
+export function comparePerFile(now: FileCount[], before: FileCount[]): string[] {
+  if (before.length === 0) return [];
+  const previous = new Map(before.map((f) => [f.url, f.entries]));
+  const warnings: string[] = [];
+
+  for (const file of now) {
+    const was = previous.get(file.url);
+    if (was === undefined || was === 0) continue;
+    if (file.entries >= was * FILE_SHRINK_LIMIT) continue;
+    const name = file.url.split("/").pop() ?? file.url;
+    const drop = (100 * (was - file.entries)) / was;
+    warnings.push(
+      `${name}: ${was.toLocaleString()} entries to ${file.entries.toLocaleString()} (${drop.toFixed(1)}% fewer)`
+    );
+  }
+
+  // A file that vanished entirely while the file COUNT stayed the same means it
+  // was replaced by a differently-named one, which the count cannot see.
+  for (const [url, was] of previous) {
+    if (was === 0) continue;
+    if (now.some((f) => f.url === url)) continue;
+    const name = url.split("/").pop() ?? url;
+    warnings.push(`${name}: listed last run with ${was.toLocaleString()} entries, absent now`);
+  }
+
+  return warnings;
+}
+
 export interface SitemapObservation {
   entries: number;
   files: number;
