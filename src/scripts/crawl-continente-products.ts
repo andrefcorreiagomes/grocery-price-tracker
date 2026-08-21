@@ -4,9 +4,22 @@ import {
   fetchProducts,
   type ProductTarget,
 } from "../scrapers/crawl/continente-products";
-import { CONTINENTE_FOOD_SECTIONS } from "../scrapers/crawl/continente-categories";
+import {
+  CONTINENTE_FOOD_SECTIONS,
+  fetchPublishedCounts,
+} from "../scrapers/crawl/continente-categories";
+import { buildRotationReport } from "../scrapers/crawl/rotation-report";
+import { buildDailyReport, snapshotBefore } from "../scrapers/crawl/daily-report";
+import {
+  compareWithBaseline,
+  compareWithPrevious,
+  previousRunFor,
+  recordRun,
+  rollingBaseline,
+} from "../scrapers/crawl/history";
+import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { persistCatalogue } from "../scrapers/crawl/persist";
-import { formatHttpStats } from "../scrapers/http";
+import { formatHttpStats, httpStats } from "../scrapers/http";
 
 /**
  * Crawl Continente ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
@@ -53,6 +66,14 @@ async function main() {
     url: k.url,
   }));
 
+  // A run with no --limit walks the whole catalogue, so it can answer what
+  // CHANGED - which needs the previous values, read before the crawl saves over
+  // them. A limited run cannot, and does not pay for these reads.
+  const complete = limit === undefined;
+  const previousRun = complete ? await previousRunFor("CONTINENTE") : null;
+  const baseline = complete ? await rollingBaseline("CONTINENTE") : null;
+  const before = complete ? await snapshotBefore("CONTINENTE") : null;
+
   if (discover) {
     // The sitemap is a superset: it carries products we have never seen, about
     // half of which are delisted. Appended AFTER the known ones so a limited
@@ -84,7 +105,15 @@ async function main() {
       console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} products`),
   });
 
-  const { summaries, prices } = await persistCatalogue("CONTINENTE", crawl.results);
+  // Which products are new to us, captured before saving - afterwards they are
+  // indistinguishable from the rest.
+  const knownIds = new Set(known.map((k) => k.storeProductId));
+  const newProducts = crawl.results
+    .flatMap((r) => r.products)
+    .filter((p) => !knownIds.has(p.id))
+    .map((p) => ({ storeProductId: p.id, name: p.name }));
+
+  const { summaries, prices, seenAt } = await persistCatalogue("CONTINENTE", crawl.results);
 
   console.log(`\nfood kept, by section:`);
   let total = 0;
@@ -106,6 +135,70 @@ async function main() {
   console.log(
     `\nDone in ${((Date.now() - started) / 60000).toFixed(1)} min: ${total.toLocaleString()} food products refreshed.`
   );
+
+  // Six allowed requests: each section's landing page publishes its own count,
+  // which is how a crawl that never touches a listing grid can still ask whether
+  // our catalogue is missing products entirely - a different question from
+  // whether the prices we hold are fresh.
+  let publishedCounts = new Map<string, number>();
+  try {
+    publishedCounts = await fetchPublishedCounts();
+  } catch (error) {
+    console.error(`could not read the published section counts: ${(error as Error).message}`);
+  }
+
+  // A complete pass gets the full report - change detection and all - with the
+  // rotation figures attached, because both are true of it. A limited pass gets
+  // only what it can honestly claim.
+  const rotationOnly = await buildRotationReport({
+    store: "CONTINENTE",
+    complete,
+    seenAt,
+    refreshed: total,
+    dead: crawl.dead,
+    deadSamples: crawl.failures.map((f) => ({
+      storeProductId: f.split(":")[0],
+      name: f.slice(0, 60),
+    })),
+    nonFood: crawl.nonFood,
+    prices,
+    http: httpStats(),
+    publishedCounts,
+    newProducts,
+    newCount: newProducts.length,
+  });
+
+  let report = rotationOnly;
+  if (complete && before && baseline) {
+    const drift = [
+      ...(await compareWithPrevious("CONTINENTE", total, [])),
+      ...compareWithBaseline(baseline, total, []),
+    ];
+    const full = await buildDailyReport({
+      store: "CONTINENTE",
+      seenAt,
+      before,
+      results: crawl.results,
+      audit: { unknown: [], missing: [] },
+      publishedCounts,
+      prices,
+      http: httpStats(),
+      drift,
+      shortSections: [],
+      sitemapSlugs: [],
+      sitemapUnknown: [],
+      baseline: { runs: baseline.runs, since: baseline.since },
+      previousRun,
+    });
+    report = { ...full, rotation: rotationOnly.rotation };
+    await recordRun("CONTINENTE", total, [], undefined, seenAt);
+  }
+
+  const explain = !args.includes("--brief");
+  const written = await writeReport(report, { explain });
+  console.log(`\n${renderReport(report, { explain })}`);
+  console.log(`\nreport written to ${written.text} and ${written.json}`);
+  if (report.verdict === "FAIL") process.exitCode = 1;
 }
 
 main()

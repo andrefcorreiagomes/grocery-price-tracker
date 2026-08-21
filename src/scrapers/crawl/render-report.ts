@@ -101,6 +101,82 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     )
   );
 
+  if (report.rotation) {
+    const r = report.rotation;
+    const pct = (n: number) => `${((100 * n) / Math.max(1, r.enrichment.total)).toFixed(1)}%`;
+    lines.push(
+      ...section(
+        "Rotation: is the whole catalogue being reached",
+        "This run refreshed a slice, not the whole catalogue, so per-section coverage would be " +
+          "meaningless - a run that deliberately fetched 25 products has not come up short by 3,295. " +
+          "What matters instead is whether every corner is still being reached. Products are fetched " +
+          "STALEST FIRST, so the oldest figure below is the worst case anywhere in the catalogue: if " +
+          "it keeps growing, the budget is too small for the catalogue's size and some products are " +
+          "being left behind.",
+        [
+          `  refreshed this run:   ${r.refreshedThisRun.toLocaleString()} of ${r.enrichment.total.toLocaleString()}`,
+          `  confirmed in the last day:    ${r.staleness.today.toLocaleString()}`,
+          `  within a week:                ${r.staleness.week.toLocaleString()}`,
+          `  within a month:               ${r.staleness.month.toLocaleString()}`,
+          `  older than a month:           ${r.staleness.older.toLocaleString()}`,
+          `  oldest confirmation:  ${r.oldestSeenAt?.slice(0, 16).replace("T", " ") ?? "n/a"}`,
+          `  full pass at this rate: ${r.daysToFullCoverage === null ? "never - nothing was refreshed" : `${r.daysToFullCoverage} day(s)`}`,
+        ],
+        explain
+      )
+    );
+
+    lines.push(
+      ...section(
+        "What only a product page can tell us",
+        "A listing crawl infers a product is gone from its absence, which is a guess - pagination " +
+          "flickers, and a product missing from one run is often back in the next. Here a delisted " +
+          "product answers with a dead page, which is a fact. Every fetch also carries the barcode and " +
+          "package size that no listing tile has, so enrichment coverage should climb run over run; if " +
+          "it stalls while products are being refreshed, the page parser has broken.",
+        [
+          `  confirmed delisted this run: ${r.confirmedDelisted.toLocaleString()}`,
+          ...notes(r.deadSamples, "    "),
+          "",
+          `  catalogue with a barcode: ${r.enrichment.withBarcode.toLocaleString()} (${pct(r.enrichment.withBarcode)})`,
+          `  catalogue with a size:    ${r.enrichment.withSize.toLocaleString()} (${pct(r.enrichment.withSize)})`,
+        ],
+        explain
+      )
+    );
+
+    lines.push(
+      ...section(
+        "Our catalogue against the store's own counts",
+        "Read from each section's landing page, which robots.txt allows. A different question from " +
+          "the rotation above: not whether our prices are fresh, but whether we know about the " +
+          "products at all. COMPARE THE TOTALS, NOT THE ROWS - the sections overlap, and we file each " +
+          "product under whichever section first listed it, so Bio e Saudável looks tiny (its products " +
+          "are filed under Frescos and Mercearia) while Frescos can exceed its own published count. " +
+          "Only a wide gap in the TOTAL means products we have genuinely never seen, and refreshing " +
+          "will never find those - that needs a discovery pass (`--discover`).",
+        (() => {
+          const rows = r.sections.map(
+            (x) =>
+              `  ${x.label.padEnd(24)} ${String(x.ours).padStart(6)} known` +
+              (x.published === null ? "" : ` of ${x.published} published`)
+          );
+          // The only comparison that means anything, because a product counted
+          // once by us may be published in several sections.
+          const ours = r.sections.reduce((n, x) => n + x.ours, 0);
+          const pub = r.sections.reduce((n, x) => n + (x.published ?? 0), 0);
+          return [
+            ...rows,
+            "",
+            `  TOTAL ${String(ours).toLocaleString()} known against ${pub.toLocaleString()} published across the sections` +
+              `, a difference of ${(pub - ours).toLocaleString()} - most of which is products listed in more than one section`,
+          ];
+        })(),
+        explain
+      )
+    );
+  }
+
   lines.push(
     ...section(
       "Did the crawl work",
@@ -149,7 +225,15 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
 
   const c = report.catalogue;
   const noBaseline = report.baseline.runs === 0;
-  lines.push(
+  // A rotation touches a deliberate slice, so it cannot speak to what MOVED,
+  // was RENAMED or RETURNED across the catalogue - it never looked at most of
+  // it. Its own sections above cover what it does know. Printing zeros here
+  // would claim those checks ran.
+  // Change detection needs a run that looked at everything. A complete pass
+  // qualifies however it was fetched - page by page or grid by grid.
+  const sawEverything = !report.rotation || report.rotation.complete;
+  if (sawEverything)
+    lines.push(
     ...section(
       "What changed in the catalogue",
       "**new** and **disappeared** are the store's range moving. **returned** means seen now but " +
@@ -205,7 +289,11 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     )
   );
 
-  lines.push(
+  // Likewise the category audit: it belongs to the crawler that walks
+  // categories. The rotation's "against the store's own counts" section asks the
+  // useful half of the same question.
+  if (sawEverything)
+    lines.push(
     ...section(
       "Categories",
       "The store publishes its own category tree, and we compare it with what we crawl. **UNKNOWN** " +

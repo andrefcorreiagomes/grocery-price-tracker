@@ -151,6 +151,14 @@ export interface DailyReport {
    * rather than describing a healthy catalogue.
    */
   incomplete?: boolean;
+
+  /**
+   * Present when the run refreshed a SLICE of the catalogue rather than walking
+   * it. The per-section coverage above is meaningless in that case - a run that
+   * deliberately fetched 25 products has not "come up short" by 3,295 - so the
+   * renderer shows this instead. See rotation-report.ts.
+   */
+  rotation?: import("./rotation-report").RotationExtras;
 }
 
 /**

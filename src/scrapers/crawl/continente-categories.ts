@@ -32,6 +32,34 @@ export const CONTINENTE_FOOD_CATEGORIES: CrawlCategory[] = [
 ];
 
 /**
+ * Each food section's landing-page slug, which is NOT its cgid (`mercearia`
+ * against `mercearias`, `laticinios-e-ovos` against `laticinios`).
+ *
+ * Landing pages are allowed by robots.txt and publish `data-total-count`, so
+ * the compliant crawler can still check its catalogue against the store's own
+ * numbers - six requests - even though it never touches a listing grid.
+ */
+export const CONTINENTE_SECTION_SLUGS: ReadonlyMap<string, string> = new Map([
+  ["Frescos", "frescos"],
+  ["Laticínios e Ovos", "laticinios-e-ovos"],
+  ["Congelados", "congelados"],
+  ["Mercearia", "mercearia"],
+  ["Bebidas e Garrafeira", "bebidas-e-garrafeira"],
+  ["Bio e Saudável", "bio-e-saudavel"],
+]);
+
+/** Read `data-total-count` off each food section's landing page. */
+export async function fetchPublishedCounts(): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  for (const [label, slug] of CONTINENTE_SECTION_SLUGS) {
+    const html = await fetchHtml(`https://www.continente.pt/${slug}/`);
+    const match = html.match(/data-total-count="(\d+)"/);
+    if (match) counts.set(label, Number(match[1]));
+  }
+  return counts;
+}
+
+/**
  * Continente publishes its whole category tree on the homepage, as JSON in a
  * `window.rootCategoryObj` script - id, display name, product count, and nested
  * sub-categories.
