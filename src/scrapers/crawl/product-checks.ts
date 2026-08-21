@@ -76,15 +76,67 @@ export async function recordChecks(
   return { written: results.length, notFood, dead };
 }
 
+export interface CheckTotals {
+  notFood: number;
+  dead: number;
+  total: number;
+}
+
 /** How the rejected ids break down, for the report. */
-export async function checkTotals(
-  store: Store
-): Promise<{ notFood: number; dead: number; total: number }> {
+export async function checkTotals(store: Store): Promise<CheckTotals> {
   const [notFood, dead] = await Promise.all([
     prisma.productCheck.count({ where: { store, verdict: "NOT_FOOD" } }),
     prisma.productCheck.count({ where: { store, verdict: "DEAD" } }),
   ]);
   return { notFood, dead, total: notFood + dead };
+}
+
+/** The ProductCheck totals recorded by the most recent run before `before`. */
+export async function previousCheckTotals(
+  store: Store,
+  before: Date
+): Promise<CheckTotals | null> {
+  const run = await prisma.crawlRun.findFirst({
+    where: { store, checkNotFood: { not: null }, startedAt: { lt: before } },
+    orderBy: { startedAt: "desc" },
+    select: { checkNotFood: true, checkDead: true },
+  });
+  if (run?.checkNotFood == null || run.checkDead == null) return null;
+  return { notFood: run.checkNotFood, dead: run.checkDead, total: run.checkNotFood + run.checkDead };
+}
+
+export interface CheckTotalsChange extends CheckTotals {
+  previousTotal: number | null;
+  /** signed change against the previous run, null when nothing to compare */
+  percent: number | null;
+  /**
+   * True when the table SHRANK. ProductCheck only ever grows in normal
+   * operation, so a fall is not slow drift to warn about later - it means rows
+   * left a table nothing deletes from, which is worth flagging at once.
+   */
+  shrank: boolean;
+}
+
+/**
+ * Attach the previous run's totals. Kept pure and separate from the read so the
+ * arithmetic - which is where the edge cases live - can be tested without a
+ * database.
+ */
+export function compareCheckTotals(
+  now: CheckTotals,
+  previous: CheckTotals | null
+): CheckTotalsChange {
+  const previousTotal = previous?.total ?? null;
+  const percent =
+    previousTotal === null || previousTotal === 0
+      ? null
+      : (100 * (now.total - previousTotal)) / previousTotal;
+  return {
+    ...now,
+    previousTotal,
+    percent,
+    shrank: previousTotal !== null && now.total < previousTotal,
+  };
 }
 
 /**

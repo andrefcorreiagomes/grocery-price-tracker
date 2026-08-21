@@ -76,6 +76,10 @@ export interface DiscoveryExtras {
   rechecked: number;
   verdictNotFood: number;
   verdictDead: number;
+  /** the ProductCheck total at the previous run, for run-over-run comparison */
+  verdictPrevTotal: number | null;
+  /** true when ProductCheck shrank since the previous run - a real anomaly */
+  verdictShrank: boolean;
   /** ids that turned out to be food and entered the catalogue */
   newFood: ProductNote[];
   newFoodCount: number;

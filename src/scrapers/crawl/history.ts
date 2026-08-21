@@ -86,7 +86,9 @@ export async function recordRun(
   /** `<loc>` entries we could not turn into a product id; should be 0 */
   sitemapUnparseable?: number | null,
   /** every store's catalogue size at the end of this run */
-  catalogueSizes?: { store: string; total: number; delisted: number }[] | null
+  catalogueSizes?: { store: string; total: number; delisted: number }[] | null,
+  /** the run's ProductCheck totals, so the next run can compare */
+  checkTotals?: { notFood: number; dead: number } | null
 ) {
   await prisma.crawlRun.create({
     data: {
@@ -102,6 +104,8 @@ export async function recordRun(
       sitemapPerFile: sitemapPerFile ? JSON.stringify(sitemapPerFile) : null,
       sitemapUnparseable: sitemapUnparseable ?? null,
       catalogueSizes: catalogueSizes ? JSON.stringify(catalogueSizes) : null,
+      checkNotFood: checkTotals?.notFood ?? null,
+      checkDead: checkTotals?.dead ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

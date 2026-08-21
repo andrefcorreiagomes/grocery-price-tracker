@@ -9,6 +9,7 @@ import {
 import { verifySitemapTrust } from "./verify-sitemap-trust";
 import { verifySitemapParse } from "./verify-sitemap-parse";
 import { verifyCatalogueSize } from "./verify-catalogue-size";
+import { verifyProductCheckTotals } from "./verify-productcheck-totals";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -232,6 +233,9 @@ async function main() {
 
   console.log("\n11. catalogue growth per store");
   failures += verifyCatalogueSize();
+
+  console.log("\n12. ProductCheck growth run over run");
+  failures += verifyProductCheckTotals();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

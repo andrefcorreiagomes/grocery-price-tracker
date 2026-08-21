@@ -223,6 +223,15 @@ model CrawlRun {
   /// changes.
   sitemapUnparseable Int?
 
+  /// The size of the ProductCheck table for this run's store, split by verdict.
+  ///
+  /// ProductCheck should only ever grow, and mostly by the discovery budget, so
+  /// a fall is the anomaly worth catching: it means rows vanished from a table
+  /// nothing deletes from. Recorded so the next run can compare, exactly as the
+  /// sitemap figures are.
+  checkNotFood Int?
+  checkDead    Int?
+
   /// How big CatalogueProduct was for EVERY store when this run finished, as
   /// JSON `[{store, total, delisted}]`.
   ///

@@ -312,7 +312,13 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           }`,
           "",
           `  judged and set aside so far: ${(d.verdictNotFood + d.verdictDead).toLocaleString()}` +
-            ` (${d.verdictNotFood.toLocaleString()} not food, ${d.verdictDead.toLocaleString()} gone)`,
+            ` (${d.verdictNotFood.toLocaleString()} not food, ${d.verdictDead.toLocaleString()} gone)` +
+            (d.verdictPrevTotal === null
+              ? "  (no previous run to compare)"
+              : `  (was ${d.verdictPrevTotal.toLocaleString()}, ${signedPercent(d.verdictNotFood + d.verdictDead, d.verdictPrevTotal)})`),
+          ...(d.verdictShrank
+            ? ["    !! this table shrank - it should only ever grow, so rows left a table nothing deletes from"]
+            : []),
         ],
         explain
       )

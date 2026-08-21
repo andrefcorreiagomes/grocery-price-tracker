@@ -10,6 +10,8 @@ import {
 } from "../scrapers/crawl/continente-categories";
 import {
   checkTotals,
+  compareCheckTotals,
+  previousCheckTotals,
   checkedIds,
   recordChecks,
   recordDead,
@@ -388,6 +390,7 @@ async function main() {
   const catalogueByStore = compareSizes(sizesNow, sizesBefore);
 
   const totals = await checkTotals(STORE);
+  const checkChange = compareCheckTotals(totals, await previousCheckTotals(STORE, seenAt));
   const delistedNotes: ProductNote[] = delisted.slice(0, SAMPLE).map((id) => ({
     storeProductId: id,
     name: catalogue.find((c) => c.storeProductId === id)?.name ?? id,
@@ -418,6 +421,8 @@ async function main() {
     rechecked,
     verdictNotFood: totals.notFood,
     verdictDead: totals.dead,
+    verdictPrevTotal: checkChange.previousTotal,
+    verdictShrank: checkChange.shrank,
     newFood: newFood.slice(0, SAMPLE),
     newFoodCount: newFood.length,
     unexaminedRemaining: remaining,
@@ -511,7 +516,8 @@ async function main() {
       sitemapTrusted,
       perFile,
       unparseable,
-      sizesNow
+      sizesNow,
+      { notFood: totals.notFood, dead: totals.dead }
     );
   }
 
@@ -522,6 +528,17 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
+  if (checkChange.shrank) {
+    report = {
+      ...report,
+      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
+      problems: [
+        `ProductCheck shrank from ${checkChange.previousTotal?.toLocaleString()} to ${checkChange.total.toLocaleString()} - rows left a table nothing deletes from`,
+        ...report.problems,
+      ],
+    };
+  }
+
   if (unparseable > 0) {
     report = {
       ...report,
