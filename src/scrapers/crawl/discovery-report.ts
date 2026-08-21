@@ -22,11 +22,14 @@ export interface DiscoveryExtras {
    */
   sitemapTrusted: boolean;
   /**
-   * Set when the sitemap could not be read at all, as opposed to being read and
-   * disbelieved. Distinguished because they call for different responses: an
-   * outage fixes itself, a sitemap that shrank by a third does not.
+   * Why it was not trusted, in words - null when it was. Kept as a reason
+   * rather than a flag because the causes call for different responses: an
+   * outage fixes itself, a file that stopped being listed does not.
    */
-  sitemapError: string | null;
+  sitemapDistrust: string | null;
+  /** product sitemap files the index listed, and what it listed last run */
+  sitemapFiles: number;
+  sitemapFilesPrevious: number | null;
 
   /** ids opened for the FIRST time this run, drawn from the backlog */
   examined: number;

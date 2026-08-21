@@ -194,18 +194,15 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
             (d.sitemapPrevious === null
               ? " (no previous run to compare)"
               : ` (was ${d.sitemapPrevious.toLocaleString()})`),
+          `  spread across:             ${d.sitemapFiles} file(s)` +
+            (d.sitemapFilesPrevious === null ? "" : ` (was ${d.sitemapFilesPrevious})`),
           ...(d.sitemapTrusted
             ? []
-            : d.sitemapError !== null
-              ? [
-                  `  !! the sitemap could not be read - discovery skipped this run.`,
-                  `     ${d.sitemapError}`,
-                  `     Prices were still refreshed: phase 2 works from our own stored addresses.`,
-                ]
-              : [
-                  `  !! the sitemap shrank sharply and was NOT trusted - discovery skipped this run.`,
-                  `     A truncated file is far likelier than the store losing this many products overnight.`,
-                ]),
+            : [
+                `  !! the sitemap was NOT trusted - discovery skipped this run.`,
+                `     ${d.sitemapDistrust}`,
+                `     Prices were still refreshed: phase 2 works from our own stored addresses.`,
+              ]),
           `  opened for the first time: ${d.examined.toLocaleString()}`,
           `  re-opened, verdict stale:  ${d.rechecked.toLocaleString()}`,
           `  of those, food added:      ${d.newFoodCount.toLocaleString()}`,

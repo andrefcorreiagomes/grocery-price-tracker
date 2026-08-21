@@ -122,9 +122,12 @@ async function main() {
   // one night of DISCOVERY and nothing else - letting it throw here would
   // abandon the price refresh that is the point of the run.
   let published = new Map<string, string>();
+  let sitemapFiles = 0;
   let sitemapError: string | null = null;
   try {
-    published = await discoverProductUrls();
+    const sitemap = await discoverProductUrls();
+    published = sitemap.urls;
+    sitemapFiles = sitemap.files;
   } catch (error) {
     sitemapError = (error as Error).message.slice(0, 120);
     console.log(`  could not read the sitemap: ${sitemapError}`);
@@ -134,13 +137,27 @@ async function main() {
   const previousSitemap = await prisma.crawlRun.findFirst({
     where: { store: STORE, sitemapEntries: { not: null } },
     orderBy: { startedAt: "desc" },
-    select: { sitemapEntries: true },
+    select: { sitemapEntries: true, sitemapFiles: true },
   });
   const sitemapPrevious = previousSitemap?.sitemapEntries ?? null;
-  // Unreadable and suspiciously small are the same conclusion: do not act on it.
-  const sitemapTrusted =
-    sitemapError === null &&
-    (sitemapPrevious === null || published.size >= sitemapPrevious * SITEMAP_SHRINK_LIMIT);
+  const filesPrevious = previousSitemap?.sitemapFiles ?? null;
+
+  // Three ways to distrust it, and the reason is worth keeping because they
+  // call for different responses. Unreadable fixes itself; a file that stopped
+  // being listed does not.
+  let distrust: string | null = null;
+  if (sitemapError !== null) {
+    distrust = `could not be read (${sitemapError})`;
+  } else if (sitemapFiles === 0) {
+    distrust = "the index listed no product sitemap files at all";
+  } else if (filesPrevious !== null && sitemapFiles < filesPrevious) {
+    // Deliberately independent of the address count: an unevenly small file
+    // could disappear without moving the count by the 5% below.
+    distrust = `the index listed ${sitemapFiles} product file(s), down from ${filesPrevious}`;
+  } else if (sitemapPrevious !== null && published.size < sitemapPrevious * SITEMAP_SHRINK_LIMIT) {
+    distrust = `it shrank from ${sitemapPrevious.toLocaleString()} to ${published.size.toLocaleString()} entries`;
+  }
+  const sitemapTrusted = distrust === null;
 
   const catalogue = await prisma.catalogueProduct.findMany({
     where: { store: STORE },
@@ -163,21 +180,15 @@ async function main() {
 
   if (sitemapError === null) {
     console.log(
-      `  ${published.size.toLocaleString()} published` +
+      `  ${published.size.toLocaleString()} published across ${sitemapFiles} file(s)` +
         `, ${catalogueIds.size.toLocaleString()} tracked` +
         `, ${alreadyChecked.size.toLocaleString()} already judged` +
         `, ${unexamined.length.toLocaleString()} never opened`
     );
-    // Only meaningful when there IS a previous count and a sitemap to compare
-    // against it - saying "shrank from undefined to 0" after an outage
-    // describes a different failure from the one that happened.
-    if (!sitemapTrusted && sitemapPrevious !== null) {
-      console.log(
-        `  sitemap shrank from ${sitemapPrevious.toLocaleString()} to ${published.size.toLocaleString()} - not trusting it, skipping discovery`
-      );
-    }
-  } else {
-    console.log(`  ${catalogueIds.size.toLocaleString()} tracked products are unaffected`);
+  }
+  if (!sitemapTrusted) {
+    console.log(`  not trusting the sitemap: ${distrust}`);
+    console.log(`  skipping discovery; ${catalogueIds.size.toLocaleString()} tracked products are unaffected`);
   }
 
   // ---------------------------------------------------------------- phase 2
@@ -332,7 +343,9 @@ async function main() {
     sitemapEntries: published.size,
     sitemapPrevious,
     sitemapTrusted,
-    sitemapError,
+    sitemapDistrust: distrust,
+    sitemapFiles,
+    sitemapFilesPrevious: filesPrevious,
     examined: fromBacklog.length,
     rechecked,
     verdictNotFood: totals.notFood,
@@ -425,7 +438,8 @@ async function main() {
       sections,
       { ...stats, wireBytes: stats.wireBytes || null },
       seenAt,
-      sitemapTrusted ? published.size : null
+      sitemapTrusted ? published.size : null,
+      sitemapTrusted ? sitemapFiles : null
     );
   }
 

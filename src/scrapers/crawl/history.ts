@@ -72,7 +72,9 @@ export async function recordRun(
    * that was trusted: recording a bad one poisons tomorrow's comparison, which
    * would then read the recovery as a sudden enormous increase.
    */
-  sitemapEntries?: number | null
+  sitemapEntries?: number | null,
+  /** how many product sitemap files the index listed, alongside the entries */
+  sitemapFiles?: number | null
 ) {
   await prisma.crawlRun.create({
     data: {
@@ -83,6 +85,7 @@ export async function recordRun(
       bytes: http?.bytes ?? null,
       wireBytes: http?.wireBytes ?? null,
       sitemapEntries: sitemapEntries ?? null,
+      sitemapFiles: sitemapFiles ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

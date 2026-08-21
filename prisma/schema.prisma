@@ -192,6 +192,10 @@ model CrawlRun {
   /// or a truncated response than a store that lost thousands of products
   /// overnight, and acting on it would raise a false alarm.
   sitemapEntries Int?
+  /// Product sitemap FILES the index listed. Catches what the entry count
+  /// cannot: the files need not be equally sized, so losing a small one can
+  /// move the address count by less than the 5% that looks suspicious.
+  sitemapFiles   Int?
   sections       CrawlSection[]
 
   @@index([store, startedAt])

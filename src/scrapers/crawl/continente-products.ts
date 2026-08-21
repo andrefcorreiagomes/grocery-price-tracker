@@ -105,6 +105,24 @@ export function productIdFromUrl(url: string): string | null {
   }
 }
 
+export interface SitemapResult {
+  /** every published product URL, keyed by the id embedded in it */
+  urls: Map<string, string>;
+  /**
+   * How many product sitemap FILES the index listed - six, at the time of
+   * writing.
+   *
+   * Recorded separately from the address count because it catches what the
+   * count cannot. The files need not be equally sized, so if the index stopped
+   * listing a small one, the addresses might drop by less than the 5% that
+   * makes a shrunken sitemap suspicious, and nothing would notice. "Six files
+   * yesterday, five today" is unambiguous whatever their sizes - and unlike the
+   * address count it means something on a first run too, since an index
+   * listing zero product files is wrong on its face.
+   */
+  files: number;
+}
+
 /**
  * Every product URL Continente publishes, keyed by the id embedded in the URL
  * (`...-2597619.html`). Six requests.
@@ -112,22 +130,26 @@ export function productIdFromUrl(url: string): string | null {
  * A superset, not a statement of what exists: measured, ~42,000 of the ~101,000
  * entries are delisted products whose pages return nothing. It is reliable for
  * re-finding products we already know about, and unreliable as a census.
+ *
+ * All the files or none: one that fails throws rather than returning a partial
+ * set, because five files of six looks exactly like a smaller shop, and the
+ * caller would read a sixth of the catalogue as no longer published.
  */
-export async function discoverProductUrls(): Promise<Map<string, string>> {
+export async function discoverProductUrls(): Promise<SitemapResult> {
   const index = await fetchHtml(sitemapIndexUrl());
   const maps = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)]
     .map((m) => m[1])
     .filter((u) => u.includes("product"));
 
-  const byId = new Map<string, string>();
+  const urls = new Map<string, string>();
   for (const map of maps) {
     const xml = await fetchHtml(map);
     for (const entry of xml.matchAll(/<loc>(https:\/\/www\.continente\.pt\/produto\/[^<]+)<\/loc>/g)) {
       const id = productIdFromUrl(entry[1]);
-      if (id) byId.set(id, entry[1]);
+      if (id) urls.set(id, entry[1]);
     }
   }
-  return byId;
+  return { urls, files: maps.length };
 }
 
 /** Top segment of a category path ("Frescos/Frutas/..." gives "Frescos"). */

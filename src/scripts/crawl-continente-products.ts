@@ -78,7 +78,7 @@ async function main() {
     // The sitemap is a superset: it carries products we have never seen, about
     // half of which are delisted. Appended AFTER the known ones so a limited
     // run spends its budget on refreshing real products first.
-    const published = await discoverProductUrls();
+    const { urls: published } = await discoverProductUrls();
     const seen = new Set(known.map((k) => k.storeProductId));
     let added = 0;
     for (const [id, url] of published) {
