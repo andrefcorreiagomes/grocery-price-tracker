@@ -189,6 +189,34 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     );
   }
 
+  if (report.catalogueByStore && report.catalogueByStore.length > 0) {
+    lines.push(
+      ...section(
+        "How big the catalogue is, by store",
+        "Every other figure describes what this run DID; this one describes the size of the thing " +
+          "it maintains, which is the only way to see a store drifting. All three appear, not just " +
+          "the one that ran, because a store whose crawler has quietly stopped shows here as a flat " +
+          "line - and a crawler that never runs writes no report of its own to notice. Rows are " +
+          "never deleted, so a delisted product still counts towards the total; the delisted figure " +
+          "is shown beside it so the total cannot quietly fill up with products the store no longer " +
+          "sells.",
+        report.catalogueByStore.map((s) => {
+          const label = s.store.replace("_", " ").padEnd(12);
+          const movement =
+            s.previousTotal === null
+              ? `${s.total.toLocaleString().padStart(8)}   (no previous run to compare)`
+              : `${s.previousTotal.toLocaleString().padStart(8)} to ${s.total.toLocaleString().padStart(8)}` +
+                `   (${signedPercent(s.total, s.previousTotal)})`;
+          return (
+            `  ${label} ${movement}` +
+            (s.delisted > 0 ? `, ${s.delisted.toLocaleString()} delisted` : "")
+          );
+        }),
+        explain
+      )
+    );
+  }
+
   if (report.discovery) {
     const d = report.discovery;
     lines.push(

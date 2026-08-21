@@ -31,6 +31,7 @@ import {
   recordRun,
   rollingBaseline,
 } from "../scrapers/crawl/history";
+import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
@@ -382,6 +383,10 @@ async function main() {
 
   // ---------------------------------------------------------------- phase 5
   const remaining = Math.max(0, unexamined.length - fromBacklog.length);
+  const sizesNow = await catalogueSizes();
+  const sizesBefore = await previousSizes(seenAt);
+  const catalogueByStore = compareSizes(sizesNow, sizesBefore);
+
   const totals = await checkTotals(STORE);
   const delistedNotes: ProductNote[] = delisted.slice(0, SAMPLE).map((id) => ({
     storeProductId: id,
@@ -452,7 +457,7 @@ async function main() {
     newCount: newFood.length,
   });
 
-  let report = { ...rotationOnly, discovery };
+  let report = { ...rotationOnly, discovery, catalogueByStore };
   const sections = saved.summaries.map((s) => ({
     cgid: s.label,
     label: s.label,
@@ -481,7 +486,7 @@ async function main() {
       baseline: { runs: baseline.runs, since: baseline.since },
       previousRun,
     });
-    report = { ...full, rotation: rotationOnly.rotation, discovery };
+    report = { ...full, rotation: rotationOnly.rotation, discovery, catalogueByStore };
 
     const stats = httpStats().reduce(
       (a, h) => ({
@@ -505,7 +510,8 @@ async function main() {
       sitemapFiles,
       sitemapTrusted,
       perFile,
-      unparseable
+      unparseable,
+      sizesNow
     );
   }
 

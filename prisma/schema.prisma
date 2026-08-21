@@ -223,6 +223,18 @@ model CrawlRun {
   /// changes.
   sitemapUnparseable Int?
 
+  /// How big CatalogueProduct was for EVERY store when this run finished, as
+  /// JSON `[{store, total, delisted}]`.
+  ///
+  /// Recorded rather than derived. Nothing deletes catalogue rows today, so the
+  /// size could in principle be reconstructed by counting `firstSeenAt` before
+  /// a date - but that silently stops being true the first time anything is
+  /// deleted by hand, and a growth figure that quietly becomes wrong is worse
+  /// than one that costs a column. All three stores, not just this run's, so a
+  /// store that stops being crawled shows up as a flat line rather than
+  /// vanishing from the report.
+  catalogueSizes String?
+
   sections       CrawlSection[]
 
   @@index([store, startedAt])

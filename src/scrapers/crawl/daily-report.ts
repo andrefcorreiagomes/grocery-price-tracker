@@ -173,6 +173,12 @@ export interface DailyReport {
    * which the sections above cannot: they only describe what we already held.
    */
   discovery?: import("./discovery-report").DiscoveryExtras;
+
+  /**
+   * How many products each store holds, and how that moved since the previous
+   * run. Present on runs that bothered to count.
+   */
+  catalogueByStore?: import("./catalogue-size").StoreSizeChange[];
 }
 
 /**
