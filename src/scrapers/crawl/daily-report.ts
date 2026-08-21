@@ -30,6 +30,30 @@ const SLOWDOWN = 2;
 /** Examples carried per list; the counts are always exact, the samples are not. */
 const SAMPLE = 12;
 
+/**
+ * Take examples from across the sections rather than the first N encountered.
+ *
+ * Crawl order is not a property of the data: taking the first twelve gave a
+ * "new products" list that was entirely fruit and vegetables and a
+ * "disappeared" list that was entirely wine, purely because Frescos is crawled
+ * first and wines happen to sort last. A reader would take that for a pattern.
+ */
+function spread<T>(groups: Map<string, T[]>, limit: number): T[] {
+  const queues = [...groups.values()].filter((g) => g.length > 0);
+  const picked: T[] = [];
+  for (let round = 0; picked.length < limit; round++) {
+    let addedThisRound = false;
+    for (const queue of queues) {
+      if (round >= queue.length) continue;
+      picked.push(queue[round]);
+      addedThisRound = true;
+      if (picked.length === limit) return picked;
+    }
+    if (!addedThisRound) break;
+  }
+  return picked;
+}
+
 export type Verdict = "OK" | "WARN" | "FAIL";
 
 export interface ProductNote {
@@ -44,6 +68,13 @@ export interface DailyReport {
   verdict: Verdict;
   /** what pushed the verdict off OK, most serious first */
   problems: string[];
+
+  /**
+   * What this report was able to compare against. Without it, an empty drift
+   * section and a `returned` of 0 read as reassurance when they may only mean
+   * there was no baseline - the same dishonesty as an alarm that never fires.
+   */
+  baseline: { runs: number; since: string | null };
 
   scraper: {
     sections: {
@@ -107,6 +138,12 @@ export interface DailyReport {
   };
 
   drift: string[];
+
+  /**
+   * True when the crawl did not finish, so every count above describes nothing
+   * rather than describing a healthy catalogue.
+   */
+  incomplete?: boolean;
 }
 
 /**
@@ -148,6 +185,7 @@ export interface ReportInput {
   http: HostStats[];
   drift: string[];
   shortSections: string[];
+  baseline: { runs: number; since: Date | null };
   previousRun: {
     startedAt: Date;
     requests: number | null;
@@ -161,12 +199,20 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   const seenIds = new Set(results.flatMap((r) => r.products.map((p) => p.id)));
 
   // --- what changed about individual products -------------------------------
-  const newProducts: ProductNote[] = [];
-  const moved: ProductNote[] = [];
-  const renamed: ProductNote[] = [];
-  const movers: ProductNote[] = [];
-  const absurd: ProductNote[] = [];
-  const returned: ProductNote[] = [];
+  // Grouped by section so the examples can be spread across them rather than
+  // taken in crawl order, which is not a property of the data.
+  const newBySection = new Map<string, ProductNote[]>();
+  const movedBySection = new Map<string, ProductNote[]>();
+  const renamedBySection = new Map<string, ProductNote[]>();
+  const returnedBySection = new Map<string, ProductNote[]>();
+  const moversBySection = new Map<string, ProductNote[]>();
+  const absurdBySection = new Map<string, ProductNote[]>();
+  const push = (map: Map<string, ProductNote[]>, section: string, note: ProductNote) => {
+    const bucket = map.get(section) ?? [];
+    bucket.push(note);
+    map.set(section, bucket);
+  };
+  let newCount = 0;
   let movedCount = 0;
   let renamedCount = 0;
   let returnedCount = 0;
@@ -179,58 +225,54 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   const previousCutoff = input.previousRun?.startedAt;
 
   for (const result of results) {
+    const sectionLabel = result.category.label;
     for (const product of result.products) {
       const was = before.byStoreProductId.get(product.id);
       if (!was) {
-        if (newProducts.length < SAMPLE) {
-          newProducts.push({ storeProductId: product.id, name: product.name });
-        }
+        newCount++;
+        push(newBySection, sectionLabel, { storeProductId: product.id, name: product.name });
         continue;
       }
 
       if (previousCutoff && was.lastSeenAt < previousCutoff) {
         returnedCount++;
-        if (returned.length < SAMPLE) {
-          returned.push({
-            storeProductId: product.id,
-            name: product.name,
-            detail: `last seen ${was.lastSeenAt.toISOString().slice(0, 16).replace("T", " ")}`,
-          });
-        }
+        push(returnedBySection, sectionLabel, {
+          storeProductId: product.id,
+          name: product.name,
+          detail: `last seen ${was.lastSeenAt.toISOString().slice(0, 16).replace("T", " ")}`,
+        });
       }
 
       const nowCategory = product.category || null;
       if (was.categoryPath && nowCategory && was.categoryPath !== nowCategory) {
         movedCount++;
-        if (moved.length < SAMPLE) {
-          moved.push({
-            storeProductId: product.id,
-            name: product.name,
-            detail: `${was.categoryPath} became ${nowCategory}`,
-          });
-        }
+        push(movedBySection, sectionLabel, {
+          storeProductId: product.id,
+          name: product.name,
+          detail: `${was.categoryPath} became ${nowCategory}`,
+        });
       }
 
       if (was.name !== product.name) {
         renamedCount++;
-        if (renamed.length < SAMPLE) {
-          renamed.push({ storeProductId: product.id, name: product.name, detail: `was "${was.name}"` });
-        }
+        push(renamedBySection, sectionLabel, {
+          storeProductId: product.id,
+          name: product.name,
+          detail: `was "${was.name}"`,
+        });
       }
 
       if (was.price !== null && product.price !== null && was.price > 0) {
         const ratio = product.price / was.price;
         const move = Math.abs(ratio - 1);
         if (ratio >= PRICE_ABSURD || ratio <= 1 / PRICE_ABSURD) {
-          if (absurd.length < SAMPLE) {
-            absurd.push({
-              storeProductId: product.id,
-              name: product.name,
-              detail: `${was.price} to ${product.price}`,
-            });
-          }
-        } else if (move >= PRICE_MOVE && movers.length < SAMPLE) {
-          movers.push({
+          push(absurdBySection, sectionLabel, {
+            storeProductId: product.id,
+            name: product.name,
+            detail: `${was.price} to ${product.price}`,
+          });
+        } else if (move >= PRICE_MOVE) {
+          push(moversBySection, sectionLabel, {
             storeProductId: product.id,
             name: product.name,
             detail: `${was.price} to ${product.price}`,
@@ -240,10 +282,21 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     }
   }
 
+  const newProducts = spread(newBySection, SAMPLE);
+  const moved = spread(movedBySection, SAMPLE);
+  const renamed = spread(renamedBySection, SAMPLE);
+  const returned = spread(returnedBySection, SAMPLE);
+  const movers = spread(moversBySection, SAMPLE);
+  // Every implausible price is carried, not a sample: this is the check that
+  // stands between a broken parser and a database of wrong prices, so the count
+  // being exact matters more than the list being short.
+  const absurd = [...absurdBySection.values()].flat();
+  const absurdCount = absurd.length;
+
   // --- what the crawl did not see -------------------------------------------
   const missingRows = await prisma.catalogueProduct.findMany({
     where: { store, lastSeenAt: { lt: seenAt } },
-    select: { storeProductId: true, name: true, lastSeenAt: true },
+    select: { storeProductId: true, name: true, lastSeenAt: true, categoryPath: true },
     orderBy: { lastSeenAt: "desc" },
   });
   const disappearedNow = missingRows.filter((r) => previousCutoff === undefined || r.lastSeenAt >= previousCutoff);
@@ -324,8 +377,8 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   if (audit.missing.length > 0) {
     problems.push(`configured categories no longer published: ${audit.missing.join(", ")}`);
   }
-  if (absurd.length > 0) {
-    problems.push(`${absurd.length} price(s) moved by more than ${PRICE_ABSURD}x - likely a parse bug`);
+  if (absurdCount > 0) {
+    problems.push(`${absurdCount} price(s) moved by more than ${PRICE_ABSURD}x - likely a parse bug`);
   }
   const fail = problems.length > 0;
 
@@ -351,6 +404,10 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     runAt: seenAt.toISOString(),
     verdict: fail ? "FAIL" : warnings.length > 0 ? "WARN" : "OK",
     problems,
+    baseline: {
+      runs: input.baseline.runs,
+      since: input.baseline.since ? input.baseline.since.toISOString() : null,
+    },
     scraper: {
       sections: results.map((r) => ({
         label: r.category.label,
@@ -368,10 +425,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     quality: { total, missingPrice, missingBrand, missingCategory, missingUrl },
     catalogue: {
       seen: seenIds.size,
-      newProducts: results.reduce(
-        (n, r) => n + r.products.filter((p) => !before.byStoreProductId.has(p.id)).length,
-        0
-      ),
+      newProducts: newCount,
       disappeared: disappearedNow.length,
       stillMissing,
       returned: returnedCount,
@@ -379,10 +433,16 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
       renamed: renamedCount,
       samples: {
         newProducts,
-        disappeared: disappearedNow.slice(0, SAMPLE).map((r) => ({
-          storeProductId: r.storeProductId,
-          name: r.name,
-        })),
+        disappeared: spread(
+          disappearedNow.reduce((map, r) => {
+            const section = (r.categoryPath ?? "(none)").split("/")[0];
+            const bucket = map.get(section) ?? [];
+            bucket.push({ storeProductId: r.storeProductId, name: r.name });
+            map.set(section, bucket);
+            return map;
+          }, new Map<string, ProductNote[]>()),
+          SAMPLE
+        ),
         returned,
         moved,
         renamed,
@@ -398,5 +458,97 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     },
     live: { trackedListingsMissing, candidatePairsAffected },
     drift: input.drift,
+  };
+}
+
+/**
+ * A report for a crawl that did not finish.
+ *
+ * The run you most need a written record of is the one that broke, and until
+ * now that was the one run that produced nothing: the report was built after a
+ * successful crawl, so a category answering HTTP 500 - which is exactly how a
+ * renamed category shows up - left an exit code and no explanation.
+ *
+ * Carries whatever was established before the failure, which is often the
+ * useful part: the category audit runs first, so a report can say "the crawl
+ * died AND the store stopped publishing `mercearias`" rather than leaving the
+ * two facts to be connected by hand.
+ */
+export function buildFailureReport(input: {
+  store: Store;
+  seenAt: Date;
+  error: unknown;
+  audit: CategoryAudit | null;
+  http: HostStats[];
+  baseline: { runs: number; since: Date | null };
+}): DailyReport {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  const problems = [`the crawl did not finish: ${message}`];
+
+  if (input.audit?.missing.length) {
+    problems.push(
+      `configured categories no longer published: ${input.audit.missing.join(", ")} ` +
+        `- a likely cause of the failure above`
+    );
+  }
+  if (input.audit?.unknown.length) {
+    problems.push(
+      `categories published but neither crawled nor known non-food: ${input.audit.unknown
+        .map((c) => c.cgid)
+        .join(", ")}`
+    );
+  }
+
+  const http = input.http.reduce(
+    (acc, h) => ({
+      requests: acc.requests + h.requests,
+      bytes: acc.bytes + h.bytes,
+      fetchMs: acc.fetchMs + h.fetchMs,
+      retries: acc.retries + h.retries,
+    }),
+    { requests: 0, bytes: 0, fetchMs: 0, retries: 0 }
+  );
+
+  return {
+    store: input.store,
+    runAt: input.seenAt.toISOString(),
+    verdict: "FAIL",
+    problems,
+    baseline: {
+      runs: input.baseline.runs,
+      since: input.baseline.since ? input.baseline.since.toISOString() : null,
+    },
+    scraper: {
+      sections: [],
+      requests: http.requests,
+      megabytes: Number((http.bytes / 1024 / 1024).toFixed(1)),
+      minutesFetching: Number((http.fetchMs / 60000).toFixed(1)),
+      retries: http.retries,
+      slowdown: null,
+    },
+    // Nothing was saved, so nothing is asserted about the catalogue. Zeroes here
+    // would read as "checked and fine".
+    quality: { total: 0, missingPrice: 0, missingBrand: 0, missingCategory: 0, missingUrl: 0 },
+    catalogue: {
+      seen: 0,
+      newProducts: 0,
+      disappeared: 0,
+      stillMissing: 0,
+      returned: 0,
+      moved: 0,
+      renamed: 0,
+      samples: { newProducts: [], disappeared: [], returned: [], moved: [], renamed: [] },
+    },
+    prices: { unchanged: 0, changed: 0, opened: 0, skipped: 0, movers: [], absurd: [] },
+    categories: {
+      published: input.audit ? input.audit.unknown.length + input.audit.missing.length : 0,
+      crawled: 0,
+      unknown: input.audit?.unknown.map((c) => ({ cgid: c.cgid, label: c.label, hitCount: c.hitCount })) ?? [],
+      missing: input.audit?.missing ?? [],
+      publishedCountChanges: [],
+    },
+    live: { trackedListingsMissing: [], candidatePairsAffected: 0 },
+    drift: [],
+    incomplete: true,
   };
 }

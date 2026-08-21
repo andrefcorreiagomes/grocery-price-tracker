@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DailyReport, ProductNote } from "./daily-report";
 
@@ -12,6 +12,10 @@ import type { DailyReport, ProductNote } from "./daily-report";
  */
 
 const REPORT_DIR = "reports";
+/** A stable path, so "how did last night go" does not require knowing a timestamp. */
+const LATEST = "latest.md";
+/** One line per run, so the verdicts can be scanned or plotted without opening anything. */
+const LOG = "history.jsonl";
 
 function section(title: string, lines: string[]): string[] {
   return lines.length > 0 ? [`## ${title}`, "", ...lines, ""] : [];
@@ -34,6 +38,25 @@ export function renderReport(report: DailyReport): string {
     lines.push(...report.problems.map((p) => `- ${p}`), "");
   } else {
     lines.push("Everything checked came back as expected.", "");
+  }
+
+  // Say what could be compared. An empty drift section and a `returned` of zero
+  // look like reassurance, when on a first run they only mean there was nothing
+  // to compare against - and a check that silently cannot run is worse than one
+  // that reports it cannot.
+  lines.push(
+    report.baseline.runs === 0
+      ? "_No previous run to compare against: everything below describes this run alone. Change detection starts with the next one._"
+      : `_Compared against the last ${report.baseline.runs} run(s), back to ${report.baseline.since?.slice(0, 16).replace("T", " ")}._`,
+    ""
+  );
+
+  if (report.incomplete) {
+    lines.push(
+      "_The crawl did not finish, so nothing was saved and the sections below describe nothing._",
+      ""
+    );
+    return lines.join("\n");
   }
 
   // The live site first: it is the only part a visitor can see go wrong.
@@ -151,7 +174,28 @@ export async function writeReport(report: DailyReport): Promise<{ text: string; 
   const text = join(REPORT_DIR, `${base}.md`);
   const json = join(REPORT_DIR, `${base}.json`);
 
-  await writeFile(text, renderReport(report), "utf8");
+  const rendered = renderReport(report);
+  await writeFile(text, rendered, "utf8");
   await writeFile(json, JSON.stringify(report, null, 2), "utf8");
+
+  // Timestamped files accumulate, which is the point - but they are useless for
+  // "just tell me about last night" unless something has a fixed name.
+  await writeFile(join(REPORT_DIR, LATEST), rendered, "utf8");
+  await appendFile(
+    join(REPORT_DIR, LOG),
+    JSON.stringify({
+      runAt: report.runAt,
+      store: report.store,
+      verdict: report.verdict,
+      problems: report.problems.length,
+      total: report.quality.total,
+      newProducts: report.catalogue.newProducts,
+      disappeared: report.catalogue.disappeared,
+      pricesChanged: report.prices.changed,
+      incomplete: report.incomplete ?? false,
+    }) + "\n",
+    "utf8"
+  );
+
   return { text, json };
 }

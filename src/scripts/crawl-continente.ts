@@ -4,12 +4,19 @@ import {
   CONTINENTE_FOOD_CATEGORIES,
   auditCategories,
   discoverCategories,
+  type CategoryAudit,
 } from "../scrapers/crawl/continente-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport } from "../scrapers/crawl/report";
 import { formatHttpStats, httpStats } from "../scrapers/http";
-import { compareWithPrevious, previousRunFor, recordRun } from "../scrapers/crawl/history";
-import { buildDailyReport, snapshotBefore } from "../scrapers/crawl/daily-report";
+import {
+  compareWithBaseline,
+  compareWithPrevious,
+  previousRunFor,
+  recordRun,
+  rollingBaseline,
+} from "../scrapers/crawl/history";
+import { buildDailyReport, buildFailureReport, snapshotBefore } from "../scrapers/crawl/daily-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 
 /**
@@ -58,19 +65,49 @@ async function main() {
   // renamed already fails loudly - its grid answers HTTP 500 and the crawl
   // throws - but a NEW food department would otherwise be invisible, because we
   // would simply never ask for it.
-  const discovered = await discoverCategories();
-  const audit = auditCategories(discovered);
-  const published = new Map(discovered.map((c) => [c.label, c.hitCount]));
+  let audit: CategoryAudit | null = null;
+  let published = new Map<string, number>();
+  try {
+    const discovered = await discoverCategories();
+    audit = auditCategories(discovered);
+    published = new Map(discovered.map((c) => [c.label, c.hitCount]));
+  } catch (error) {
+    console.error(`could not read the published category tree: ${(error as Error).message}`);
+  }
 
   // The previous run has to be read BEFORE this one is recorded, and the
   // catalogue has to be read before the crawl saves over it: name, category,
   // price and lastSeenAt are all overwritten in place, so this is the only
   // moment their previous values still exist.
   const previousRun = await previousRunFor("CONTINENTE");
+  const baseline = await rollingBaseline("CONTINENTE");
   const before = await snapshotBefore("CONTINENTE");
 
-  const results = await crawlContinente({ categories, maxPages });
-  const { summaries, prices, seenAt } = await persistCatalogue("CONTINENTE", results);
+  let results;
+  let saved;
+  try {
+    results = await crawlContinente({ categories, maxPages });
+    saved = await persistCatalogue("CONTINENTE", results);
+  } catch (error) {
+    // The run that breaks is the one most worth a written record, and it used to
+    // be the only one that produced none.
+    const failure = buildFailureReport({
+      store: "CONTINENTE",
+      seenAt: new Date(),
+      error,
+      audit,
+      http: httpStats(),
+      baseline: { runs: baseline.runs, since: baseline.since },
+    });
+    const where = await writeReport(failure);
+    console.error(`
+${renderReport(failure)}`);
+    console.error(`
+report written to ${where.text}`);
+    process.exitCode = 1;
+    return;
+  }
+  const { summaries, prices, seenAt } = saved;
 
   // The store's own count is the yardstick: everything it lists should be either
   // collected here or already collected by an earlier section.
@@ -97,7 +134,13 @@ async function main() {
     return;
   }
 
-  const drift = await compareWithPrevious("CONTINENTE", total, sections);
+  // Both comparisons: against the run before (catches a sudden break) and
+  // against the rolling median (catches a slow leak that never trips a
+  // day-over-day threshold).
+  const drift = [
+    ...(await compareWithPrevious("CONTINENTE", total, sections)),
+    ...compareWithBaseline(baseline, total, sections),
+  ];
   const http = httpStats();
 
   const report = await buildDailyReport({
@@ -105,12 +148,13 @@ async function main() {
     seenAt,
     before,
     results,
-    audit,
+    audit: audit ?? { unknown: [], missing: [] },
     publishedCounts: published,
     prices,
     http,
     drift,
     shortSections: short,
+    baseline: { runs: baseline.runs, since: baseline.since },
     previousRun,
   });
 
