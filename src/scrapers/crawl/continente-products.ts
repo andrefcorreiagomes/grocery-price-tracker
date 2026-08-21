@@ -1,5 +1,5 @@
 import { scrapeContinente } from "../continente";
-import { fetchHtml } from "../http";
+import { fetchHtml, HttpError } from "../http";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult, CrawlProgress } from "./types";
 
@@ -27,23 +27,61 @@ import type { CategoryResult, CrawlProgress } from "./types";
  * them, the runner persists.
  */
 
-/** Sitemap files Continente advertises in its robots.txt. */
-const SITEMAP_INDEX = "https://www.continente.pt/sitemap_index.xml";
+/**
+ * Sitemap files Continente advertises in its robots.txt.
+ *
+ * Overridable so the failure path can actually be exercised. "What happens when
+ * the sitemap is unreachable?" is a question with a real answer - discovery is
+ * skipped and the price refresh continues - and an answer nobody would ever
+ * check if testing it meant waiting for a genuine outage.
+ */
+function sitemapIndexUrl(): string {
+  // Read per call, not at import: a module-level constant is fixed before any
+  // test can set the variable, which silently sends the "offline" test to the
+  // live site instead - measured, it fetched all six real sitemaps.
+  return process.env.CONTINENTE_SITEMAP_URL ?? "https://www.continente.pt/sitemap_index.xml";
+}
 
 export interface ProductTarget {
   storeProductId: string;
   url: string;
 }
 
+/** A page that told us the product is gone. */
+export interface DeadProduct {
+  storeProductId: string;
+  url: string;
+  reason: string;
+}
+
+/** A page that answered, for a real product we do not track. */
+export interface NonFoodProduct {
+  storeProductId: string;
+  url: string;
+  name: string;
+  categoryPath: string | null;
+}
+
 export interface ProductCrawlResult {
   /** grouped by the top segment of each product's own category path */
   results: CategoryResult[];
   fetched: number;
-  /** pages that returned no product data: delisted, and about half the sitemap */
-  dead: number;
+  /**
+   * Pages that said the product is gone: delisted, and about half the sitemap.
+   * Returned as data rather than a count because each one is evidence about a
+   * specific product - it advances that product's delisting counter and, for a
+   * never-seen id, settles what it is once and for all.
+   */
+  dead: DeadProduct[];
   /** products whose category is not one we treat as food */
-  nonFood: number;
-  failures: string[];
+  nonFood: NonFoodProduct[];
+  /**
+   * Failures we could NOT interpret - a 5xx, a socket error, anything that
+   * means "we could not tell" rather than "it is gone". Kept apart from `dead`
+   * because counting them as delistings would let one bad night mark thousands
+   * of live products as discontinued.
+   */
+  unreachable: DeadProduct[];
 }
 
 /**
@@ -76,7 +114,7 @@ export function productIdFromUrl(url: string): string | null {
  * re-finding products we already know about, and unreliable as a census.
  */
 export async function discoverProductUrls(): Promise<Map<string, string>> {
-  const index = await fetchHtml(SITEMAP_INDEX);
+  const index = await fetchHtml(sitemapIndexUrl());
   const maps = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)]
     .map((m) => m[1])
     .filter((u) => u.includes("product"));
@@ -109,38 +147,63 @@ export async function fetchProducts(
   opts: {
     isFood: (categoryPath: string | null) => boolean;
     onProgress?: (p: CrawlProgress) => void;
+    /**
+     * Called with each batch of food products as it is collected, so a long run
+     * can be saved as it goes. A full Continente pass takes about five hours,
+     * and holding all of it until the end means a dropped connection at hour
+     * four loses the night.
+     */
+    onBatch?: (products: SearchHit[]) => Promise<void>;
+    /** products per `onBatch` call */
+    batchSize?: number;
   }
 ): Promise<ProductCrawlResult> {
   const bySection = new Map<string, SearchHit[]>();
-  const failures: string[] = [];
+  const dead: DeadProduct[] = [];
+  const nonFood: NonFoodProduct[] = [];
+  const unreachable: DeadProduct[] = [];
+  const batchSize = opts.batchSize ?? 500;
+  let pending: SearchHit[] = [];
   let fetched = 0;
-  let dead = 0;
-  let nonFood = 0;
+
+  const flush = async () => {
+    if (pending.length === 0 || !opts.onBatch) return;
+    await opts.onBatch(pending);
+    pending = [];
+  };
 
   for (const [i, target] of targets.entries()) {
     let product;
     try {
       product = await scrapeContinente(target.url);
     } catch (error) {
-      // A page with no product data is the normal signal for a delisted
-      // product, not an error worth stopping for - roughly half of the
-      // sitemap's unseen entries are in that state.
-      dead++;
-      if (failures.length < 10) {
-        failures.push(`${target.storeProductId}: ${(error as Error).message.slice(0, 80)}`);
-      }
+      const err = error as Error;
+      // A 404, or a page that loaded with no product data on it, both mean the
+      // store no longer sells this - roughly half of the sitemap's unseen
+      // entries are in that state. Anything else means we could not tell, and
+      // must not be mistaken for a delisting.
+      const gone = err instanceof HttpError ? err.status === 404 || err.status === 410 : true;
+      (gone ? dead : unreachable).push({
+        storeProductId: target.storeProductId,
+        url: target.url,
+        reason: err.message.slice(0, 100),
+      });
       continue;
     }
 
     fetched++;
     if (!opts.isFood(product.categoryPath)) {
-      nonFood++;
+      nonFood.push({
+        storeProductId: target.storeProductId,
+        url: target.url,
+        name: product.name,
+        categoryPath: product.categoryPath,
+      });
       continue;
     }
 
     const section = topSection(product.categoryPath);
-    const list = bySection.get(section) ?? [];
-    list.push({
+    const hit: SearchHit = {
       id: target.storeProductId,
       name: product.name,
       price: product.price,
@@ -153,8 +216,13 @@ export async function fetchProducts(
       ean: product.ean,
       packageSize: product.packageSize,
       unit: product.packageUnit,
-    });
+    };
+    const list = bySection.get(section) ?? [];
+    list.push(hit);
     bySection.set(section, list);
+    pending.push(hit);
+
+    if (pending.length >= batchSize) await flush();
 
     if ((i + 1) % 100 === 0) {
       opts.onProgress?.({
@@ -165,6 +233,8 @@ export async function fetchProducts(
     }
   }
 
+  await flush();
+
   return {
     results: [...bySection.entries()].map(([section, products]) => ({
       category: { cgid: section, label: section },
@@ -173,6 +243,6 @@ export async function fetchProducts(
     fetched,
     dead,
     nonFood,
-    failures,
+    unreachable,
   };
 }

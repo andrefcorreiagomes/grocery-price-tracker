@@ -1,3 +1,5 @@
+import { rawGet, type RawResponse } from "./fetch-raw";
+
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 (personal price-tracker; contact: groceriestracker50@gmail.com)";
 
@@ -22,7 +24,15 @@ export interface HostStats {
   requests: number;
   /** attempts that failed and were retried (429, 5xx, socket errors) */
   retries: number;
+  /**
+   * HTML we parsed, i.e. the page AFTER decompression - what the parser had to
+   * chew through, not what crossed the network. All three stores serve gzip, so
+   * this runs several times larger than `wireBytes`; reporting it as bandwidth
+   * overstates the load we put on them.
+   */
   bytes: number;
+  /** compressed bytes actually received, counted chunk by chunk */
+  wireBytes: number;
   /** milliseconds spent inside fetch, waiting on the server */
   fetchMs: number;
   /** milliseconds spent holding back to honour the per-host delay */
@@ -40,7 +50,15 @@ const stats = new Map<string, HostStats>();
 function statsFor(host: string): HostStats {
   let entry = stats.get(host);
   if (!entry) {
-    entry = { host, requests: 0, retries: 0, bytes: 0, fetchMs: 0, waitMs: 0 };
+    entry = {
+      host,
+      requests: 0,
+      retries: 0,
+      bytes: 0,
+      wireBytes: 0,
+      fetchMs: 0,
+      waitMs: 0,
+    };
     stats.set(host, entry);
   }
   return entry;
@@ -55,18 +73,56 @@ export function resetHttpStats(): void {
   stats.clear();
 }
 
+/** Compressed bytes transferred, or null when nothing was requested. */
+export function wireBytesOf(s: HostStats): number | null {
+  return s.requests > 0 ? s.wireBytes : null;
+}
+
+export interface TotalStats {
+  requests: number;
+  /** HTML processed, after decompression */
+  bytes: number;
+  /** compressed bytes transferred, null when nothing was requested */
+  wireBytes: number | null;
+  fetchMs: number;
+  retries: number;
+}
+
+/** Sum per-host stats into one set of run totals. */
+export function totalStats(list: HostStats[]): TotalStats {
+  const sum = list.reduce(
+    (a, h) => ({
+      requests: a.requests + h.requests,
+      bytes: a.bytes + h.bytes,
+      wireBytes: a.wireBytes + h.wireBytes,
+      fetchMs: a.fetchMs + h.fetchMs,
+      retries: a.retries + h.retries,
+    }),
+    { requests: 0, bytes: 0, wireBytes: 0, fetchMs: 0, retries: 0 }
+  );
+  return { ...sum, wireBytes: sum.wireBytes > 0 ? sum.wireBytes : null };
+}
+
+/** Megabytes, to one decimal, or null. */
+export function megabytes(bytes: number | null): number | null {
+  return bytes === null ? null : Number((bytes / 1024 / 1024).toFixed(1));
+}
+
 /** Format the totals as printable lines, for a runner to log at the end. */
 export function formatHttpStats(): string[] {
   return httpStats().map((s) => {
     const mb = s.bytes / 1024 / 1024;
+    const wire = wireBytesOf(s);
     const seconds = s.fetchMs / 1000;
+    const transferred =
+      wire === null ? "-" : `${(wire / 1024 / 1024).toFixed(1)} MB transferred`;
     return (
       `  ${s.host.padEnd(22)} ${String(s.requests).padStart(5)} requests  ` +
-      `${mb.toFixed(0).padStart(5)} MB  ` +
+      `${transferred.padStart(20)}  ` +
+      `${mb.toFixed(0).padStart(5)} MB html  ` +
       `${(seconds / 60).toFixed(1).padStart(5)} min fetching  ` +
       `${(s.waitMs / 60000).toFixed(1).padStart(5)} min throttled  ` +
-      `${s.retries} retries  ` +
-      `(${seconds > 0 ? (mb / seconds).toFixed(2) : "-"} MB/s)`
+      `${s.retries} retries`
     );
   });
 }
@@ -105,13 +161,32 @@ function takeTurn(host: string): Promise<void> {
   return turn;
 }
 
+/**
+ * A response the server refused, carrying its status.
+ *
+ * The status matters to callers, not just the failure: a 404 means the product
+ * is gone and can be counted towards delisting, while a 503 or a socket error
+ * means we could not tell. Marking products delisted because the network had a
+ * bad night is exactly the mistake this exists to prevent.
+ */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, url: string) {
+    super(`Fetch failed (${status}) for ${url}`);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 /** Transient by nature: rate limiting, or the origin briefly unavailable. */
 function isRetryable(status: number): boolean {
   return status === 429 || status === 408 || status >= 500;
 }
 
-function retryAfterMs(res: Response, attempt: number): number {
-  const header = res.headers.get("retry-after");
+function retryAfterMs(res: RawResponse, attempt: number): number {
+  const raw = res.headers["retry-after"];
+  const header = Array.isArray(raw) ? raw[0] : raw;
   if (header) {
     const seconds = Number.parseInt(header, 10);
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
@@ -126,13 +201,11 @@ export async function fetchHtml(url: string): Promise<string> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     await takeTurn(host);
     const startedAt = Date.now();
-    let res: Response;
+    let res: RawResponse;
     try {
-      res = await fetch(url, {
-        headers: {
-          "User-Agent": USER_AGENT,
-          "Accept-Language": "pt-PT,pt;q=0.9",
-        },
+      res = await rawGet(url, {
+        "User-Agent": USER_AGENT,
+        "Accept-Language": "pt-PT,pt;q=0.9",
       });
     } catch (error) {
       // Network-level failure (DNS, socket) - worth one more try.
@@ -144,25 +217,27 @@ export async function fetchHtml(url: string): Promise<string> {
     }
 
     if (res.ok) {
-      const body = await res.text();
       const entry = statsFor(host);
       entry.requests++;
-      entry.bytes += body.length;
+      entry.bytes += res.body.length;
+      entry.wireBytes += res.wireBytes;
       entry.fetchMs += Date.now() - startedAt;
-      return body;
+      return res.body;
     }
 
+    // A failed response still moved bytes, and a night of 404s is not free.
+    statsFor(host).wireBytes += res.wireBytes;
     statsFor(host).fetchMs += Date.now() - startedAt;
 
     // A 404 means the listing is gone; retrying cannot help and the caller
     // needs to hear about it straight away. It is not counted as a retry.
     if (!isRetryable(res.status)) {
-      throw new Error(`Fetch failed (${res.status}) for ${url}`);
+      throw new HttpError(res.status, url);
     }
 
     statsFor(host).retries++;
 
-    lastError = new Error(`Fetch failed (${res.status}) for ${url}`);
+    lastError = new HttpError(res.status, url);
     if (attempt < MAX_ATTEMPTS - 1) await sleep(retryAfterMs(res, attempt));
   }
 

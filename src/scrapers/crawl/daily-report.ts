@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/db";
 import type { Store } from "@/generated/prisma/client";
-import type { HostStats } from "../http";
+import { megabytes, totalStats, type HostStats } from "../http";
 import type { CategoryAudit } from "./continente-categories";
 import type { PriceHistorySummary } from "./price-history";
 import type { CategoryResult } from "./types";
@@ -86,7 +86,14 @@ export interface DailyReport {
       short: number;
     }[];
     requests: number;
+    /**
+     * HTML processed, i.e. page size AFTER decompression. NOT bandwidth: every
+     * store serves gzip and Node's fetch asks for it without being told to, so
+     * a Continente product page is ~1 MB here and ~159 KB on the wire.
+     */
     megabytes: number;
+    /** compressed megabytes actually transferred; null when unreported */
+    transferredMegabytes: number | null;
     minutesFetching: number;
     retries: number;
     /** ratio against the previous run; null when there is nothing to compare */
@@ -159,6 +166,13 @@ export interface DailyReport {
    * renderer shows this instead. See rotation-report.ts.
    */
   rotation?: import("./rotation-report").RotationExtras;
+
+  /**
+   * Present when the run also looked for products it had never seen - the
+   * nightly run's phases 1 and 3. Answers whether the catalogue is COMPLETE,
+   * which the sections above cannot: they only describe what we already held.
+   */
+  discovery?: import("./discovery-report").DiscoveryExtras;
 }
 
 /**
@@ -362,15 +376,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   }
 
   // --- requests -------------------------------------------------------------
-  const http = input.http.reduce(
-    (acc, h) => ({
-      requests: acc.requests + h.requests,
-      bytes: acc.bytes + h.bytes,
-      fetchMs: acc.fetchMs + h.fetchMs,
-      retries: acc.retries + h.retries,
-    }),
-    { requests: 0, bytes: 0, fetchMs: 0, retries: 0 }
-  );
+  const http = totalStats(input.http);
   const previousPerRequest =
     input.previousRun?.fetchMs && input.previousRun.requests
       ? input.previousRun.fetchMs / input.previousRun.requests
@@ -434,7 +440,8 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
         short: r.expected ? Math.max(0, r.expected - (r.products.length + (r.duplicates ?? 0))) : 0,
       })),
       requests: http.requests,
-      megabytes: Number((http.bytes / 1024 / 1024).toFixed(1)),
+      megabytes: megabytes(http.bytes) ?? 0,
+      transferredMegabytes: megabytes(http.wireBytes),
       minutesFetching: Number((http.fetchMs / 60000).toFixed(1)),
       retries: http.retries,
       slowdown: slowdown === null ? null : Number(slowdown.toFixed(2)),
@@ -518,15 +525,7 @@ export function buildFailureReport(input: {
     );
   }
 
-  const http = input.http.reduce(
-    (acc, h) => ({
-      requests: acc.requests + h.requests,
-      bytes: acc.bytes + h.bytes,
-      fetchMs: acc.fetchMs + h.fetchMs,
-      retries: acc.retries + h.retries,
-    }),
-    { requests: 0, bytes: 0, fetchMs: 0, retries: 0 }
-  );
+  const http = totalStats(input.http);
 
   return {
     store: input.store,
@@ -540,7 +539,8 @@ export function buildFailureReport(input: {
     scraper: {
       sections: [],
       requests: http.requests,
-      megabytes: Number((http.bytes / 1024 / 1024).toFixed(1)),
+      megabytes: megabytes(http.bytes) ?? 0,
+      transferredMegabytes: megabytes(http.wireBytes),
       minutesFetching: Number((http.fetchMs / 60000).toFixed(1)),
       retries: http.retries,
       slowdown: null,

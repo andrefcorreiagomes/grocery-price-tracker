@@ -124,10 +124,11 @@ async function main() {
 
   console.log(
     `\n${crawl.fetched.toLocaleString()} pages returned a product` +
-      `, ${crawl.dead.toLocaleString()} were dead (delisted)` +
-      `, ${crawl.nonFood.toLocaleString()} were not food`
+      `, ${crawl.dead.length.toLocaleString()} were dead (delisted)` +
+      `, ${crawl.nonFood.length.toLocaleString()} were not food` +
+      `, ${crawl.unreachable.length.toLocaleString()} could not be reached`
   );
-  for (const f of crawl.failures) console.log(`    ${f}`);
+  for (const f of crawl.dead.slice(0, 10)) console.log(`    ${f.storeProductId}: ${f.reason}`);
 
   console.log(`\nprices: ${prices.changed} changed, ${prices.unchanged} held, ${prices.opened} newly tracked`);
   console.log("\nrequests:");
@@ -155,12 +156,12 @@ async function main() {
     complete,
     seenAt,
     refreshed: total,
-    dead: crawl.dead,
-    deadSamples: crawl.failures.map((f) => ({
-      storeProductId: f.split(":")[0],
-      name: f.slice(0, 60),
+    dead: crawl.dead.length,
+    deadSamples: crawl.dead.map((d) => ({
+      storeProductId: d.storeProductId,
+      name: d.reason.slice(0, 60),
     })),
-    nonFood: crawl.nonFood,
+    nonFood: crawl.nonFood.length,
     prices,
     http: httpStats(),
     publishedCounts,

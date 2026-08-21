@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/db";
 import type { Store } from "@/generated/prisma/client";
-import type { HostStats } from "../http";
+import { megabytes, totalStats, type HostStats } from "../http";
 import type { DailyReport, ProductNote } from "./daily-report";
 import type { PriceHistorySummary } from "./price-history";
 
@@ -153,15 +153,7 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
     prisma.catalogueProduct.count({ where: { store, url: "" } }),
   ]);
 
-  const http = input.http.reduce(
-    (a, h) => ({
-      requests: a.requests + h.requests,
-      bytes: a.bytes + h.bytes,
-      fetchMs: a.fetchMs + h.fetchMs,
-      retries: a.retries + h.retries,
-    }),
-    { requests: 0, bytes: 0, fetchMs: 0, retries: 0 }
-  );
+  const http = totalStats(input.http);
 
   const problems: string[] = [];
   if (trackedListingsMissing.length > 0) {
@@ -195,7 +187,8 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
     scraper: {
       sections: [],
       requests: http.requests,
-      megabytes: Number((http.bytes / 1024 / 1024).toFixed(1)),
+      megabytes: megabytes(http.bytes) ?? 0,
+      transferredMegabytes: megabytes(http.wireBytes),
       minutesFetching: Number((http.fetchMs / 60000).toFixed(1)),
       retries: http.retries,
       slowdown: null,

@@ -2,6 +2,7 @@ import { prisma } from "../../lib/db";
 import { matchableEan } from "../../lib/matching";
 import type { Store } from "@/generated/prisma/client";
 import { recordPrices, type PriceHistorySummary } from "./price-history";
+import type { SearchHit } from "../search/types";
 import type { CategoryResult } from "./types";
 
 export interface PersistSummary {
@@ -54,6 +55,131 @@ function enrichment(p: {
 }
 
 /**
+ * A save path held open for the length of a crawl, so results can be written as
+ * they arrive instead of all at the end.
+ *
+ * The compliant Continente crawler runs for about five hours. Accumulating five
+ * hours of results in memory and writing once, at the end, means a dropped
+ * connection at hour four loses the whole night. Saving every batch caps that
+ * loss at a few minutes, and costs nothing: the same number of transactions, in
+ * the same size, just spread across the run.
+ *
+ * Two things must still happen exactly once per run, which is why this is opened
+ * rather than called:
+ *
+ *   - ONE `seenAt`. The report answers "which products did this run not see?" by
+ *     comparing `lastSeenAt` against the run's instant. Per-batch timestamps
+ *     would leave that question with no single answer.
+ *   - ONE read of the existing ids. "Is this product new?" has to be judged
+ *     against the table as it was BEFORE the run; re-reading per batch would
+ *     make products created by batch 3 look pre-existing to batch 4.
+ */
+export interface CatalogueWriter {
+  /** the instant this whole run stamps on everything it saves */
+  seenAt: Date;
+  /** upsert one batch; safe to call repeatedly as the crawl proceeds */
+  save(products: SearchHit[], label: string): Promise<void>;
+  /** merged counts across every batch saved */
+  finish(): PersistResult;
+}
+
+export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter> {
+  // One instant for the whole run, so a crawl lands at a single point in time
+  // rather than smeared across however long it took.
+  const seenAt = new Date();
+
+  const known = new Set(
+    (
+      await prisma.catalogueProduct.findMany({
+        where: { store },
+        select: { storeProductId: true },
+      })
+    ).map((row) => row.storeProductId)
+  );
+
+  const byLabel = new Map<string, PersistSummary>();
+  const priceTotals: PriceHistorySummary = {
+    opened: 0,
+    changed: 0,
+    unchanged: 0,
+    skipped: 0,
+  };
+
+  return {
+    seenAt,
+
+    async save(products, label) {
+      const summary = byLabel.get(label) ?? { label, total: 0, created: 0, updated: 0 };
+      for (const p of products) {
+        summary.total++;
+        if (known.has(p.id)) {
+          summary.updated++;
+        } else {
+          summary.created++;
+          known.add(p.id); // so a repeat later in the same run counts as an update
+        }
+      }
+      byLabel.set(label, summary);
+
+      const observations: { productId: string; price: number | null }[] = [];
+      for (let i = 0; i < products.length; i += CHUNK) {
+        // The transaction returns the upserted rows, so ids for products created
+        // just now are available without a second read.
+        const saved = await prisma.$transaction(
+          products.slice(i, i + CHUNK).map((p) =>
+            prisma.catalogueProduct.upsert({
+              where: { store_storeProductId: { store, storeProductId: p.id } },
+              create: {
+                store,
+                storeProductId: p.id,
+                name: p.name,
+                brand: p.brand,
+                categoryPath: p.category || null,
+                price: p.price,
+                url: p.url,
+                firstSeenAt: seenAt,
+                lastSeenAt: seenAt,
+                lastCheckedAt: seenAt,
+                ...enrichment(p),
+              },
+              update: {
+                name: p.name,
+                brand: p.brand,
+                categoryPath: p.category || null,
+                price: p.price,
+                url: p.url,
+                lastSeenAt: seenAt,
+                lastCheckedAt: seenAt,
+                // Answering at all clears a delisting: a product that returns is
+                // not delisted, however many nights it was missing.
+                deadCount: 0,
+                delistedAt: null,
+                ...enrichment(p),
+              },
+              select: { id: true, price: true },
+            })
+          )
+        );
+
+        for (const row of saved) {
+          observations.push({ productId: row.id, price: row.price });
+        }
+      }
+
+      const prices = await recordPrices(observations, seenAt);
+      priceTotals.opened += prices.opened;
+      priceTotals.changed += prices.changed;
+      priceTotals.unchanged += prices.unchanged;
+      priceTotals.skipped += prices.skipped;
+    },
+
+    finish() {
+      return { summaries: [...byLabel.values()], prices: priceTotals, seenAt };
+    },
+  };
+}
+
+/**
  * Upsert crawled products into CatalogueProduct by (store, storeProductId), so
  * all three runners share one save path. Listing data only - name, brand,
  * categoryPath, price, url; ean/size are left to enrichment. On an existing row,
@@ -69,81 +195,17 @@ function enrichment(p: {
  * existing price as well as the id: the crawl already knows every product's
  * price, and overwriting the column without keeping it threw away a daily
  * reading we had already paid the requests for.
+ *
+ * The one-shot form, for crawls that finish fast enough to save at the end. The
+ * nightly Continente run opens the writer directly instead.
  */
 export async function persistCatalogue(
   store: Store,
   results: CategoryResult[]
 ): Promise<PersistResult> {
-  // One instant for the whole run, so a crawl lands at a single point in time
-  // rather than smeared across however long it took.
-  const seenAt = new Date();
-
-  const known = new Set(
-    (
-      await prisma.catalogueProduct.findMany({
-        where: { store },
-        select: { storeProductId: true },
-      })
-    ).map((row) => row.storeProductId)
-  );
-
-  const summaries: PersistSummary[] = [];
-  const observations: { productId: string; price: number | null }[] = [];
-
+  const writer = await openCatalogueWriter(store);
   for (const { category, products } of results) {
-    let created = 0;
-    let updated = 0;
-    for (const p of products) {
-      if (known.has(p.id)) {
-        updated++;
-      } else {
-        created++;
-        known.add(p.id); // so a repeat later in the same run counts as an update
-      }
-    }
-
-    for (let i = 0; i < products.length; i += CHUNK) {
-      // The transaction returns the upserted rows, so ids for products created
-      // just now are available without a second read.
-      const saved = await prisma.$transaction(
-        products.slice(i, i + CHUNK).map((p) =>
-          prisma.catalogueProduct.upsert({
-            where: { store_storeProductId: { store, storeProductId: p.id } },
-            create: {
-              store,
-              storeProductId: p.id,
-              name: p.name,
-              brand: p.brand,
-              categoryPath: p.category || null,
-              price: p.price,
-              url: p.url,
-              firstSeenAt: seenAt,
-              lastSeenAt: seenAt,
-              ...enrichment(p),
-            },
-            update: {
-              name: p.name,
-              brand: p.brand,
-              categoryPath: p.category || null,
-              price: p.price,
-              url: p.url,
-              lastSeenAt: seenAt,
-              ...enrichment(p),
-            },
-            select: { id: true, price: true },
-          })
-        )
-      );
-
-      for (const row of saved) {
-        observations.push({ productId: row.id, price: row.price });
-      }
-    }
-
-    summaries.push({ label: category.label, total: products.length, created, updated });
+    await writer.save(products, category.label);
   }
-
-  const prices = await recordPrices(observations, seenAt);
-
-  return { summaries, prices, seenAt };
+  return writer.finish();
 }

@@ -98,10 +98,30 @@ model CatalogueProduct {
   lastSeenAt  DateTime  @default(now())
   enrichedAt  DateTime? // when the product page was last fetched for size/EAN; null = never enriched
 
+  /// When we last ATTEMPTED this product, successfully or not - which is a
+  /// different fact from `lastSeenAt` ("last confirmed to exist"), and the two
+  /// cannot share a column. A 404 leaves `lastSeenAt` frozen, and a frozen old
+  /// timestamp sorts to the FRONT of a stalest-first queue: order the nightly
+  /// crawl by it and every dead product marches to the head of the line and is
+  /// re-fetched first, climbing higher the longer it stays dead.
+  lastCheckedAt DateTime?
+
+  /// Consecutive nights the product page returned nothing. Reset to 0 by any
+  /// successful fetch, so a single bad night cannot accumulate.
+  deadCount Int @default(0)
+
+  /// Set once `deadCount` reaches 3: we believe the store stopped selling this.
+  /// A MARKER, never a deletion - the row and its whole CataloguePrice history
+  /// stay, because "this cost EUR 1.15 until it vanished" is real history. It
+  /// drops the product out of the nightly queue (re-checked at 90 days instead)
+  /// and is what a user-facing catalogue would filter on later.
+  delistedAt DateTime?
+
   @@unique([store, storeProductId])
   @@index([store, brand]) // brand blocking
   @@index([store, categoryPath]) // category blocking
   @@index([eanNormalized]) // EAN match / veto
+  @@index([store, delistedAt, lastCheckedAt]) // the nightly queue, stalest first
   candidatesA MatchCandidate[] @relation("CandidateA")
   candidatesB MatchCandidate[] @relation("CandidateB")
   prices      CataloguePrice[]
@@ -159,12 +179,62 @@ model CrawlRun {
   /// takes three times longer, or starts retrying, is being throttled - and
   /// that is the warning that arrives before a block, not after.
   requests  Int?
+  /// HTML processed, i.e. page size AFTER decompression - what the parser saw,
+  /// not what crossed the network. The two differ by ~6.4x on Continente.
   bytes     Int?
+  /// Compressed bytes actually transferred, when the responses reported a size.
+  /// Null when nothing did (a chunked response carries no content-length).
+  wireBytes Int?
   fetchMs   Int?
   retries   Int?
-  sections  CrawlSection[]
+  /// Product ids the sitemap published this run. The next run compares against
+  /// it: a sitemap that suddenly shrinks is far more likely to be a bad deploy
+  /// or a truncated response than a store that lost thousands of products
+  /// overnight, and acting on it would raise a false alarm.
+  sitemapEntries Int?
+  sections       CrawlSection[]
 
   @@index([store, startedAt])
+}
+
+/// A product id we opened and decided NOT to keep, so we never open it again.
+///
+/// Continente publishes ~101,000 product ids; ~17,000 are food we track. The
+/// rest are non-food or delisted, and finding that out costs one request each -
+/// about 24 hours in total. Without this table that cost is paid on EVERY
+/// discovery run, because the answer is thrown away. With it, discovery is a
+/// set subtraction against the sitemap and a handful of fetches for whatever is
+/// genuinely new.
+///
+/// Food is deliberately NOT here. Every published id lives in exactly one of
+/// CatalogueProduct (food we track) or this table (everything rejected), so the
+/// two can never disagree about the same product - and "in neither" is exactly
+/// the definition of an id still needing examination.
+model ProductCheck {
+  id             String  @id @default(cuid())
+  store          Store
+  storeProductId String
+  url            String
+  verdict        Verdict
+  categoryPath   String? // what it was, when the page had one
+  name           String? // enough to recognise it in a report
+
+  /// Verdicts go stale: a delisted product can return, a non-food item can be
+  /// recategorised. Anything older than 90 days goes back in the queue at a
+  /// trickle, which is what stops this table becoming a way of being
+  /// permanently wrong.
+  checkedAt  DateTime
+  checkCount Int      @default(1)
+
+  @@unique([store, storeProductId])
+  @@index([store, checkedAt]) // entries due for a re-check
+}
+
+enum Verdict {
+  /// The page loaded and the product is real, but not in a food section.
+  NOT_FOOD
+  /// The page returned nothing: the store no longer sells this.
+  DEAD
 }
 
 model CrawlSection {

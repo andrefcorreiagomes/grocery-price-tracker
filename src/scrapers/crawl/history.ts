@@ -42,7 +42,10 @@ export async function previousRunFor(store: Store) {
 
 export interface RunRequestStats {
   requests: number;
+  /** HTML processed, after decompression - not what crossed the network */
   bytes: number;
+  /** compressed bytes transferred, null when no response reported a size */
+  wireBytes?: number | null;
   fetchMs: number;
   retries: number;
 }
@@ -62,7 +65,14 @@ export async function recordRun(
   total: number,
   sections: RunSection[],
   http?: RunRequestStats,
-  seenAt?: Date
+  seenAt?: Date,
+  /**
+   * Product ids the sitemap published, so the next run can tell a store that
+   * lost products from a sitemap that came back truncated. Only pass a count
+   * that was trusted: recording a bad one poisons tomorrow's comparison, which
+   * would then read the recovery as a sudden enormous increase.
+   */
+  sitemapEntries?: number | null
 ) {
   await prisma.crawlRun.create({
     data: {
@@ -71,6 +81,8 @@ export async function recordRun(
       startedAt: seenAt,
       requests: http?.requests ?? null,
       bytes: http?.bytes ?? null,
+      wireBytes: http?.wireBytes ?? null,
+      sitemapEntries: sitemapEntries ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

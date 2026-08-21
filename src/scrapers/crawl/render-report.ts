@@ -154,7 +154,7 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "product under whichever section first listed it, so Bio e Saudável looks tiny (its products " +
           "are filed under Frescos and Mercearia) while Frescos can exceed its own published count. " +
           "Only a wide gap in the TOTAL means products we have genuinely never seen, and refreshing " +
-          "will never find those - that needs a discovery pass (`--discover`).",
+          "will never find those - that is what the discovery section below is for.",
         (() => {
           const rows = r.sections.map(
             (x) =>
@@ -172,6 +172,82 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               `, a difference of ${(pub - ours).toLocaleString()} - most of which is products listed in more than one section`,
           ];
         })(),
+        explain
+      )
+    );
+  }
+
+  if (report.discovery) {
+    const d = report.discovery;
+    lines.push(
+      ...section(
+        "Discovery: is the catalogue complete",
+        "A different question from freshness. Refreshing only ever revisits products we already " +
+          "hold, so on its own it can never find a product the store has just started selling - the " +
+          "catalogue could only shrink. Continente's sitemap lists every product id it publishes, so " +
+          "each night we subtract what we track and what we have already judged, and open whatever is " +
+          "left. The answer is written down permanently, which is what stops this costing 24 hours " +
+          "every single night. Until 'never opened' reaches zero, a newly listed product may wait its " +
+          "turn in that queue.",
+        [
+          `  published in the sitemap:  ${d.sitemapEntries.toLocaleString()}` +
+            (d.sitemapPrevious === null
+              ? " (no previous run to compare)"
+              : ` (was ${d.sitemapPrevious.toLocaleString()})`),
+          ...(d.sitemapTrusted
+            ? []
+            : d.sitemapError !== null
+              ? [
+                  `  !! the sitemap could not be read - discovery skipped this run.`,
+                  `     ${d.sitemapError}`,
+                  `     Prices were still refreshed: phase 2 works from our own stored addresses.`,
+                ]
+              : [
+                  `  !! the sitemap shrank sharply and was NOT trusted - discovery skipped this run.`,
+                  `     A truncated file is far likelier than the store losing this many products overnight.`,
+                ]),
+          `  opened for the first time: ${d.examined.toLocaleString()}`,
+          `  re-opened, verdict stale:  ${d.rechecked.toLocaleString()}`,
+          `  of those, food added:      ${d.newFoodCount.toLocaleString()}`,
+          ...notes(d.newFood, "    "),
+          "",
+          `  still never opened:        ${d.unexaminedRemaining.toLocaleString()}`,
+          `  nights to finish at this rate: ${
+            d.nightsToComplete === null
+              ? "never - no budget was spent"
+              : d.nightsToComplete === 0
+                ? "done, everything published has been judged"
+                : d.nightsToComplete.toLocaleString()
+          }`,
+          "",
+          `  judged and set aside so far: ${(d.verdictNotFood + d.verdictDead).toLocaleString()}` +
+            ` (${d.verdictNotFood.toLocaleString()} not food, ${d.verdictDead.toLocaleString()} gone)`,
+        ],
+        explain
+      )
+    );
+
+    lines.push(
+      ...section(
+        "Products leaving the catalogue",
+        "Nothing is ever deleted: a product that stops answering keeps its row and its whole price " +
+          "history, because 'this cost what it cost until it vanished' is real history. Three " +
+          "CONSECUTIVE nights of a dead page are required before we believe it, so one bad night " +
+          "cannot delist anything, and only a page that actually said the product is gone counts - a " +
+          "server error means we could not tell, and is listed separately. Dropping out of the " +
+          "sitemap is an early warning that usually precedes the dead page by a day or two.",
+        [
+          `  delisted this run (third dead night): ${d.delistedNowCount.toLocaleString()}`,
+          ...notes(d.delistedNow, "    "),
+          "",
+          `  still live but no longer food:        ${d.recategorisedCount.toLocaleString()}`,
+          ...notes(d.recategorised, "    "),
+          "",
+          `  no longer listed in the sitemap:      ${d.droppedFromSitemapCount.toLocaleString()}`,
+          ...notes(d.droppedFromSitemap, "    "),
+          "",
+          `  could not be reached (not counted as gone): ${d.unreachable.toLocaleString()}`,
+        ],
         explain
       )
     );
@@ -196,7 +272,10 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
             (s.short > 0 ? `  SHORT by ${s.short}` : "")
         ),
         "",
-        `  ${report.scraper.requests} requests, ${report.scraper.megabytes} MB, ` +
+        `  ${report.scraper.requests} requests, ` +
+          (report.scraper.transferredMegabytes === null
+            ? `transfer unreported, ${report.scraper.megabytes} MB of HTML, `
+            : `${report.scraper.transferredMegabytes} MB transferred (${report.scraper.megabytes} MB of HTML once unpacked), `) +
           `${report.scraper.minutesFetching} min fetching, ${report.scraper.retries} retries` +
           (report.scraper.slowdown === null
             ? "  (no earlier run to compare the timing against)"
