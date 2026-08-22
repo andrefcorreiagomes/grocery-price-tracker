@@ -117,11 +117,20 @@ model CatalogueProduct {
   /// and is what a user-facing catalogue would filter on later.
   delistedAt DateTime?
 
+  /// Set when this row was reconciled to a SUCCESSOR id by barcode: the same
+  /// product returned under a new storeProductId, and its price history was
+  /// moved onto that row. A tombstone - kept and delisted, but its
+  /// CataloguePrice rows now live on `supersededById`. Plain id, not a relation:
+  /// nothing is ever deleted, so there is no integrity to enforce, and the
+  /// matcher joins on it when it needs to.
+  supersededById String?
+
   @@unique([store, storeProductId])
   @@index([store, brand]) // brand blocking
   @@index([store, categoryPath]) // category blocking
   @@index([eanNormalized]) // EAN match / veto
   @@index([store, delistedAt, lastCheckedAt]) // the nightly queue, stalest first
+  @@index([store, supersededById]) // finding tombstones / their successors
   candidatesA MatchCandidate[] @relation("CandidateA")
   candidatesB MatchCandidate[] @relation("CandidateB")
   prices      CataloguePrice[]

@@ -34,6 +34,7 @@ import {
   rollingBaseline,
 } from "../scrapers/crawl/history";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
+import { churnCatastropheReason, reconcileByBarcode } from "../scrapers/crawl/reidentification";
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
@@ -272,24 +273,49 @@ async function main() {
       console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} products`),
   });
 
-  // A page that said the product is gone advances its counter; three nights
-  // sets delistedAt. Transient failures only touch lastCheckedAt, so a bad
-  // night cannot delist anything.
-  const { delisted } = await recordDead(
-    STORE,
-    refresh.dead.map((d) => d.storeProductId),
-    seenAt
-  );
-  await recordRecategorised(
-    STORE,
-    refresh.nonFood.map((n) => n.storeProductId),
-    seenAt
-  );
-  await touchChecked(
-    STORE,
-    refresh.unreachable.map((u) => u.storeProductId),
-    seenAt
-  );
+  // Guard 1: if an implausible fraction of the catalogue failed at once, this
+  // is a mass re-numbering or a site fault, not turnover. Freeze delisting -
+  // advance nothing toward removal - so an unattended schedule cannot wipe the
+  // catalogue over three such nights. The reason is added to the report below.
+  const catastrophe = churnCatastropheReason({
+    dead: refresh.dead.length,
+    attempted: queue.length,
+    complete,
+  });
+
+  let delisted: string[] = [];
+  if (catastrophe) {
+    console.log(`  !! ${catastrophe}`);
+    // Clock only: no deadCount, no delistedAt.
+    await touchChecked(
+      STORE,
+      [
+        ...refresh.dead.map((d) => d.storeProductId),
+        ...refresh.nonFood.map((n) => n.storeProductId),
+        ...refresh.unreachable.map((u) => u.storeProductId),
+      ],
+      seenAt
+    );
+  } else {
+    // A page that said the product is gone advances its counter; three nights
+    // sets delistedAt. Transient failures only touch lastCheckedAt, so a bad
+    // night cannot delist anything.
+    ({ delisted } = await recordDead(
+      STORE,
+      refresh.dead.map((d) => d.storeProductId),
+      seenAt
+    ));
+    await recordRecategorised(
+      STORE,
+      refresh.nonFood.map((n) => n.storeProductId),
+      seenAt
+    );
+    await touchChecked(
+      STORE,
+      refresh.unreachable.map((u) => u.storeProductId),
+      seenAt
+    );
+  }
 
   console.log(
     `  ${refresh.fetched.toLocaleString()} answered` +
@@ -373,6 +399,23 @@ async function main() {
 
   const saved = writer.finish();
   const total = saved.summaries.reduce((sum, s) => sum + s.total, 0);
+
+  // Guard 2: a product discovered this run that shares an exact barcode with one
+  // that just disappeared is the same product under a new id. Carry its price
+  // history across rather than restarting it. Only meaningful on a complete
+  // pass, where "disappeared" is knowable.
+  const reidentification = complete
+    ? await reconcileByBarcode(
+        STORE,
+        newFood.map((p) => p.storeProductId),
+        seenAt
+      )
+    : { changes: [], ambiguous: [] };
+  if (reidentification.changes.length > 0) {
+    console.log(
+      `\n${reidentification.changes.length.toLocaleString()} product(s) changed id and were reconciled by barcode`
+    );
+  }
 
   // ---------------------------------------------------------------- phase 4
   console.log("\nphase 4: published section counts");
@@ -462,7 +505,7 @@ async function main() {
     newCount: newFood.length,
   });
 
-  let report = { ...rotationOnly, discovery, catalogueByStore };
+  let report = { ...rotationOnly, discovery, catalogueByStore, reidentification };
   const sections = saved.summaries.map((s) => ({
     cgid: s.label,
     label: s.label,
@@ -491,7 +534,7 @@ async function main() {
       baseline: { runs: baseline.runs, since: baseline.since },
       previousRun,
     });
-    report = { ...full, rotation: rotationOnly.rotation, discovery, catalogueByStore };
+    report = { ...full, rotation: rotationOnly.rotation, discovery, catalogueByStore, reidentification };
 
     const stats = httpStats().reduce(
       (a, h) => ({
@@ -528,6 +571,13 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
+  if (catastrophe) {
+    // The strongest signal in the report: the run is not to be trusted, and it
+    // is a FAIL rather than a WARN because acting on it (delisting) would be
+    // destructive. The freeze already happened; this is the alarm.
+    report = { ...report, verdict: "FAIL", problems: [catastrophe, ...report.problems] };
+  }
+
   if (checkChange.shrank) {
     report = {
       ...report,

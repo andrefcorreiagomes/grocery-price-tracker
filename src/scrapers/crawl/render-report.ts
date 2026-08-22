@@ -189,6 +189,44 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     );
   }
 
+  if (
+    report.reidentification &&
+    (report.reidentification.changes.length > 0 || report.reidentification.ambiguous.length > 0)
+  ) {
+    const r = report.reidentification;
+    lines.push(
+      ...section(
+        "Products that changed id",
+        "A product's identity is the id in its Continente URL, so a product re-issued under a new " +
+          "id looks like one product disappearing and an unrelated one appearing - with its price " +
+          "history restarting from zero. When the new product shares an EXACT barcode with the one " +
+          "that just vanished, they are the same thing: the history is carried across and the old " +
+          "row kept as a tombstone pointing at the new id. Only products with a real barcode can be " +
+          "matched this way; a re-numbered product without one still shows as an unrelated new/gone " +
+          "pair above. A handful here is routine; hundreds is a mass re-numbering.",
+        [
+          `  reconciled by barcode: ${r.changes.length.toLocaleString()}`,
+          ...r.changes
+            .slice(0, 12)
+            .map(
+              (c) =>
+                `    ${c.oldId} -> ${c.newId}   ${c.name.slice(0, 34).padEnd(34)} history carried over (${c.periodsCarried} period${c.periodsCarried === 1 ? "" : "s"})`
+            ),
+          ...(r.ambiguous.length === 0
+            ? []
+            : [
+                "",
+                `  !! ${r.ambiguous.length.toLocaleString()} barcode(s) matched more than one disappeared product - not linked, needs a look:`,
+                ...r.ambiguous
+                  .slice(0, 12)
+                  .map((a) => `     ${a.newId}  ${a.name.slice(0, 34).padEnd(34)} ${a.candidates} candidates`),
+              ]),
+        ],
+        explain
+      )
+    );
+  }
+
   if (report.catalogueByStore && report.catalogueByStore.length > 0) {
     lines.push(
       ...section(

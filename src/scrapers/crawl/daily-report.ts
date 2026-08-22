@@ -179,6 +179,12 @@ export interface DailyReport {
    * run. Present on runs that bothered to count.
    */
   catalogueByStore?: import("./catalogue-size").StoreSizeChange[];
+
+  /**
+   * Products whose id changed and were reconciled by barcode this run, plus the
+   * ambiguous barcode matches a human should look at. Present on a complete pass.
+   */
+  reidentification?: import("./reidentification").ReidentificationResult;
 }
 
 /**
