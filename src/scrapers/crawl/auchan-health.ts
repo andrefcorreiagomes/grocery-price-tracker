@@ -164,6 +164,33 @@ export function tileHealthReasons(input: TileHealth): string[] {
   return reasons;
 }
 
+// --- the gate in front of the confirmation pass ---------------------------
+
+/**
+ * May this run treat a product's absence as worth confirming with a page fetch?
+ *
+ * This is deliberately NOT any single guard, and it lives here rather than
+ * inline in the runner because getting it wrong is expensive at the store's
+ * expense rather than ours.
+ *
+ * Every guard above stands down when `complete` is false, which is right for
+ * each of them - on a deliberate slice they would all fire - and leaves nothing
+ * whatsoever in front of the confirmation pass. A `--max-pages=2` run walks
+ * about 400 products against a catalogue of ~17,800, so without the `complete`
+ * term the pass would fetch a product page for the ~17,400 it never looked for:
+ * hours of requests to confirm absences that are an artefact of the flag.
+ *
+ * So a product page is fetched only when the walk both COVERED everything and
+ * was believed. Otherwise absence is not evidence, and the right number of
+ * requests is zero.
+ */
+export function shouldConfirmAbsences(input: {
+  complete: boolean;
+  walkFrozen: boolean;
+}): boolean {
+  return input.complete && !input.walkFrozen;
+}
+
 // --- the unknown-segment monitor -----------------------------------------
 
 export interface SegmentCount {

@@ -14,6 +14,7 @@ import {
   isTileYieldCollapse,
   isTruncatedWalk,
   isUnderCollectedWalk,
+  shouldConfirmAbsences,
   tileHealthReasons,
   underCollectedReason,
   type SegmentCount,
@@ -114,6 +115,14 @@ async function main() {
   // evidence. A truncated or mis-parsed walk makes the missing set mostly false,
   // so delisting freezes and phase 2 is skipped entirely - fetching a page for
   // thousands of products that are not really gone is exactly what to avoid.
+  //
+  // A PARTIAL walk is that same problem in its most extreme form, and needs its
+  // own gate: every guard below deliberately stands down when `complete` is
+  // false, because on a deliberate slice each one would fire. That would leave
+  // nothing at all in front of phase 2, and `--max-pages=2` walks ~400 products
+  // while the catalogue holds ~17,800 - so phase 2 would fetch a product page
+  // for ~17,400 products that were never even looked for. Hours of requests to
+  // the store, to confirm absences that are an artefact of the flag.
   const truncated = isTruncatedWalk({
     walked: walk.crawled,
     published: walk.publishedTotal,
@@ -130,6 +139,7 @@ async function main() {
   const yieldCollapse = isTileYieldCollapse(tileHealth);
   const underCollected = isUnderCollectedWalk({ missing: missing.length, live, complete });
   const walkFrozen = truncated || emptyStorm || yieldCollapse || underCollected;
+  const skipConfirmation = !shouldConfirmAbsences({ complete, walkFrozen });
 
   const confirmedDead: string[] = [];
   let delisted: string[] = [];
@@ -137,10 +147,16 @@ async function main() {
   const alive: string[] = [];
   let catastrophe: string | null = null;
 
-  if (walkFrozen) {
-    console.log(`\nphase 2: skipped - the walk did not see the whole catalogue, so absence is not evidence`);
+  if (skipConfirmation) {
+    console.log(
+      `\nphase 2: skipped - ${
+        complete
+          ? "the walk did not see the whole catalogue, so absence is not evidence"
+          : `this is a partial walk (--max-pages), so the ${missing.length.toLocaleString()} unseen products were never looked for`
+      }`
+    );
     // Not even the clock is touched: these products were never actually
-    // attempted, and a frozen run should leave no trace that looks like one.
+    // attempted, and a skipped run should leave no trace that looks like one.
   } else {
     console.log(`\nphase 2: confirming ${missing.length.toLocaleString()} products missing from the walk`);
     for (const m of missing) {
@@ -178,7 +194,7 @@ async function main() {
         `, ${unreachable.length.toLocaleString()} unreachable`
     );
   }
-  const frozen = walkFrozen || catastrophe !== null;
+  const frozen = skipConfirmation || catastrophe !== null;
 
   // ---------------------------------------------------------------- phase 3
   const segmentCounts: SegmentCount[] = [...walk.segmentTally].map(([segment, count]) => ({

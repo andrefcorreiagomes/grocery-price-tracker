@@ -8,6 +8,7 @@ import {
   isTileYieldCollapse,
   isTruncatedWalk,
   isUnderCollectedWalk,
+  shouldConfirmAbsences,
   type SegmentCount,
 } from "../scrapers/crawl/auchan-health";
 import { MIN_ATTEMPTED, isPriceChurnStorm, PRICE_CHURN_LIMIT } from "../scrapers/crawl/reidentification";
@@ -150,6 +151,37 @@ export async function verifyAuchanNightly(): Promise<number> {
       priced: seen,
       complete: true,
     })
+  );
+
+  // The gate in front of phase 2, which is NOT any single guard.
+  //
+  // Every guard above stands down when `complete` is false, because on a
+  // deliberate slice each one would fire. That is right for the guards and
+  // catastrophic for the confirmation pass: with all of them quiet, nothing
+  // would stop a `--max-pages=2` run - ~400 products walked against a ~17,800
+  // catalogue - from fetching a product page for the ~17,400 it never looked
+  // for. So the skip is `!complete || walkFrozen`, and this asserts the
+  // `!complete` half, which no individual guard can express.
+  const walkFrozenFor = (complete: boolean) =>
+    isTruncatedWalk({ walked: 400, published: 54_859, failedDepartments: [], complete }) ||
+    isUnderCollectedWalk({ missing: 17_400, live: 17_800, complete }) ||
+    isTileYieldCollapse({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete }) ||
+    isEmptyCategoryStorm({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete });
+  check(
+    "on a partial walk no guard fires, so they cannot gate the confirmation pass",
+    !walkFrozenFor(false)
+  );
+  check(
+    "a partial walk skips the confirmation pass anyway",
+    !shouldConfirmAbsences({ complete: false, walkFrozen: walkFrozenFor(false) })
+  );
+  check(
+    "the same shortfall on a COMPLETE walk does freeze delisting",
+    walkFrozenFor(true) && !shouldConfirmAbsences({ complete: true, walkFrozen: walkFrozenFor(true) })
+  );
+  check(
+    "a complete, healthy walk does confirm absences",
+    shouldConfirmAbsences({ complete: true, walkFrozen: false })
   );
 
   // --- tile parsing yield ---------------------------------------------------
