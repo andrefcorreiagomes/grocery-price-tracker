@@ -208,8 +208,13 @@ export interface GridHealthExtras {
   walked: number;
   /** what the store's own counter published across the walk */
   published: number;
-  /** whether delisting was frozen this run because a guard fired */
-  frozen: boolean;
+  /**
+   * What happened to delisting this run. Three states, not two: "a guard fired"
+   * and "this was a partial walk we never asked to be complete" both stop
+   * anything being marked gone, but only one of them is a fault, and reporting
+   * a deliberate `--max-pages` run as a fired guard is a false alarm.
+   */
+  delisting: "active" | "frozen" | "partial";
 
   tilesSeen: number;
   tilesKept: number;

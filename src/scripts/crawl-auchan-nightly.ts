@@ -194,7 +194,13 @@ async function main() {
         `, ${unreachable.length.toLocaleString()} unreachable`
     );
   }
-  const frozen = skipConfirmation || catastrophe !== null;
+  // A partial walk is reported apart from a fired guard: both stop anything
+  // being marked gone, but only one of them means something went wrong.
+  const delisting: "active" | "frozen" | "partial" = !complete
+    ? "partial"
+    : walkFrozen || catastrophe !== null
+      ? "frozen"
+      : "active";
 
   // ---------------------------------------------------------------- phase 3
   const segmentCounts: SegmentCount[] = [...walk.segmentTally].map(([segment, count]) => ({
@@ -219,7 +225,7 @@ async function main() {
     mode: MODE,
     walked: walk.crawled,
     published: walk.publishedTotal,
-    frozen,
+    delisting,
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
     withoutCategory: walk.withoutCategory,

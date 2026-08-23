@@ -195,10 +195,24 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               `  ${x.label.padEnd(24)} ${String(x.ours).padStart(6)} known` +
               (x.published === null ? "" : ` of ${x.published} published`)
           );
+          const ours = r.sections.reduce((n, x) => n + x.ours, 0);
+          // A store that publishes no per-section counts gets no comparison
+          // rather than a comparison against zero, which rendered as "17,864
+          // known against 0 published, a difference of -17,864" - a shortfall
+          // that reads as catastrophic and does not exist. Auchan publishes one
+          // count for the whole walk, which the grid-health section shows.
+          const counted = r.sections.filter((x) => x.published !== null);
+          if (counted.length === 0) {
+            return [
+              ...rows,
+              "",
+              `  TOTAL ${ours.toLocaleString()} known. This store publishes no per-section counts, so there is` +
+                ` nothing to compare them against here; its published total is in the grid-health section above.`,
+            ];
+          }
           // The only comparison that means anything, because a product counted
           // once by us may be published in several sections.
-          const ours = r.sections.reduce((n, x) => n + x.ours, 0);
-          const pub = r.sections.reduce((n, x) => n + (x.published ?? 0), 0);
+          const pub = counted.reduce((n, x) => n + (x.published ?? 0), 0);
           return [
             ...rows,
             "",
@@ -327,7 +341,13 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               : "  (the store published no count this run)"),
           `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
           `  tiles with no category: ${g.withoutCategory.toLocaleString()} (${emptyPct}% of those kept)`,
-          `  delisting this run:   ${g.frozen ? "FROZEN - a guard fired, so nothing was marked gone" : "active"}`,
+          `  delisting this run:   ${
+            g.delisting === "frozen"
+              ? "FROZEN - a guard fired, so nothing was marked gone"
+              : g.delisting === "partial"
+                ? "not attempted - a partial walk, so absence was never tested"
+                : "active"
+          }`,
           "",
           "  segments seen (kept by the food filter, or dropped):",
           ...g.segments.map(

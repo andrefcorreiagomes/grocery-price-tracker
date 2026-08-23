@@ -361,7 +361,7 @@ export async function verifyAuchanNightly(): Promise<number> {
     mode: "root",
     walked: 54_800,
     published: 54_859,
-    frozen: false,
+    delisting: "active",
     tilesSeen: 54_900,
     tilesKept: 54_880,
     withoutCategory: 4,
@@ -394,6 +394,39 @@ export async function verifyAuchanNightly(): Promise<number> {
   check("the report carries the grid-health section", rendered.includes("Grid health"));
   check("the report shows the walked-vs-published line", rendered.includes("54,800"));
   check("the report shows alive-but-missing", rendered.includes("alive but missing"));
+
+  // A partial walk must not be reported as a fired guard: both stop delisting,
+  // only one is a fault, and calling a deliberate --max-pages run FROZEN is a
+  // false alarm.
+  const partial = renderReport({ ...base, gridHealth: { ...gridHealth, delisting: "partial" } }, { explain: false });
+  check("a partial walk is not reported as a fired guard", !partial.includes("FROZEN"));
+  check("a partial walk says absence was never tested", partial.includes("absence was never tested"));
+  check(
+    "a fired guard still reports FROZEN",
+    renderReport({ ...base, gridHealth: { ...gridHealth, delisting: "frozen" } }, { explain: false }).includes("FROZEN")
+  );
+
+  // A store publishing no per-section counts must get no comparison rather than
+  // a comparison against zero, which read as a 17,864-product shortfall.
+  const noCounts = renderReport(
+    {
+      ...base,
+      rotation: {
+        complete: true,
+        refreshedThisRun: 100,
+        staleness: { today: 100, week: 0, month: 0, older: 0 },
+        daysToFullCoverage: 1,
+        oldestSeenAt: null,
+        confirmedDelisted: 0,
+        deadSamples: [],
+        enrichment: { total: 100, withBarcode: 0, withSize: 0 },
+        sections: [{ label: "alimentacao", ours: 100, published: null }],
+      },
+    },
+    { explain: false }
+  );
+  check("no per-section counts means no invented shortfall", !noCounts.includes("difference of -"));
+  check("and it says why instead", noCounts.includes("publishes no per-section counts"));
 
   const warned = escalate(base, "WARN", "a soft problem");
   const failed = escalate(warned, "FAIL", "a hard problem");
