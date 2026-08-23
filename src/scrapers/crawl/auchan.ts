@@ -1,5 +1,5 @@
 import { fetchHtml } from "../http";
-import { parseAuchanTiles, parseAuchanTotal } from "../search/auchan";
+import { parseAuchanTilesDetailed, parseAuchanTotal, type TileParse } from "../search/auchan";
 import type { SearchHit } from "../search/types";
 import { discoverFoodDepartments, isFoodSegment } from "./auchan-categories";
 import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
@@ -75,7 +75,11 @@ export interface AuchanWalkSummary {
 
 export interface AuchanCrawlResult {
   mode: AuchanCrawlMode;
-  /** food products grouped by their top-segment department, deduped */
+  /**
+   * Food products grouped by their top-segment department, deduped. Empty when
+   * the crawl streamed to an `onBatch` handler rather than accumulating - the
+   * nightly run persists as it goes and never holds the whole catalogue.
+   */
   food: CategoryResult[];
   /** every top segment seen mapped to its distinct product count (food + non-food) */
   segmentTally: Map<string, number>;
@@ -87,23 +91,39 @@ export interface AuchanCrawlResult {
   walks: AuchanWalkSummary[];
   /** department slugs whose id could not be read (departments mode only) */
   failedDepartments: string[];
+
+  // Grid-health figures, threaded out so the nightly run can fail on a parser
+  // that broke silently. See TileParse for why each matters.
+  /** `[data-gtm]` tiles encountered across every page */
+  tilesSeen: number;
+  /** of those, how many parsed to a usable product */
+  tilesKept: number;
+  /** tiles that parsed but carried no category, so were dropped as non-food */
+  withoutCategory: number;
+  /** the store's own published counts summed across the walk(s), for the truncated-walk brake */
+  publishedTotal: number;
 }
 
 /**
- * Walk one category id to its end, returning its distinct products. Pagination
- * runs against the count the category publishes for itself; the short-page rule
- * is only a fallback, because a full page of tiles need not parse to a full page
- * of products and stopping there truncates the crawl.
+ * Walk one category id to its end, handing each page's parse to `onPage`.
+ * Pagination runs against the count the category publishes for itself; the
+ * short-page rule is only a fallback, because a full page of tiles need not
+ * parse to a full page of products and stopping there truncates the crawl.
  *
- * Dedup here is per-walk, used only to detect pagination wrapping. Run-wide
- * dedup happens in the caller, so that a department made mostly of products
- * already seen elsewhere still gets walked to its end.
+ * Dedup HERE is per-walk, used only to detect pagination wrapping, and its size
+ * is returned as `distinct`. Run-wide dedup, the food filter and any streaming
+ * happen in `onPage`, so that a department made mostly of products already seen
+ * elsewhere still gets walked to its end.
  */
 async function walkCategory(
   category: CrawlCategory,
-  opts: { maxPages?: number; onProgress?: (p: CrawlProgress) => void }
-): Promise<{ products: SearchHit[]; expected: number | null }> {
-  const byId = new Map<string, SearchHit>();
+  opts: {
+    maxPages?: number;
+    onProgress?: (p: CrawlProgress) => void;
+    onPage: (parse: TileParse) => void | Promise<void>;
+  }
+): Promise<{ expected: number | null; distinct: number }> {
+  const seenIds = new Set<string>();
   let expected: number | null = null;
 
   for (let page = 0; opts.maxPages === undefined || page < opts.maxPages; page++) {
@@ -114,28 +134,33 @@ async function walkCategory(
         ? `${SHOW_URL}?cgid=${cgid}&start=0&sz=${PAGE_SIZE}`
         : `${GRID_URL}?cgid=${cgid}&start=${start}&sz=${PAGE_SIZE}`
     );
-    const tiles = parseAuchanTiles(html);
+    const parse = parseAuchanTilesDetailed(html);
     if (page === 0) expected = parseAuchanTotal(html);
-    if (tiles.length === 0) break; // ran off the end
+
+    // Emit BEFORE the end-of-catalogue break, so a page that parsed nothing
+    // because every tile was discarded still reaches the tile-yield monitor
+    // rather than looking like the natural end of the walk.
+    await opts.onPage(parse);
+    if (parse.hits.length === 0) break; // ran off the end (or the whole page failed to parse)
 
     let fresh = 0;
-    for (const tile of tiles) {
-      if (byId.has(tile.id)) continue;
-      byId.set(tile.id, tile);
+    for (const tile of parse.hits) {
+      if (seenIds.has(tile.id)) continue;
+      seenIds.add(tile.id);
       fresh++;
     }
-    opts.onProgress?.({ category, page: page + 1, collected: byId.size });
+    opts.onProgress?.({ category, page: page + 1, collected: seenIds.size });
 
     if (fresh === 0) break; // pagination wrapped onto already-seen products
 
     if (expected !== null) {
       if (start + PAGE_SIZE >= expected) break;
-    } else if (tiles.length < PAGE_SIZE) {
+    } else if (parse.hits.length < PAGE_SIZE) {
       break; // no published count to steer by: fall back to the short page
     }
   }
 
-  return { products: [...byId.values()], expected };
+  return { expected, distinct: seenIds.size };
 }
 
 export async function crawlAuchan(
@@ -143,6 +168,13 @@ export async function crawlAuchan(
     mode?: AuchanCrawlMode;
     maxPages?: number;
     onProgress?: (p: CrawlProgress) => void;
+    /**
+     * Called with each page's food products, grouped by segment, as the walk
+     * proceeds. When present the crawl streams and holds nothing: `food` in the
+     * result is empty and the caller (the nightly writer) owns persistence. When
+     * absent the products accumulate into `food`, for the one-shot script.
+     */
+    onBatch?: (products: SearchHit[], segment: string) => void | Promise<void>;
   } = {}
 ): Promise<AuchanCrawlResult> {
   const mode = opts.mode ?? DEFAULT_AUCHAN_MODE;
@@ -163,38 +195,67 @@ export async function crawlAuchan(
   const foodBySegment = new Map<string, SearchHit[]>();
   const walks: AuchanWalkSummary[] = [];
 
+  let tilesSeen = 0;
+  let tilesKept = 0;
+  let withoutCategory = 0;
+  let publishedTotal = 0;
+
   for (const category of categories) {
-    const { products, expected } = await walkCategory(category, opts);
-
     let added = 0;
-    for (const tile of products) {
-      if (seen.has(tile.id)) continue; // cross-listed in a department already walked
-      seen.add(tile.id);
-      added++;
 
-      const segment = topSegment(tile.category);
-      segmentTally.set(segment, (segmentTally.get(segment) ?? 0) + 1);
+    const { expected, distinct } = await walkCategory(category, {
+      maxPages: opts.maxPages,
+      onProgress: opts.onProgress,
+      onPage: async (parse) => {
+        tilesSeen += parse.seen;
+        tilesKept += parse.hits.length;
+        withoutCategory += parse.withoutCategory;
 
-      const samples = segmentSamples.get(segment) ?? [];
-      if (samples.length < SAMPLES_PER_SEGMENT) {
-        samples.push(tile.name);
-        segmentSamples.set(segment, samples);
-      }
+        // This page's food, grouped by segment, for streaming.
+        const freshFood = new Map<string, SearchHit[]>();
 
-      // The whitelist applies in both modes: a department page carries some
-      // cross-listed non-food, judged here by the product's own category path.
-      if (isFoodSegment(segment)) {
-        const list = foodBySegment.get(segment) ?? [];
-        list.push(tile);
-        foodBySegment.set(segment, list);
-      }
-    }
+        for (const tile of parse.hits) {
+          if (seen.has(tile.id)) continue; // cross-listed, or a page overlap
+          seen.add(tile.id);
+          added++;
+
+          const segment = topSegment(tile.category);
+          segmentTally.set(segment, (segmentTally.get(segment) ?? 0) + 1);
+
+          const samples = segmentSamples.get(segment) ?? [];
+          if (samples.length < SAMPLES_PER_SEGMENT) {
+            samples.push(tile.name);
+            segmentSamples.set(segment, samples);
+          }
+
+          // The whitelist applies in both modes: a department page carries some
+          // cross-listed non-food, judged here by the product's own category path.
+          if (!isFoodSegment(segment)) continue;
+
+          if (opts.onBatch) {
+            const list = freshFood.get(segment) ?? [];
+            list.push(tile);
+            freshFood.set(segment, list);
+          } else {
+            const list = foodBySegment.get(segment) ?? [];
+            list.push(tile);
+            foodBySegment.set(segment, list);
+          }
+        }
+
+        if (opts.onBatch) {
+          for (const [segment, list] of freshFood) await opts.onBatch(list, segment);
+        }
+      },
+    });
+
+    if (expected !== null) publishedTotal += expected;
 
     walks.push({
       label: category.label,
       cgid: category.cgid,
       expected,
-      fetched: products.length,
+      fetched: distinct,
       added,
     });
   }
@@ -212,5 +273,9 @@ export async function crawlAuchan(
     crawled: seen.size,
     walks,
     failedDepartments,
+    tilesSeen,
+    tilesKept,
+    withoutCategory,
+    publishedTotal,
   };
 }

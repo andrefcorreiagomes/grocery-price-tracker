@@ -29,6 +29,28 @@ export interface RenderOptions {
   explain?: boolean;
 }
 
+/**
+ * Push a problem onto a report and move its verdict, most-serious-first.
+ *
+ * The verdict ladder was open-coded once per check in each nightly runner, the
+ * same six-line `{ ...report, verdict: report.verdict === "FAIL" ? ... }` spread
+ * every time - which is exactly how the Continente runner ended up pushing a
+ * parser-regression FAIL onto the list twice. The two rules never change: a FAIL
+ * can never be softened to a WARN, and every message goes to the FRONT, because
+ * the reader wants the worst thing first.
+ */
+export function escalate(
+  report: DailyReport,
+  level: "FAIL" | "WARN",
+  message: string
+): DailyReport {
+  return {
+    ...report,
+    verdict: level === "FAIL" || report.verdict === "FAIL" ? "FAIL" : "WARN",
+    problems: [message, ...report.problems],
+  };
+}
+
 function section(title: string, note: string, lines: string[], explain: boolean): string[] {
   if (lines.length === 0) return [];
   return [`## ${title}`, "", ...(explain ? [`> ${note}`, ""] : []), ...lines, ""];
@@ -273,6 +295,86 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
             (s.delisted > 0 ? `, ${s.delisted.toLocaleString()} delisted` : "")
           );
         }),
+        explain
+      )
+    );
+  }
+
+  if (report.gridHealth) {
+    const g = report.gridHealth;
+    const yieldPct = ((100 * g.tilesKept) / Math.max(1, g.tilesSeen)).toFixed(1);
+    const emptyPct = ((100 * g.withoutCategory) / Math.max(1, g.tilesKept)).toFixed(1);
+    lines.push(
+      ...section(
+        "Grid health: was the whole catalogue reached, and did the tiles parse",
+        "This store is crawled by walking its listing grids, not by reading a sitemap of every " +
+          "published id - so unlike Continente there is no independent list to check completeness " +
+          "against, and the walk has to police itself. Two silent failures matter. A TRUNCATED walk: " +
+          "if we fetched materially fewer products than the store's own counter published, the grid " +
+          "was cut short, and since a product's absence is the only reason we ever delist, a short " +
+          "walk must delist NOTHING - so it freezes delisting and fails. A broken TILE PARSER: each " +
+          "product's data rides in a JSON attribute, and a renamed attribute makes the reader return " +
+          "nothing without throwing, shrinking the catalogue with no error. Tiles-kept against " +
+          "tiles-seen is the alarm for that, and the share of tiles arriving with no category is the " +
+          "alarm for the food filter emptying the catalogue, because an empty category reads as " +
+          "non-food.",
+        [
+          `  mode:                 ${g.mode}`,
+          `  products walked:      ${g.walked.toLocaleString()}` +
+            (g.published > 0
+              ? ` of ${g.published.toLocaleString()} the store published` +
+                (g.walked < g.published ? `  (${(g.published - g.walked).toLocaleString()} short)` : "")
+              : "  (the store published no count this run)"),
+          `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
+          `  tiles with no category: ${g.withoutCategory.toLocaleString()} (${emptyPct}% of those kept)`,
+          `  delisting this run:   ${g.frozen ? "FROZEN - a guard fired, so nothing was marked gone" : "active"}`,
+          "",
+          "  segments seen (kept by the food filter, or dropped):",
+          ...g.segments.map(
+            (s) => `    ${s.kept ? "keep" : "drop"}  ${String(s.count).padStart(6)}  ${s.segment}`
+          ),
+          ...(g.segmentsAppeared.length
+            ? [
+                "",
+                "  !! new segments the filter DROPPED, not seen last run - a food department may be hiding here:",
+                ...g.segmentsAppeared.flatMap((s) => [
+                  `     ${s.segment}  (${s.count.toLocaleString()} products)`,
+                  ...s.samples.slice(0, 3).map((n) => `        ${n.slice(0, 60)}`),
+                ]),
+              ]
+            : []),
+          ...(g.segmentsVanished.length
+            ? [
+                "",
+                "  !! segments the filter KEPT last run and are GONE now - a food department vanished:",
+                ...g.segmentsVanished.map((s) => `     ${s.segment}  (was ${s.count.toLocaleString()} products)`),
+              ]
+            : []),
+        ],
+        explain
+      )
+    );
+
+    lines.push(
+      ...section(
+        "Products leaving the catalogue",
+        "A grid walk only tells us a product is ABSENT, which is a guess - pagination flickers. So " +
+          "every product missing from a complete walk gets one product-page fetch to settle it. A page " +
+          "that returns 404/410 is a fact, and three such nights in a row delist the product; one bad " +
+          "night cannot. A page that will not load at all means we could not tell, and is counted " +
+          "apart, never as gone. And a page that still ANSWERS while the product was missing from the " +
+          "grid is the interesting one: the product is alive, so the walk itself has a hole the store's " +
+          "own counter did not reveal.",
+        [
+          `  confirmed gone this run (dead page): ${g.confirmedDead.toLocaleString()}`,
+          `  of those, delisted (third dead night): ${g.delistedNow.toLocaleString()}`,
+          ...notes(g.delistedSamples, "    "),
+          "",
+          `  alive but missing from the grid:     ${g.aliveButMissing.toLocaleString()}`,
+          ...notes(g.aliveButMissingSamples, "    "),
+          "",
+          `  could not be reached (not counted as gone): ${g.unreachable.toLocaleString()}`,
+        ],
         explain
       )
     );

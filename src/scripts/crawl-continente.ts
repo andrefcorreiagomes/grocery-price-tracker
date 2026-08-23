@@ -181,11 +181,14 @@ async function main() {
   console.log(`\nreport written to ${written.text} and ${written.json}`);
 
   await recordRun("CONTINENTE", total, sections, {
-    requests: http.reduce((n, h) => n + h.requests, 0),
-    bytes: http.reduce((n, h) => n + h.bytes, 0),
-    fetchMs: http.reduce((n, h) => n + h.fetchMs, 0),
-    retries: http.reduce((n, h) => n + h.retries, 0),
-  }, seenAt);
+    http: {
+      requests: http.reduce((n, h) => n + h.requests, 0),
+      bytes: http.reduce((n, h) => n + h.bytes, 0),
+      fetchMs: http.reduce((n, h) => n + h.fetchMs, 0),
+      retries: http.reduce((n, h) => n + h.retries, 0),
+    },
+    seenAt,
+  });
 
   // The verdict is the machine-readable half: a scheduler should not have to
   // read prose to find out that a crawl went wrong.

@@ -253,6 +253,32 @@ model CrawlRun {
   /// vanishing from the report.
   catalogueSizes String?
 
+  /// Grid-walk bookkeeping, for stores crawled by listing grid rather than by
+  /// sitemap (Auchan today, Pingo Doce later). Named store-neutrally; a store
+  /// crawled another way simply leaves them null, exactly as Auchan leaves the
+  /// sitemap columns above null. The grid crawl's answer to the sitemap figures:
+  /// they are what the next run compares against to catch a whole food
+  /// department appearing under an unrecognised name, or the tile parser quietly
+  /// dropping products.
+
+  /// Every top segment the walk saw, as JSON `[{segment, count, kept}]` - the
+  /// grid crawl's equivalent of the sitemap's per-file entries.
+  segmentTally  String?
+  /// What the store's own result counter published across the walk, against
+  /// which `walkedTotal` is checked for a truncated crawl.
+  publishedTotal Int?
+  /// Distinct products the walk actually fetched, food and non-food together.
+  walkedTotal    Int?
+  /// `[data-gtm]` tiles the walk encountered - the denominator for tile yield,
+  /// which catches a renamed attribute that would otherwise shrink the catalogue
+  /// in silence.
+  tilesSeen      Int?
+  /// Of those, how many parsed to a usable product.
+  tilesKept      Int?
+  /// Tiles that parsed but carried no category path, so would drop as non-food.
+  /// A spike means the whole catalogue is about to read as non-food.
+  emptyCategory  Int?
+
   sections       CrawlSection[]
 
   @@index([store, startedAt])

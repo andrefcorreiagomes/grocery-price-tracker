@@ -51,45 +51,83 @@ export interface RunRequestStats {
 }
 
 /**
- * Save this run so the next one has something to compare against.
- *
- * `seenAt` must be the instant the crawl stamped on the products it saw, NOT
- * the moment this is called. They differ by however long saving took, and that
- * gap is enough to break the next run's comparison: a product's `lastSeenAt`
- * would be fractionally EARLIER than the run that wrote it, so the next run
- * reads every product as having been absent and returned. Measured once as
- * "returned: 17090" - the entire catalogue.
+ * Everything about a run beyond its store, total and sections. An options
+ * object rather than a positional tail: this reached eleven parameters for
+ * Continente's sitemap bookkeeping, and Auchan's grid figures would push it past
+ * fifteen, most of them the same `number | null` and impossible to tell apart at
+ * a call site. Every field is optional, and a store records only the ones that
+ * mean something to it - Auchan never sets a sitemap figure, Continente never
+ * sets a grid one.
  */
-export async function recordRun(
-  store: Store,
-  total: number,
-  sections: RunSection[],
-  http?: RunRequestStats,
-  seenAt?: Date,
+export interface RunRecord {
+  http?: RunRequestStats;
+  /**
+   * The instant the crawl stamped on the products it saw, NOT the moment this is
+   * called. They differ by however long saving took, and that gap is enough to
+   * break the next run's comparison: a product's `lastSeenAt` would be
+   * fractionally EARLIER than the run that wrote it, so the next run reads every
+   * product as having been absent and returned. Measured once as "returned:
+   * 17090" - the entire catalogue.
+   */
+  seenAt?: Date;
+
+  // --- Continente sitemap discovery ---------------------------------------
   /**
    * Product ids the sitemap published, so the next run can tell a store that
    * lost products from a sitemap that came back truncated. Only pass a count
    * that was trusted: recording a bad one poisons tomorrow's comparison, which
    * would then read the recovery as a sudden enormous increase.
    */
-  sitemapEntries?: number | null,
+  sitemapEntries?: number | null;
   /** how many product sitemap files the index listed, alongside the entries */
-  sitemapFiles?: number | null,
+  sitemapFiles?: number | null;
   /**
    * Whether those figures were BELIEVED. Recorded either way: keeping the
    * disbelieved ones is what lets the next run tell a persistent change from a
    * one-night glitch, instead of distrusting a reorganised sitemap forever.
    */
-  sitemapTrusted?: boolean | null,
+  sitemapTrusted?: boolean | null;
   /** entries per sitemap file, so the next run can compare each against itself */
-  sitemapPerFile?: { url: string; entries: number }[] | null,
+  sitemapPerFile?: { url: string; entries: number }[] | null;
   /** `<loc>` entries we could not turn into a product id; should be 0 */
-  sitemapUnparseable?: number | null,
+  sitemapUnparseable?: number | null;
+
+  // --- shared -------------------------------------------------------------
   /** every store's catalogue size at the end of this run */
-  catalogueSizes?: { store: string; total: number; delisted: number }[] | null,
+  catalogueSizes?: { store: string; total: number; delisted: number }[] | null;
   /** the run's ProductCheck totals, so the next run can compare */
-  checkTotals?: { notFood: number; dead: number } | null
+  checkTotals?: { notFood: number; dead: number } | null;
+
+  // --- Auchan grid walk ---------------------------------------------------
+  /**
+   * Every top segment the walk saw, mapped to its product count and whether the
+   * whitelist kept it, as JSON. The grid crawl's answer to the sitemap: a new
+   * food department under an unrecognised name is otherwise invisible.
+   */
+  segmentTally?: { segment: string; count: number; kept: boolean }[] | null;
+  /** what the store's own counter published across the walk, to compare with what we fetched */
+  publishedTotal?: number | null;
+  /** distinct products the walk actually fetched, food and non-food together */
+  walkedTotal?: number | null;
+  /** `[data-gtm]` tiles the walk encountered, the denominator for tile yield */
+  tilesSeen?: number | null;
+  /** of those, how many parsed to a usable product */
+  tilesKept?: number | null;
+  /** tiles that parsed but carried no category path, so would drop as non-food */
+  emptyCategory?: number | null;
+}
+
+/**
+ * Save this run so the next one has something to compare against. See RunRecord
+ * for why the bookkeeping is an options object rather than a parameter list.
+ */
+export async function recordRun(
+  store: Store,
+  total: number,
+  sections: RunSection[],
+  record: RunRecord = {}
 ) {
+  const { http, seenAt } = record;
   await prisma.crawlRun.create({
     data: {
       store,
@@ -98,14 +136,20 @@ export async function recordRun(
       requests: http?.requests ?? null,
       bytes: http?.bytes ?? null,
       wireBytes: http?.wireBytes ?? null,
-      sitemapEntries: sitemapEntries ?? null,
-      sitemapFiles: sitemapFiles ?? null,
-      sitemapTrusted: sitemapTrusted ?? null,
-      sitemapPerFile: sitemapPerFile ? JSON.stringify(sitemapPerFile) : null,
-      sitemapUnparseable: sitemapUnparseable ?? null,
-      catalogueSizes: catalogueSizes ? JSON.stringify(catalogueSizes) : null,
-      checkNotFood: checkTotals?.notFood ?? null,
-      checkDead: checkTotals?.dead ?? null,
+      sitemapEntries: record.sitemapEntries ?? null,
+      sitemapFiles: record.sitemapFiles ?? null,
+      sitemapTrusted: record.sitemapTrusted ?? null,
+      sitemapPerFile: record.sitemapPerFile ? JSON.stringify(record.sitemapPerFile) : null,
+      sitemapUnparseable: record.sitemapUnparseable ?? null,
+      catalogueSizes: record.catalogueSizes ? JSON.stringify(record.catalogueSizes) : null,
+      checkNotFood: record.checkTotals?.notFood ?? null,
+      checkDead: record.checkTotals?.dead ?? null,
+      segmentTally: record.segmentTally ? JSON.stringify(record.segmentTally) : null,
+      publishedTotal: record.publishedTotal ?? null,
+      walkedTotal: record.walkedTotal ?? null,
+      tilesSeen: record.tilesSeen ?? null,
+      tilesKept: record.tilesKept ?? null,
+      emptyCategory: record.emptyCategory ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
       sections: {

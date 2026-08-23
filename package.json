@@ -18,6 +18,7 @@
     "crawl:pingodoce": "tsx src/scripts/crawl-pingodoce.ts",
     "crawl:auchan": "tsx src/scripts/crawl-auchan.ts",
     "crawl:continente:nightly": "tsx src/scripts/crawl-continente-nightly.ts",
+    "crawl:auchan:nightly": "tsx src/scripts/crawl-auchan-nightly.ts",
     "verify:nightly": "tsx src/scripts/verify-nightly.ts"
   },
   "dependencies": {

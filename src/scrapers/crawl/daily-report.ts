@@ -191,6 +191,48 @@ export interface DailyReport {
    * barcode changing, with the old product archived under a retired id.
    */
   identitySwaps?: import("./reidentification").ArchivedSwap[];
+
+  /**
+   * Present when the store was crawled by listing GRID rather than by sitemap
+   * (Auchan). The grid crawl's counterpart of `discovery`: it answers whether
+   * the walk saw everything, and whether the tile parser is still healthy -
+   * questions a grid crawl has to ask itself because, unlike a sitemap crawl, it
+   * has no independent list of every published id to check against.
+   */
+  gridHealth?: GridHealthExtras;
+}
+
+export interface GridHealthExtras {
+  mode: "root" | "departments";
+  /** distinct products the walk fetched, food and non-food together */
+  walked: number;
+  /** what the store's own counter published across the walk */
+  published: number;
+  /** whether delisting was frozen this run because a guard fired */
+  frozen: boolean;
+
+  tilesSeen: number;
+  tilesKept: number;
+  withoutCategory: number;
+
+  /** every top segment seen this run, with its count and whether it was kept */
+  segments: { segment: string; count: number; kept: boolean }[];
+  /** dropped segments new since last run - a new food department may hide here */
+  segmentsAppeared: { segment: string; count: number; samples: string[] }[];
+  /** kept segments present last run and gone now - a food department vanished */
+  segmentsVanished: { segment: string; count: number }[];
+
+  // phase 2: turning absence into a confirmed fact, one product page at a time
+  /** missing products whose page returned 404/410 and advanced their dead count */
+  confirmedDead: number;
+  /** of those, how many reached the third dead night and were delisted */
+  delistedNow: number;
+  delistedSamples: ProductNote[];
+  /** missing products whose page could not be read - counted as gone, no */
+  unreachable: number;
+  /** missing from the grid yet the page still answered: the walk has a hole */
+  aliveButMissing: number;
+  aliveButMissingSamples: ProductNote[];
 }
 
 /**

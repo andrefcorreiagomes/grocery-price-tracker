@@ -7,19 +7,47 @@ import type { SearchHit } from "./types";
 const SEARCH_URL = "https://www.auchan.pt/pt/pesquisa";
 
 /**
- * Parse Auchan product tiles out of a grid/search HTML fragment. Shared by the
- * search extractor here and the catalogue crawler. Each tile carries its data
- * split across two JSON attributes: `data-gtm` (id/name/price/brand/category)
- * and `data-urls` (the absolute product url).
+ * What one HTML fragment yielded, beyond the products themselves.
+ *
+ * The counts exist because the failure they measure is silent. `parseAuchanTiles`
+ * returns early on a tile whose JSON will not parse or is missing a field, so a
+ * renamed attribute does not throw - it quietly returns fewer products, and the
+ * catalogue shrinks with nothing to show why. Counting elements SEEN against
+ * hits KEPT turns that into a number a run can fail on. `withoutCategory` is the
+ * other silent one: a tile with no category path still becomes a hit, but its
+ * top segment reads as empty and the food filter drops it, so a spike here means
+ * the catalogue is about to read as non-food.
  */
-export function parseAuchanTiles(html: string): SearchHit[] {
+export interface TileParse {
+  hits: SearchHit[];
+  /** `[data-gtm]` elements encountered - the denominator */
+  seen: number;
+  /** elements that could not be turned into a hit: bad JSON or a missing field */
+  discarded: number;
+  /** hits that parsed but carry no category path */
+  withoutCategory: number;
+}
+
+/**
+ * Parse Auchan product tiles out of a grid/search HTML fragment, reporting the
+ * yield. Each tile carries its data split across two JSON attributes: `data-gtm`
+ * (id/name/price/brand/category) and `data-urls` (the absolute product url).
+ */
+export function parseAuchanTilesDetailed(html: string): TileParse {
   const $ = cheerio.load(html);
   const hits: SearchHit[] = [];
+  let seen = 0;
+  let discarded = 0;
+  let withoutCategory = 0;
 
   $("[data-gtm]").each((_, el) => {
+    seen++;
     const rawGtm = $(el).attr("data-gtm");
     const rawUrls = $(el).attr("data-urls");
-    if (!rawGtm || !rawUrls) return;
+    if (!rawGtm || !rawUrls) {
+      discarded++;
+      return;
+    }
 
     let gtm: { id?: string; name?: string; price?: string; brand?: string; category?: string };
     let urls: { absoluteProductUrl?: string };
@@ -27,21 +55,37 @@ export function parseAuchanTiles(html: string): SearchHit[] {
       gtm = JSON.parse(rawGtm);
       urls = JSON.parse(rawUrls);
     } catch {
+      discarded++;
       return;
     }
-    if (!gtm.id || !gtm.name || gtm.price === undefined || !urls.absoluteProductUrl) return;
+    if (!gtm.id || !gtm.name || gtm.price === undefined || !urls.absoluteProductUrl) {
+      discarded++;
+      return;
+    }
+
+    const category = gtm.category ?? "";
+    if (category === "") withoutCategory++;
 
     hits.push({
       id: gtm.id,
       name: gtm.name,
       price: Number(gtm.price),
       brand: gtm.brand ?? "",
-      category: gtm.category ?? "",
+      category,
       url: urls.absoluteProductUrl,
     });
   });
 
-  return hits;
+  return { hits, seen, discarded, withoutCategory };
+}
+
+/**
+ * The bare form, for callers that only want the products - the search extractor
+ * and the product-discovery skill. The crawler uses the detailed form so it can
+ * fail on a collapsed yield.
+ */
+export function parseAuchanTiles(html: string): SearchHit[] {
+  return parseAuchanTilesDetailed(html).hits;
 }
 
 /**

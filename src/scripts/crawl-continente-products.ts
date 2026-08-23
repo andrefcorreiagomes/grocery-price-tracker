@@ -192,7 +192,7 @@ async function main() {
       previousRun,
     });
     report = { ...full, rotation: rotationOnly.rotation };
-    await recordRun("CONTINENTE", total, [], undefined, seenAt);
+    await recordRun("CONTINENTE", total, [], { seenAt });
   }
 
   const explain = !args.includes("--brief");

@@ -11,6 +11,7 @@ import { verifySitemapParse } from "./verify-sitemap-parse";
 import { verifyCatalogueSize } from "./verify-catalogue-size";
 import { verifyProductCheckTotals } from "./verify-productcheck-totals";
 import { verifyReidentification } from "./verify-reidentification";
+import { verifyAuchanNightly } from "./verify-auchan-nightly";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -240,6 +241,9 @@ async function main() {
 
   console.log("\n13. re-identification guards (churn brake + barcode continuity)");
   failures += await verifyReidentification();
+
+  console.log("\n14. Auchan nightly (grid guards, delisting, segment monitor)");
+  failures += await verifyAuchanNightly();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

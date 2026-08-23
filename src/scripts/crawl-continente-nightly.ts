@@ -22,7 +22,7 @@ import {
   type CheckResult,
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { buildDailyReport, snapshotBefore, type ProductNote } from "../scrapers/crawl/daily-report";
+import { buildDailyReport, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
 import { RUNS_BEFORE_ACCEPTING, comparePerFile, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
@@ -43,7 +43,7 @@ import {
   type ArchivedSwap,
 } from "../scrapers/crawl/reidentification";
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
-import { renderReport, writeReport } from "../scrapers/crawl/render-report";
+import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
 import type { SearchHit } from "../scrapers/search/types";
 
@@ -553,7 +553,7 @@ async function main() {
     newCount: newFood.length,
   });
 
-  let report = { ...rotationOnly, discovery, catalogueByStore, reidentification, identitySwaps: archivedSwaps };
+  let report: DailyReport = { ...rotationOnly, discovery, catalogueByStore, reidentification, identitySwaps: archivedSwaps };
   const sections = saved.summaries.map((s) => ({
     cgid: s.label,
     label: s.label,
@@ -601,22 +601,19 @@ async function main() {
       }),
       { requests: 0, bytes: 0, wireBytes: 0, fetchMs: 0, retries: 0 }
     );
-    await recordRun(
-      STORE,
-      total,
-      sections,
-      { ...stats, wireBytes: stats.wireBytes || null },
+    await recordRun(STORE, total, sections, {
+      http: { ...stats, wireBytes: stats.wireBytes || null },
       seenAt,
       // Recorded whether or not we believed them: a disbelieved observation is
       // what lets the next run tell a persistent change from a one-night glitch.
-      published.size,
+      sitemapEntries: published.size,
       sitemapFiles,
       sitemapTrusted,
-      perFile,
-      unparseable,
-      sizesNow,
-      { notFood: totals.notFood, dead: totals.dead }
-    );
+      sitemapPerFile: perFile,
+      sitemapUnparseable: unparseable,
+      catalogueSizes: sizesNow,
+      checkTotals: { notFood: totals.notFood, dead: totals.dead },
+    });
   }
 
   console.log("\nrequests:");
@@ -626,77 +623,54 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
-  if (regressions.length > 0) {
-    // A parser regression makes every other number in the report suspect, so it
-    // is a FAIL and it goes first.
-    report = { ...report, verdict: "FAIL", problems: [...regressions, ...report.problems] };
-  }
-
-  if (regressions.length > 0) {
+  // Each escalate prepends, so applying them in this order leaves the sitemap
+  // caveats nearest the top and the parser regression - the most serious - just
+  // behind them; the reversed loop keeps multiple regressions in their own order.
+  for (const reason of [...regressions].reverse()) {
     // A parser regression makes every other number in the report suspect - the
-    // prices, the barcodes, the counts - so it is a FAIL and it goes first.
-    report = { ...report, verdict: "FAIL", problems: [...regressions, ...report.problems] };
+    // prices, the barcodes, the counts - so it is a FAIL.
+    report = escalate(report, "FAIL", reason);
   }
 
   if (catastrophe) {
     // The strongest signal in the report: the run is not to be trusted, and it
     // is a FAIL rather than a WARN because acting on it (delisting) would be
     // destructive. The freeze already happened; this is the alarm.
-    report = { ...report, verdict: "FAIL", problems: [catastrophe, ...report.problems] };
+    report = escalate(report, "FAIL", catastrophe);
   }
 
   if (checkChange.shrank) {
-    report = {
-      ...report,
-      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
-      problems: [
-        `ProductCheck shrank from ${checkChange.previousTotal?.toLocaleString()} to ${checkChange.total.toLocaleString()} - rows left a table nothing deletes from`,
-        ...report.problems,
-      ],
-    };
+    report = escalate(
+      report,
+      "WARN",
+      `ProductCheck shrank from ${checkChange.previousTotal?.toLocaleString()} to ${checkChange.total.toLocaleString()} - rows left a table nothing deletes from`
+    );
   }
 
   if (unparseable > 0) {
-    report = {
-      ...report,
-      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
-      problems: [
-        `${unparseable.toLocaleString()} sitemap address(es) had no extractable product id and were dropped - the URL shape may have changed`,
-        ...report.problems,
-      ],
-    };
+    report = escalate(
+      report,
+      "WARN",
+      `${unparseable.toLocaleString()} sitemap address(es) had no extractable product id and were dropped - the URL shape may have changed`
+    );
   }
 
   if (fileWarnings.length > 0) {
-    report = {
-      ...report,
-      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
-      problems: [
-        `${fileWarnings.length} sitemap file(s) shrank sharply: ${fileWarnings[0]}`,
-        ...report.problems,
-      ],
-    };
+    report = escalate(report, "WARN", `${fileWarnings.length} sitemap file(s) shrank sharply: ${fileWarnings[0]}`);
   }
 
   if (accepted !== null) {
-    report = {
-      ...report,
-      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
-      problems: [`sitemap baseline moved: ${accepted}`, ...report.problems],
-    };
+    report = escalate(report, "WARN", `sitemap baseline moved: ${accepted}`);
   }
 
   if (!sitemapTrusted) {
-    report = {
-      ...report,
-      verdict: report.verdict === "FAIL" ? "FAIL" : "WARN",
-      problems: [
-        sitemapError === null
-          ? `the sitemap shrank from ${sitemapPrevious?.toLocaleString()} to ${published.size.toLocaleString()} entries and was not trusted - discovery skipped, prices still refreshed`
-          : `the sitemap could not be read (${sitemapError}) - discovery skipped, prices still refreshed`,
-        ...report.problems,
-      ],
-    };
+    report = escalate(
+      report,
+      "WARN",
+      sitemapError === null
+        ? `the sitemap shrank from ${sitemapPrevious?.toLocaleString()} to ${published.size.toLocaleString()} entries and was not trusted - discovery skipped, prices still refreshed`
+        : `the sitemap could not be read (${sitemapError}) - discovery skipped, prices still refreshed`
+    );
   }
 
   const explain = !args.includes("--brief");
