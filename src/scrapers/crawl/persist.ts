@@ -24,6 +24,16 @@ export interface PersistResult {
   summaries: PersistSummary[];
   prices: PriceHistorySummary;
   /**
+   * Products whose id arrived carrying a different barcode than the row holds -
+   * held aside, unwritten, for the caller to archive once the brakes have
+   * cleared. Empty on every normal run.
+   */
+  swaps: IdentitySwap[];
+  /** rows whose stored barcode stopped being readable this run */
+  barcodesLost: number;
+  /** rows where a stored barcode could be compared at all - the denominator */
+  barcodesCompared: number;
+  /**
    * The single instant this run stamped on everything it saw. The daily report
    * needs it to ask the only question the catalogue cannot answer for itself:
    * which products did this crawl NOT see?
@@ -74,11 +84,40 @@ function enrichment(p: {
  *     against the table as it was BEFORE the run; re-reading per batch would
  *     make products created by batch 3 look pre-existing to batch 4.
  */
+/**
+ * A product arriving under an id that already belongs to a DIFFERENT product,
+ * proven by the barcode changing from one real value to another.
+ *
+ * Held aside rather than written. The decision to archive needs whole-run
+ * totals - a thousand of these at once means the barcode reader broke, not that
+ * a thousand products swapped - but batches are written as they arrive. Upsert
+ * it now and the old row's name, price and category are gone before the brake
+ * can decide, so the eventual tombstone would carry the impostor's data.
+ */
+export interface IdentitySwap {
+  storeProductId: string;
+  /** the barcode the row held before this run */
+  previousEan: string;
+  /** what arrived under the same id */
+  incomingEan: string;
+  /** the incoming product, unwritten - the caller inserts it after archiving */
+  incoming: SearchHit;
+  /** which section it arrived in, so the summary can still account for it */
+  label: string;
+}
+
 export interface CatalogueWriter {
   /** the instant this whole run stamps on everything it saves */
   seenAt: Date;
   /** upsert one batch; safe to call repeatedly as the crawl proceeds */
   save(products: SearchHit[], label: string): Promise<void>;
+  /**
+   * Write products whose identity swap has already been resolved - the old row
+   * archived under a retired id, leaving this one free. Skips swap detection,
+   * which would otherwise hold the same product aside forever: the pre-run
+   * barcode map still remembers the id's previous owner.
+   */
+  saveResolved(products: SearchHit[], label: string): Promise<void>;
   /** merged counts across every batch saved */
   finish(): PersistResult;
 }
@@ -88,13 +127,20 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
   // rather than smeared across however long it took.
   const seenAt = new Date();
 
+  // The pre-run barcode of every row, read in the same pass as the ids. This is
+  // the only moment it exists: the upsert overwrites it, so a swap is
+  // undetectable a millisecond later.
+  const previousEan = new Map<string, string | null>();
   const known = new Set(
     (
       await prisma.catalogueProduct.findMany({
         where: { store },
-        select: { storeProductId: true },
+        select: { storeProductId: true, eanNormalized: true },
       })
-    ).map((row) => row.storeProductId)
+    ).map((row) => {
+      previousEan.set(row.storeProductId, row.eanNormalized);
+      return row.storeProductId;
+    })
   );
 
   const byLabel = new Map<string, PersistSummary>();
@@ -104,11 +150,49 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
     unchanged: 0,
     skipped: 0,
   };
+  const swaps: IdentitySwap[] = [];
+  let barcodesLost = 0;
+  let barcodesCompared = 0;
 
-  return {
-    seenAt,
+  /**
+   * Remove products whose id already belongs to a different product, holding
+   * them aside unwritten. Comparing BEFORE the upsert is the whole point: the
+   * write overwrites the stored barcode, so a swap is undetectable afterwards.
+   */
+  function withoutSwaps(incoming: SearchHit[], label: string): SearchHit[] {
+    const kept: SearchHit[] = [];
+    for (const p of incoming) {
+      const stored = previousEan.get(p.id);
+      const arriving = matchableEan(p.ean);
 
-    async save(products, label) {
+      // `undefined` means the row did not exist before this run; a listing crawl
+      // leaves `ean` undefined, meaning "this source could not know". Neither is
+      // evidence of anything.
+      if (stored !== undefined && stored !== null && p.ean !== undefined) {
+        barcodesCompared++;
+        if (arriving === null) {
+          // A barcode we held has stopped being readable. Far likelier to be our
+          // parser than a real product change, so it never archives anything -
+          // it is only counted, and a mass occurrence fails the run.
+          barcodesLost++;
+        } else if (arriving !== stored) {
+          swaps.push({
+            storeProductId: p.id,
+            previousEan: stored,
+            incomingEan: arriving,
+            incoming: p,
+            label,
+          });
+          continue; // held aside: not written this run
+        }
+      }
+      kept.push(p);
+    }
+    return kept;
+  }
+
+  /** The upsert itself, shared by both entry points. */
+  async function write(products: SearchHit[], label: string): Promise<void> {
       const summary = byLabel.get(label) ?? { label, total: 0, created: 0, updated: 0 };
       for (const p of products) {
         summary.total++;
@@ -171,10 +255,21 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
       priceTotals.changed += prices.changed;
       priceTotals.unchanged += prices.unchanged;
       priceTotals.skipped += prices.skipped;
-    },
+  }
 
+  return {
+    seenAt,
+    save: (products, label) => write(withoutSwaps(products, label), label),
+    saveResolved: (products, label) => write(products, label),
     finish() {
-      return { summaries: [...byLabel.values()], prices: priceTotals, seenAt };
+      return {
+        summaries: [...byLabel.values()],
+        prices: priceTotals,
+        seenAt,
+        swaps,
+        barcodesLost,
+        barcodesCompared,
+      };
     },
   };
 }

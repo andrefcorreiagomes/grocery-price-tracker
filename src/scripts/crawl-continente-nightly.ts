@@ -34,7 +34,14 @@ import {
   rollingBaseline,
 } from "../scrapers/crawl/history";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
-import { churnCatastropheReason, reconcileByBarcode } from "../scrapers/crawl/reidentification";
+import {
+  archiveIdentitySwaps,
+  churnCatastropheReason,
+  isBarcodeSwapStorm,
+  parserRegressionReasons,
+  reconcileByBarcode,
+  type ArchivedSwap,
+} from "../scrapers/crawl/reidentification";
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
@@ -397,6 +404,47 @@ async function main() {
     );
   }
 
+  const held = writer.finish();
+
+  // Guard 3 and the parser-regression brakes. Every one of these asks the same
+  // question: is this many at once plausible as the STORE changing, or is it our
+  // reader breaking? A broken parser is invisible per product and unmistakable
+  // in aggregate - the barcode reader returned null for every product for
+  // months, and nothing noticed because nothing was counting.
+  const regressions = parserRegressionReasons({
+    swaps: held.swaps.length,
+    lost: held.barcodesLost,
+    compared: held.barcodesCompared,
+    changed: held.prices.changed,
+    priced: held.prices.changed + held.prices.unchanged,
+    complete,
+  });
+  const swapStorm = isBarcodeSwapStorm({
+    swaps: held.swaps.length,
+    compared: held.barcodesCompared,
+    complete,
+  });
+
+  // Archive only when the swap brake is clear. A storm means the reader is
+  // wrong, and archiving on a wrong reading would retire thousands of real
+  // products as impostors - the one irreversible thing in this run.
+  let archivedSwaps: ArchivedSwap[] = [];
+  if (held.swaps.length > 0 && !swapStorm) {
+    archivedSwaps = await archiveIdentitySwaps(STORE, held.swaps, seenAt);
+    // The ids are free now, so the incoming products can take them. saveResolved
+    // skips detection, which would otherwise hold them aside again.
+    for (const swap of held.swaps) {
+      await writer.saveResolved([swap.incoming], swap.label);
+    }
+    console.log(
+      `\n${archivedSwaps.length.toLocaleString()} id(s) were reused by a different product; the old rows were archived`
+    );
+  } else if (held.swaps.length > 0) {
+    console.log(
+      `\n!! ${held.swaps.length.toLocaleString()} barcode changes look like a reader fault - nothing archived`
+    );
+  }
+
   const saved = writer.finish();
   const total = saved.summaries.reduce((sum, s) => sum + s.total, 0);
 
@@ -505,7 +553,7 @@ async function main() {
     newCount: newFood.length,
   });
 
-  let report = { ...rotationOnly, discovery, catalogueByStore, reidentification };
+  let report = { ...rotationOnly, discovery, catalogueByStore, reidentification, identitySwaps: archivedSwaps };
   const sections = saved.summaries.map((s) => ({
     cgid: s.label,
     label: s.label,
@@ -534,7 +582,14 @@ async function main() {
       baseline: { runs: baseline.runs, since: baseline.since },
       previousRun,
     });
-    report = { ...full, rotation: rotationOnly.rotation, discovery, catalogueByStore, reidentification };
+    report = {
+      ...full,
+      rotation: rotationOnly.rotation,
+      discovery,
+      catalogueByStore,
+      reidentification,
+      identitySwaps: archivedSwaps,
+    };
 
     const stats = httpStats().reduce(
       (a, h) => ({
@@ -571,6 +626,18 @@ async function main() {
   // A skipped discovery has to reach the verdict, not just the detail below it:
   // the run genuinely succeeded at refreshing prices, but the catalogue stopped
   // growing tonight and nobody should have to read the whole report to find out.
+  if (regressions.length > 0) {
+    // A parser regression makes every other number in the report suspect, so it
+    // is a FAIL and it goes first.
+    report = { ...report, verdict: "FAIL", problems: [...regressions, ...report.problems] };
+  }
+
+  if (regressions.length > 0) {
+    // A parser regression makes every other number in the report suspect - the
+    // prices, the barcodes, the counts - so it is a FAIL and it goes first.
+    report = { ...report, verdict: "FAIL", problems: [...regressions, ...report.problems] };
+  }
+
   if (catastrophe) {
     // The strongest signal in the report: the run is not to be trusted, and it
     // is a FAIL rather than a WARN because acting on it (delisting) would be

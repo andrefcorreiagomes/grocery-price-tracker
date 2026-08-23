@@ -189,6 +189,29 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     );
   }
 
+  if (report.identitySwaps && report.identitySwaps.length > 0) {
+    lines.push(
+      ...section(
+        "Products whose id was reused by a different product",
+        "The opposite of the section below: not one product moving to a new id, but a DIFFERENT " +
+          "product arriving at an id we already had. Proven by the barcode changing from one real " +
+          "value to another - the barcode identifies the physical product, the id only identifies " +
+          "the page. Left alone this is the worst silent corruption available to us, because prices " +
+          "key on the id: two unrelated products would be spliced into one continuous series with " +
+          "nothing marking the seam. Instead the old product is archived under a retired id, keeping " +
+          "its own history, and the incoming product takes the clean id. A handful is normal; many " +
+          "at once means the barcode reader is misreading, and then nothing is archived at all.",
+        report.identitySwaps.slice(0, 12).flatMap((s) => [
+          `  ${s.storeProductId} -> ${s.retiredId}`,
+          `      was ${s.previousName.slice(0, 44)}`,
+          `      now ${s.newName.slice(0, 44)}`,
+          `      barcode ${s.previousEan} became ${s.incomingEan}; archived, histories kept separate`,
+        ]),
+        explain
+      )
+    );
+  }
+
   if (
     report.reidentification &&
     (report.reidentification.changes.length > 0 || report.reidentification.ambiguous.length > 0)

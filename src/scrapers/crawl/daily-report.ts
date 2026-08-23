@@ -185,6 +185,12 @@ export interface DailyReport {
    * ambiguous barcode matches a human should look at. Present on a complete pass.
    */
   reidentification?: import("./reidentification").ReidentificationResult;
+
+  /**
+   * Ids that were taken over by a DIFFERENT product this run, proven by the
+   * barcode changing, with the old product archived under a retired id.
+   */
+  identitySwaps?: import("./reidentification").ArchivedSwap[];
 }
 
 /**
