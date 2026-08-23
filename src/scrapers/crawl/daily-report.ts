@@ -226,6 +226,12 @@ export interface GridHealthExtras {
   segmentsAppeared: { segment: string; count: number; samples: string[] }[];
   /** kept segments present last run and gone now - a food department vanished */
   segmentsVanished: { segment: string; count: number }[];
+  /**
+   * True when there was no earlier tally, so the segments above are the baseline
+   * and nothing could be reported as new. Said out loud rather than left to be
+   * inferred from two empty lists, which would read as "compared, and all clear".
+   */
+  segmentsAreBaseline: boolean;
 
   // phase 2: turning absence into a confirmed fact, one product page at a time
   /** missing products whose page returned 404/410 and advanced their dead count */

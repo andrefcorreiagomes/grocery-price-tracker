@@ -353,6 +353,14 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           ...g.segments.map(
             (s) => `    ${s.kept ? "keep" : "drop"}  ${String(s.count).padStart(6)}  ${s.segment}`
           ),
+          ...(g.segmentsAreBaseline
+            ? [
+                "",
+                "  This is the first walk with a segment tally, so the list above is the BASELINE and nothing",
+                "  could be reported as new. Comparison starts with the next run: from then on, a segment the",
+                "  filter drops that was not here before is worth opening.",
+              ]
+            : []),
           ...(g.segmentsAppeared.length
             ? [
                 "",

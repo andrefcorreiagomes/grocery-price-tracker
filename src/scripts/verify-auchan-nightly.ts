@@ -225,6 +225,7 @@ export async function verifyAuchanNightly(): Promise<number> {
   const diff = compareSegments(nowSegs, beforeSegs);
   check("a new dropped segment shows as appeared", diff.appeared.length === 1 && diff.appeared[0].segment === "brinquedos");
   check("a kept segment gone shows as vanished", diff.vanished.length === 1 && diff.vanished[0].segment === "congelados");
+  check("a run with a baseline is not a first run", !diff.firstRun);
   check(
     "a dropped segment already seen last run does not re-appear",
     !compareSegments(
@@ -232,6 +233,23 @@ export async function verifyAuchanNightly(): Promise<number> {
       [{ segment: "brinquedos", count: 19, kept: false }]
     ).appeared.length
   );
+
+  // The first walk has no tally to compare against. Plain set arithmetic would
+  // call every non-food segment Auchan sells "new", warning fifteen to
+  // twenty-five times on the run most likely to be read closely - so an empty
+  // baseline reports nothing and says so instead.
+  const first = compareSegments(
+    [
+      { segment: "alimentacao", count: 8000, kept: true },
+      { segment: "tecnologia", count: 900, kept: false },
+      { segment: "casa", count: 700, kept: false },
+      { segment: "brinquedos", count: 400, kept: false },
+    ],
+    []
+  );
+  check("a first run accuses no segment of being new", first.appeared.length === 0);
+  check("a first run reports nothing vanished either", first.vanished.length === 0);
+  check("a first run says it is the baseline", first.firstRun);
 
   // --- database primitives --------------------------------------------------
   console.log("\n  database primitives");
@@ -368,6 +386,7 @@ export async function verifyAuchanNightly(): Promise<number> {
     segments: [{ segment: "alimentacao", count: 100, kept: true }],
     segmentsAppeared: [],
     segmentsVanished: [],
+    segmentsAreBaseline: false,
     confirmedDead: 3,
     delistedNow: 1,
     delistedSamples: [{ storeProductId: "x", name: "Gone product" }],
@@ -404,6 +423,17 @@ export async function verifyAuchanNightly(): Promise<number> {
   check(
     "a fired guard still reports FROZEN",
     renderReport({ ...base, gridHealth: { ...gridHealth, delisting: "frozen" } }, { explain: false }).includes("FROZEN")
+  );
+
+  // Two empty lists on a first run would read as "compared, and all clear".
+  const baselineRun = renderReport(
+    { ...base, gridHealth: { ...gridHealth, segmentsAreBaseline: true } },
+    { explain: false }
+  );
+  check("a first run says its segments are the baseline", baselineRun.includes("BASELINE"));
+  check(
+    "a run with a baseline does not print that note",
+    !renderReport(base, { explain: false }).includes("BASELINE")
   );
 
   // A store publishing no per-section counts must get no comparison rather than

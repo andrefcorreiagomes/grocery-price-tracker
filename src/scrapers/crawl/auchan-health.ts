@@ -214,6 +214,20 @@ export interface SegmentComparison {
    * both are worth a FAIL.
    */
   vanished: SegmentCount[];
+  /**
+   * True when there was no previous tally to compare against, so this run's
+   * segments become the baseline and NOTHING is reported as new.
+   *
+   * Without this the set arithmetic is technically right and practically
+   * useless: with an empty `before`, every segment the whitelist drops is
+   * "not present last run", so a first walk accuses every non-food department
+   * Auchan sells - tecnologia, casa, brinquedos, beleza and the rest - of
+   * having just appeared. Fifteen to twenty-five warnings, all false, on the
+   * one run a reader is most likely to be reading closely. An alarm that fires
+   * on the first run for a reason that is not a fault is an alarm people learn
+   * to skip.
+   */
+  firstRun: boolean;
 }
 
 /**
@@ -221,11 +235,13 @@ export interface SegmentComparison {
  * arithmetic is tested without a database.
  */
 export function compareSegments(now: SegmentCount[], before: SegmentCount[]): SegmentComparison {
+  if (before.length === 0) return { appeared: [], vanished: [], firstRun: true };
+
   const nowByName = new Map(now.map((s) => [s.segment, s]));
   const beforeNames = new Set(before.map((s) => s.segment));
 
   const appeared = now.filter((s) => !s.kept && !beforeNames.has(s.segment));
   const vanished = before.filter((s) => s.kept && !nowByName.has(s.segment));
 
-  return { appeared, vanished };
+  return { appeared, vanished, firstRun: false };
 }

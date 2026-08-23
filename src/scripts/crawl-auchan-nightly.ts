@@ -236,6 +236,7 @@ async function main() {
       samples: walk.segmentSamples.get(s.segment) ?? [],
     })),
     segmentsVanished: segmentDiff.vanished.map((s) => ({ segment: s.segment, count: s.count })),
+    segmentsAreBaseline: segmentDiff.firstRun,
     confirmedDead: confirmedDead.length,
     delistedNow: delisted.length,
     delistedSamples: delisted.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),
