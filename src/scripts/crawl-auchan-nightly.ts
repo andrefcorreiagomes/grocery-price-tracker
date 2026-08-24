@@ -124,7 +124,7 @@ async function main() {
   // for ~17,400 products that were never even looked for. Hours of requests to
   // the store, to confirm absences that are an artefact of the flag.
   const truncated = isTruncatedWalk({
-    walked: walk.crawled,
+    delivered: walk.tilesSeen,
     published: walk.publishedTotal,
     failedDepartments: walk.failedDepartments,
     complete,
@@ -350,7 +350,7 @@ async function main() {
     if (reason) report = escalate(report, "FAIL", reason);
   }
   for (const reason of incompleteWalkReasons({
-    walked: walk.crawled,
+    delivered: walk.tilesSeen,
     published: walk.publishedTotal,
     failedDepartments: walk.failedDepartments,
     complete,

@@ -40,8 +40,19 @@ function overLimit(count: number, of: number, limit: number, complete: boolean):
 // --- the incomplete-walk brake -------------------------------------------
 
 export interface WalkCompleteness {
-  /** distinct products the walk fetched */
-  walked: number;
+  /**
+   * Tiles the grid actually HANDED OVER, whether or not we could read them.
+   *
+   * Deliberately not the count of products we parsed. Those are different
+   * questions with different owners, and conflating them made the first real
+   * Auchan run fail for no reason: the grid served all 55,200 tiles it
+   * published, our tile reader could not parse 805 of them (a 98.5% yield, well
+   * inside what the yield guard allows), and comparing PARSED against PUBLISHED
+   * re-counted those same 805 as evidence the grid had been truncated. Two
+   * guards then disagreed about one set of numbers, and the stricter one froze
+   * a healthy run. Truncation is the grid's failure; a low yield is ours.
+   */
+  delivered: number;
   /** what the store's own counter published across the walk */
   published: number;
   /** department slugs whose grid id could not be read, so were never walked */
@@ -51,18 +62,25 @@ export interface WalkCompleteness {
 }
 
 /**
- * Did the walk collect materially fewer products than Auchan said it holds, or
- * miss a whole department? Either way absence stops being evidence, so the caller
- * must freeze delisting. Reuses `isMeaningfulShortfall` - the same more-than-5
- * AND more-than-1% bar the coverage report already applies per category - so
- * there is no new threshold to calibrate, and 1% of the root catalogue is ~550
- * products, far more than any real night's turnover.
+ * Did the grid hand over materially fewer tiles than Auchan said it holds, or
+ * was a whole department never walked? Either way part of the catalogue was
+ * never offered to us, absence stops being evidence, and the caller must freeze
+ * delisting.
+ *
+ * Reuses `isMeaningfulShortfall` - the same more-than-5 AND more-than-1% bar the
+ * coverage report already applies per category - so there is no new threshold to
+ * calibrate, and 1% of the root catalogue is ~550 products, far more than any
+ * real night's turnover.
+ *
+ * What this does NOT judge: whether we could read what arrived (isTileYieldCollapse)
+ * or whether the grid repeated itself (the duplicate figure, reported not
+ * alarmed - measured at 1 tile in 54,395, so a threshold would be noise).
  */
 export function isTruncatedWalk(input: WalkCompleteness): boolean {
   if (!input.complete) return false;
   if (input.failedDepartments.length > 0) return true;
   if (input.published <= 0) return false; // no counter to judge against
-  const gap = input.published - input.walked;
+  const gap = input.published - input.delivered;
   return gap > 0 && isMeaningfulShortfall(gap, input.published);
 }
 
@@ -107,12 +125,12 @@ export function incompleteWalkReasons(input: WalkCompleteness): string[] {
         `- a whole slice of the catalogue is absent, so delisting was frozen. Nothing was marked gone.`
     );
   }
-  const gap = input.published - input.walked;
+  const gap = input.published - input.delivered;
   if (input.published > 0 && gap > 0 && isMeaningfulShortfall(gap, input.published)) {
     reasons.push(
-      `the walk fetched ${input.walked.toLocaleString()} of ${input.published.toLocaleString()} the store published ` +
-        `(${gap.toLocaleString()} short, ${((100 * gap) / input.published).toFixed(1)}%) - the grid was truncated, ` +
-        `so absence is not evidence and delisting was frozen. Nothing was marked gone.`
+      `the grid served ${input.delivered.toLocaleString()} tiles of the ${input.published.toLocaleString()} the store ` +
+        `published (${gap.toLocaleString()} short, ${((100 * gap) / input.published).toFixed(1)}%) - part of the ` +
+        `catalogue was never offered to us, so absence is not evidence and delisting was frozen. Nothing was marked gone.`
     );
   }
   return reasons;

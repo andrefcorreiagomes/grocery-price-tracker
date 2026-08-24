@@ -72,26 +72,37 @@ export async function verifyAuchanNightly(): Promise<number> {
   // --- the four grid guards, pure ------------------------------------------
   console.log("  guards (pure predicates)");
 
-  // Incomplete walk: reuses isMeaningfulShortfall - more than 5 AND more than 1%.
+  // Incomplete walk: measures tiles DELIVERED against published - not tiles
+  // parsed, which is the tile-yield guard's job. Reuses isMeaningfulShortfall -
+  // more than 5 AND more than 1%.
   check(
-    "truncated walk fires when the walk is materially short",
-    isTruncatedWalk({ walked: 40_000, published: 54_859, failedDepartments: [], complete: true })
+    "truncated walk fires when the grid served materially fewer tiles",
+    isTruncatedWalk({ delivered: 40_000, published: 54_859, failedDepartments: [], complete: true })
   );
   check(
     "truncated walk stays quiet on a tiny gap",
-    !isTruncatedWalk({ walked: 54_850, published: 54_859, failedDepartments: [], complete: true })
+    !isTruncatedWalk({ delivered: 54_850, published: 54_859, failedDepartments: [], complete: true })
   );
   check(
     "a failed department is a truncated walk on its own",
-    isTruncatedWalk({ walked: 54_859, published: 54_859, failedDepartments: ["congelados"], complete: true })
+    isTruncatedWalk({ delivered: 54_859, published: 54_859, failedDepartments: ["congelados"], complete: true })
   );
   check(
     "truncated walk never fires on a smoke test",
-    !isTruncatedWalk({ walked: 10, published: 54_859, failedDepartments: ["x"], complete: false })
+    !isTruncatedWalk({ delivered: 10, published: 54_859, failedDepartments: ["x"], complete: false })
   );
   check(
     "truncated walk cannot judge without a published count",
-    !isTruncatedWalk({ walked: 10, published: 0, failedDepartments: [], complete: true })
+    !isTruncatedWalk({ delivered: 10, published: 0, failedDepartments: [], complete: true })
+  );
+  // The first real run's exact numbers: the grid delivered every tile it
+  // published (55,200), the reader parsed 54,395 of them, and 806 fewer distinct
+  // PRODUCTS than published is a parse yield the tile guard tolerates - NOT a
+  // truncated grid. Comparing delivered-vs-published keeps the two guards from
+  // contradicting each other and freezing a healthy run.
+  check(
+    "a full grid with an imperfect parse yield is not truncated",
+    !isTruncatedWalk({ delivered: 55_200, published: 55_200, failedDepartments: [], complete: true })
   );
 
   // Under-collected: the same signal against our own catalogue, above MIN_ATTEMPTED.
@@ -163,7 +174,7 @@ export async function verifyAuchanNightly(): Promise<number> {
   // for. So the skip is `!complete || walkFrozen`, and this asserts the
   // `!complete` half, which no individual guard can express.
   const walkFrozenFor = (complete: boolean) =>
-    isTruncatedWalk({ walked: 400, published: 54_859, failedDepartments: [], complete }) ||
+    isTruncatedWalk({ delivered: 400, published: 54_859, failedDepartments: [], complete }) ||
     isUnderCollectedWalk({ missing: 17_400, live: 17_800, complete }) ||
     isTileYieldCollapse({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete }) ||
     isEmptyCategoryStorm({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete });
