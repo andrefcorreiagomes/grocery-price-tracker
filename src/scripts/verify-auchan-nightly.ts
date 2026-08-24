@@ -2,7 +2,7 @@ import { prisma } from "../lib/db";
 import {
   EMPTY_CATEGORY_LIMIT,
   MISSING_LIMIT,
-  TILE_DISCARD_LIMIT,
+  TILE_MALFORMED_LIMIT,
   compareSegments,
   isEmptyCategoryStorm,
   isTileYieldCollapse,
@@ -123,35 +123,49 @@ export async function verifyAuchanNightly(): Promise<number> {
   // Tile yield and empty category, both share the MIN_ATTEMPTED floor.
   const seen = MIN_ATTEMPTED + 500;
   check(
-    "tile-yield collapse fires when too many tiles fail to parse",
+    "tile-yield collapse fires when too many tiles are malformed",
     isTileYieldCollapse({
       tilesSeen: seen,
-      tilesKept: Math.floor(seen * (1 - TILE_DISCARD_LIMIT - 0.05)),
+      tilesKept: seen,
+      malformed: Math.ceil(seen * (TILE_MALFORMED_LIMIT + 0.05)),
       withoutCategory: 0,
       complete: true,
     })
   );
   check(
-    "tile-yield quiet at a healthy yield",
-    !isTileYieldCollapse({ tilesSeen: seen, tilesKept: seen - 1, withoutCategory: 0, complete: true })
+    "tile-yield quiet when nothing is malformed",
+    !isTileYieldCollapse({ tilesSeen: seen, tilesKept: seen, malformed: 1, withoutCategory: 0, complete: true })
+  );
+  // The whole point of the split: a large UNPRICED share (out of stock) is not a
+  // parser fault and must not trip the yield alarm - only malformed tiles do.
+  check(
+    "a large unpriced share does not trip the yield alarm",
+    !isTileYieldCollapse({
+      tilesSeen: seen,
+      tilesKept: Math.floor(seen * 0.8),
+      malformed: 0,
+      withoutCategory: 0,
+      complete: true,
+    })
   );
   check(
     "empty-category storm fires when too many tiles have no category",
     isEmptyCategoryStorm({
       tilesSeen: seen,
       tilesKept: seen,
+      malformed: 0,
       withoutCategory: Math.ceil(seen * (EMPTY_CATEGORY_LIMIT + 0.05)),
       complete: true,
     })
   );
   check(
     "empty-category quiet when almost all tiles have a category",
-    !isEmptyCategoryStorm({ tilesSeen: seen, tilesKept: seen, withoutCategory: 3, complete: true })
+    !isEmptyCategoryStorm({ tilesSeen: seen, tilesKept: seen, malformed: 0, withoutCategory: 3, complete: true })
   );
   check(
     "neither tile guard fires on a smoke test",
-    !isTileYieldCollapse({ tilesSeen: 10, tilesKept: 0, withoutCategory: 0, complete: false }) &&
-      !isEmptyCategoryStorm({ tilesSeen: 10, tilesKept: 10, withoutCategory: 10, complete: false })
+    !isTileYieldCollapse({ tilesSeen: 10, tilesKept: 0, malformed: 10, withoutCategory: 0, complete: false }) &&
+      !isEmptyCategoryStorm({ tilesSeen: 10, tilesKept: 10, malformed: 0, withoutCategory: 10, complete: false })
   );
 
   // The price alarm, reused from Continente.
@@ -176,8 +190,8 @@ export async function verifyAuchanNightly(): Promise<number> {
   const walkFrozenFor = (complete: boolean) =>
     isTruncatedWalk({ delivered: 400, published: 54_859, failedDepartments: [], complete }) ||
     isUnderCollectedWalk({ missing: 17_400, live: 17_800, complete }) ||
-    isTileYieldCollapse({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete }) ||
-    isEmptyCategoryStorm({ tilesSeen: 400, tilesKept: 400, withoutCategory: 0, complete });
+    isTileYieldCollapse({ tilesSeen: 400, tilesKept: 400, malformed: 0, withoutCategory: 0, complete }) ||
+    isEmptyCategoryStorm({ tilesSeen: 400, tilesKept: 400, malformed: 0, withoutCategory: 0, complete });
   check(
     "on a partial walk no guard fires, so they cannot gate the confirmation pass",
     !walkFrozenFor(false)
@@ -203,15 +217,19 @@ export async function verifyAuchanNightly(): Promise<number> {
     { absoluteProductUrl: "https://x/a1" }
   );
   const badJson = `<div data-gtm='{not json' data-urls='{}'></div>`;
-  const missingField = tileHtml({ id: "a2", name: "No price" }, { absoluteProductUrl: "https://x/a2" });
+  // No url is structural breakage: a real product tile always has one.
+  const missingUrl = tileHtml({ id: "a2", name: "No url", price: "3.00" }, {});
+  // Has id/name/url but no price: a listed-but-unavailable product, benign.
+  const unpricedTile = tileHtml({ id: "a3", name: "Out of stock" }, { absoluteProductUrl: "https://x/a3" });
   const noCategory = tileHtml(
-    { id: "a3", name: "Sem categoria", price: "2.00" },
-    { absoluteProductUrl: "https://x/a3" }
+    { id: "a4", name: "Sem categoria", price: "2.00" },
+    { absoluteProductUrl: "https://x/a4" }
   );
-  const parse = parseAuchanTilesDetailed(good + badJson + missingField + noCategory);
-  check("N tiles, M malformed: keeps N-M", parse.hits.length === 2, `hits=${parse.hits.length}`);
-  check("all four elements are counted as seen", parse.seen === 4, `seen=${parse.seen}`);
-  check("the two unparseable tiles are discarded", parse.discarded === 2, `discarded=${parse.discarded}`);
+  const parse = parseAuchanTilesDetailed(good + badJson + missingUrl + unpricedTile + noCategory);
+  check("keeps only the well-formed, priced tiles", parse.hits.length === 2, `hits=${parse.hits.length}`);
+  check("all five elements are counted as seen", parse.seen === 5, `seen=${parse.seen}`);
+  check("bad JSON and a missing url are malformed", parse.malformed === 2, `malformed=${parse.malformed}`);
+  check("a well-formed tile with no price is unpriced, not malformed", parse.unpriced === 1, `unpriced=${parse.unpriced}`);
   check("a tile with no category is counted", parse.withoutCategory === 1, `withoutCategory=${parse.withoutCategory}`);
 
   check(
@@ -367,11 +385,13 @@ export async function verifyAuchanNightly(): Promise<number> {
     walkedTotal: 54_800,
     tilesSeen: 54_900,
     tilesKept: 54_880,
+    tilesUnpriced: 15,
+    tilesMalformed: 5,
     emptyCategory: 4,
   });
   const savedRun = await prisma.crawlRun.findFirst({
     where: { store: STORE, startedAt: runInstant },
-    select: { segmentTally: true, publishedTotal: true, tilesSeen: true, walkedTotal: true },
+    select: { segmentTally: true, publishedTotal: true, tilesSeen: true, tilesMalformed: true, walkedTotal: true },
   });
   const roundTrip = savedRun?.segmentTally ? (JSON.parse(savedRun.segmentTally) as SegmentCount[]) : [];
   check(
@@ -380,7 +400,10 @@ export async function verifyAuchanNightly(): Promise<number> {
   );
   check(
     "the grid columns survive a recordRun round trip",
-    savedRun?.publishedTotal === 54_859 && savedRun?.tilesSeen === 54_900 && savedRun?.walkedTotal === 54_800
+    savedRun?.publishedTotal === 54_859 &&
+      savedRun?.tilesSeen === 54_900 &&
+      savedRun?.tilesMalformed === 5 &&
+      savedRun?.walkedTotal === 54_800
   );
   await prisma.crawlRun.deleteMany({ where: { store: STORE, startedAt: runInstant } });
 
@@ -393,6 +416,8 @@ export async function verifyAuchanNightly(): Promise<number> {
     delisting: "active",
     tilesSeen: 54_900,
     tilesKept: 54_880,
+    tilesUnpriced: 15,
+    tilesMalformed: 5,
     withoutCategory: 4,
     segments: [{ segment: "alimentacao", count: 100, kept: true }],
     segmentsAppeared: [],
@@ -424,6 +449,7 @@ export async function verifyAuchanNightly(): Promise<number> {
   check("the report carries the grid-health section", rendered.includes("Grid health"));
   check("the report shows the walked-vs-published line", rendered.includes("54,800"));
   check("the report shows alive-but-missing", rendered.includes("alive but missing"));
+  check("the report shows unpriced apart from malformed", rendered.includes("listed without a price") && rendered.includes("MALFORMED"));
 
   // A partial walk must not be reported as a fired guard: both stop delisting,
   // only one is a fault, and calling a deliberate --max-pages run FROZEN is a

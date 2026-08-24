@@ -275,6 +275,14 @@ model CrawlRun {
   tilesSeen      Int?
   /// Of those, how many parsed to a usable product.
   tilesKept      Int?
+  /// Well-formed tiles carrying no price - out-of-stock products the store still
+  /// lists but cannot sell today. Skipped, not a fault; recorded apart from
+  /// malformed so the two are never confused when reading a run back.
+  tilesUnpriced  Int?
+  /// Tiles broken in a way a healthy grid never is (bad JSON, or a missing
+  /// id/name/url). The tile-yield alarm's numerator, kept from a ~0% baseline by
+  /// excluding the unpriced tiles above.
+  tilesMalformed Int?
   /// Tiles that parsed but carried no category path, so would drop as non-food.
   /// A spike means the whole catalogue is about to read as non-food.
   emptyCategory  Int?

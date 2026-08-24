@@ -132,6 +132,7 @@ async function main() {
   const tileHealth = {
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
+    malformed: walk.tilesMalformed,
     withoutCategory: walk.withoutCategory,
     complete,
   };
@@ -228,6 +229,8 @@ async function main() {
     delisting,
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
+    tilesUnpriced: walk.tilesUnpriced,
+    tilesMalformed: walk.tilesMalformed,
     withoutCategory: walk.withoutCategory,
     segments: [...segmentCounts].sort((a, b) => b.count - a.count),
     segmentsAppeared: segmentDiff.appeared.map((s) => ({
@@ -299,6 +302,8 @@ async function main() {
       walkedTotal: walk.crawled,
       tilesSeen: walk.tilesSeen,
       tilesKept: walk.tilesKept,
+      tilesUnpriced: walk.tilesUnpriced,
+      tilesMalformed: walk.tilesMalformed,
       emptyCategory: walk.withoutCategory,
     });
   }

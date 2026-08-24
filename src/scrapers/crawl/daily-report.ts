@@ -218,6 +218,10 @@ export interface GridHealthExtras {
 
   tilesSeen: number;
   tilesKept: number;
+  /** well-formed tiles carrying no price: out of stock, skipped, not a fault */
+  tilesUnpriced: number;
+  /** tiles broken in a way a healthy grid never is - what the yield alarm watches */
+  tilesMalformed: number;
   withoutCategory: number;
 
   /** every top segment seen this run, with its count and whether it was kept */

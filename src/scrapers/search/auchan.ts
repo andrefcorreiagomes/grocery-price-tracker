@@ -12,18 +12,29 @@ const SEARCH_URL = "https://www.auchan.pt/pt/pesquisa";
  * The counts exist because the failure they measure is silent. `parseAuchanTiles`
  * returns early on a tile whose JSON will not parse or is missing a field, so a
  * renamed attribute does not throw - it quietly returns fewer products, and the
- * catalogue shrinks with nothing to show why. Counting elements SEEN against
- * hits KEPT turns that into a number a run can fail on. `withoutCategory` is the
- * other silent one: a tile with no category path still becomes a hit, but its
- * top segment reads as empty and the food filter drops it, so a spike here means
- * the catalogue is about to read as non-food.
+ * catalogue shrinks with nothing to show why.
+ *
+ * Two reasons a tile does not become a product, kept APART because only one is a
+ * fault. A tile can be perfectly well-formed and simply carry no price - an
+ * out-of-stock product Auchan still lists but cannot sell today - and a price
+ * tracker has nothing to record for it, so it is skipped and that is correct.
+ * Measured at ~1.5% of the catalogue, and it must not count against the parser:
+ * folding it in gave the yield guard a permanent 1.5% floor to see a real break
+ * through. `malformed` is the actual alarm - bad JSON, or a missing id/name/url,
+ * which a healthy grid never produces and a renamed attribute produces for every
+ * tile at once. `withoutCategory` is the third silent one: a tile with no
+ * category still becomes a hit, but its top segment reads as empty and the food
+ * filter drops it, so a spike there means the catalogue is about to read as
+ * non-food.
  */
 export interface TileParse {
   hits: SearchHit[];
   /** `[data-gtm]` elements encountered - the denominator */
   seen: number;
-  /** elements that could not be turned into a hit: bad JSON or a missing field */
-  discarded: number;
+  /** well-formed tiles that simply carry no price: out of stock, skipped, benign */
+  unpriced: number;
+  /** tiles broken in a way a healthy grid never is: bad JSON, or a missing id/name/url */
+  malformed: number;
   /** hits that parsed but carry no category path */
   withoutCategory: number;
 }
@@ -37,7 +48,8 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
   const $ = cheerio.load(html);
   const hits: SearchHit[] = [];
   let seen = 0;
-  let discarded = 0;
+  let unpriced = 0;
+  let malformed = 0;
   let withoutCategory = 0;
 
   $("[data-gtm]").each((_, el) => {
@@ -45,7 +57,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     const rawGtm = $(el).attr("data-gtm");
     const rawUrls = $(el).attr("data-urls");
     if (!rawGtm || !rawUrls) {
-      discarded++;
+      malformed++;
       return;
     }
 
@@ -55,11 +67,20 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
       gtm = JSON.parse(rawGtm);
       urls = JSON.parse(rawUrls);
     } catch {
-      discarded++;
+      malformed++;
       return;
     }
-    if (!gtm.id || !gtm.name || gtm.price === undefined || !urls.absoluteProductUrl) {
-      discarded++;
+    // id, name and url are the structural fields a real product tile always
+    // carries; missing one means the tile shape has changed.
+    if (!gtm.id || !gtm.name || !urls.absoluteProductUrl) {
+      malformed++;
+      return;
+    }
+    // Price is the one field a listed-but-unavailable product legitimately
+    // lacks. Verified against the live grid: these tiles carry no price ANYWHERE
+    // in their markup, so it is genuine absence, not a parser miss.
+    if (gtm.price === undefined) {
+      unpriced++;
       return;
     }
 
@@ -76,7 +97,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     });
   });
 
-  return { hits, seen, discarded, withoutCategory };
+  return { hits, seen, unpriced, malformed, withoutCategory };
 }
 
 /**

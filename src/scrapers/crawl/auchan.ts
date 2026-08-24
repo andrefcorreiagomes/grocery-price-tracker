@@ -98,6 +98,10 @@ export interface AuchanCrawlResult {
   tilesSeen: number;
   /** of those, how many parsed to a usable product */
   tilesKept: number;
+  /** well-formed tiles carrying no price: out of stock, skipped, benign */
+  tilesUnpriced: number;
+  /** tiles broken in a way a healthy grid never is - the tile-yield alarm's numerator */
+  tilesMalformed: number;
   /** tiles that parsed but carried no category, so were dropped as non-food */
   withoutCategory: number;
   /** the store's own published counts summed across the walk(s), for the truncated-walk brake */
@@ -197,6 +201,8 @@ export async function crawlAuchan(
 
   let tilesSeen = 0;
   let tilesKept = 0;
+  let tilesUnpriced = 0;
+  let tilesMalformed = 0;
   let withoutCategory = 0;
   let publishedTotal = 0;
 
@@ -209,6 +215,8 @@ export async function crawlAuchan(
       onPage: async (parse) => {
         tilesSeen += parse.seen;
         tilesKept += parse.hits.length;
+        tilesUnpriced += parse.unpriced;
+        tilesMalformed += parse.malformed;
         withoutCategory += parse.withoutCategory;
 
         // This page's food, grouped by segment, for streaming.
@@ -275,6 +283,8 @@ export async function crawlAuchan(
     failedDepartments,
     tilesSeen,
     tilesKept,
+    tilesUnpriced,
+    tilesMalformed,
     withoutCategory,
     publishedTotal,
   };

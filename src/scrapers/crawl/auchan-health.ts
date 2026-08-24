@@ -25,11 +25,14 @@ import { MIN_ATTEMPTED } from "./reidentification";
  */
 export const EMPTY_CATEGORY_LIMIT = 0.05;
 /**
- * Above this share of `[data-gtm]` tiles failing to parse, the tile reader is
- * broken rather than the odd malformed tile. A renamed attribute discards every
- * tile at once; a healthy grid discards essentially none.
+ * Above this share of `[data-gtm]` tiles MALFORMED, the tile reader is broken
+ * rather than the odd bad tile. A renamed attribute malforms every tile at once;
+ * a healthy grid malforms essentially none. Note this counts only genuine
+ * breakage - bad JSON or a missing id/name/url - and NOT the well-formed tiles
+ * that merely carry no price, which are ~1.5% of the catalogue and would give
+ * this alarm a permanent floor to see a real break through.
  */
-export const TILE_DISCARD_LIMIT = 0.05;
+export const TILE_MALFORMED_LIMIT = 0.05;
 
 function overLimit(count: number, of: number, limit: number, complete: boolean): boolean {
   if (!complete) return false;
@@ -143,6 +146,8 @@ export interface TileHealth {
   tilesSeen: number;
   /** of those, how many parsed to a usable product */
   tilesKept: number;
+  /** tiles broken in a way a healthy grid never is: bad JSON, or a missing id/name/url */
+  malformed: number;
   /** kept tiles that carried no category path */
   withoutCategory: number;
   complete: boolean;
@@ -153,10 +158,13 @@ export function isEmptyCategoryStorm(input: TileHealth): boolean {
   return overLimit(input.withoutCategory, input.tilesKept, EMPTY_CATEGORY_LIMIT, input.complete);
 }
 
-/** Too many tiles failing to parse: the tile reader broke, not the odd bad tile. */
+/**
+ * Too many tiles MALFORMED: the tile reader broke, not the odd bad tile. Counts
+ * only genuine breakage - well-formed tiles carrying no price are out of stock,
+ * not a fault, and are excluded so this alarm reads from a ~0% baseline.
+ */
 export function isTileYieldCollapse(input: TileHealth): boolean {
-  const discarded = input.tilesSeen - input.tilesKept;
-  return overLimit(discarded, input.tilesSeen, TILE_DISCARD_LIMIT, input.complete);
+  return overLimit(input.malformed, input.tilesSeen, TILE_MALFORMED_LIMIT, input.complete);
 }
 
 /** Phrased reasons for both tile guards, empty when the tiles are healthy. */
@@ -165,10 +173,9 @@ export function tileHealthReasons(input: TileHealth): string[] {
   const pct = (n: number, of: number) => ((100 * n) / Math.max(1, of)).toFixed(0);
 
   if (isTileYieldCollapse(input)) {
-    const discarded = input.tilesSeen - input.tilesKept;
     reasons.push(
-      `${pct(discarded, input.tilesSeen)}% of grid tiles could not be parsed ` +
-        `(${discarded.toLocaleString()} of ${input.tilesSeen.toLocaleString()}) - a tile attribute has been ` +
+      `${pct(input.malformed, input.tilesSeen)}% of grid tiles were malformed ` +
+        `(${input.malformed.toLocaleString()} of ${input.tilesSeen.toLocaleString()}) - a tile attribute has been ` +
         `renamed or reshaped, and products were dropped in silence. Delisting was frozen.`
     );
   }

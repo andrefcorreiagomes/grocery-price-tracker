@@ -113,6 +113,10 @@ export interface RunRecord {
   tilesSeen?: number | null;
   /** of those, how many parsed to a usable product */
   tilesKept?: number | null;
+  /** well-formed tiles carrying no price: out of stock, skipped, benign */
+  tilesUnpriced?: number | null;
+  /** tiles broken in a way a healthy grid never is - the tile-yield alarm's numerator */
+  tilesMalformed?: number | null;
   /** tiles that parsed but carried no category path, so would drop as non-food */
   emptyCategory?: number | null;
 }
@@ -149,6 +153,8 @@ export async function recordRun(
       walkedTotal: record.walkedTotal ?? null,
       tilesSeen: record.tilesSeen ?? null,
       tilesKept: record.tilesKept ?? null,
+      tilesUnpriced: record.tilesUnpriced ?? null,
+      tilesMalformed: record.tilesMalformed ?? null,
       emptyCategory: record.emptyCategory ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,

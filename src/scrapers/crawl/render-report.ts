@@ -328,10 +328,13 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "was cut short, and since a product's absence is the only reason we ever delist, a short " +
           "walk must delist NOTHING - so it freezes delisting and fails. A broken TILE PARSER: each " +
           "product's data rides in a JSON attribute, and a renamed attribute makes the reader return " +
-          "nothing without throwing, shrinking the catalogue with no error. Tiles-kept against " +
-          "tiles-seen is the alarm for that, and the share of tiles arriving with no category is the " +
-          "alarm for the food filter emptying the catalogue, because an empty category reads as " +
-          "non-food.",
+          "nothing without throwing, shrinking the catalogue with no error. MALFORMED tiles are the " +
+          "alarm for that - bad JSON or a missing id/name/url, which a healthy grid never produces. " +
+          "Tiles that are well-formed but simply carry no price are counted apart: those are " +
+          "out-of-stock products the store still lists but cannot sell, a price tracker has nothing " +
+          "to record for them, and lumping them in gave the alarm a permanent floor to see a real " +
+          "break through. The share of tiles arriving with no category is the alarm for the food " +
+          "filter emptying the catalogue, because an empty category reads as non-food.",
         [
           `  mode:                 ${g.mode}`,
           `  products walked:      ${g.walked.toLocaleString()}` +
@@ -340,6 +343,11 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
                 (g.walked < g.published ? `  (${(g.published - g.walked).toLocaleString()} short)` : "")
               : "  (the store published no count this run)"),
           `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
+          `  listed without a price: ${g.tilesUnpriced.toLocaleString()} (out of stock, skipped - not a fault)`,
+          `  MALFORMED tiles:      ${g.tilesMalformed.toLocaleString()}` +
+            (g.tilesMalformed === 0
+              ? "  (the parser read every tile it should)"
+              : `  <- ${((100 * g.tilesMalformed) / Math.max(1, g.tilesSeen)).toFixed(1)}% - the tile shape may have changed`),
           `  tiles with no category: ${g.withoutCategory.toLocaleString()} (${emptyPct}% of those kept)`,
           `  delisting this run:   ${
             g.delisting === "frozen"
