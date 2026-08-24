@@ -119,21 +119,44 @@ export function underCollectedReason(input: {
   );
 }
 
-export function incompleteWalkReasons(input: WalkCompleteness): string[] {
-  if (!input.complete) return [];
+/** One walk's coverage: what its grid delivered against what it published. */
+export interface WalkCoverage {
+  label: string;
+  delivered: number;
+  expected: number | null;
+}
+
+/**
+ * Which walks came up materially short of the count their OWN grid published,
+ * plus any department that could not be walked at all. Per-category on purpose:
+ * the nightly unions root with the five departments, and a single summed
+ * delivered-vs-published would both double-count the overlap (~55k + ~18k) and
+ * dilute one department being cut in half below the 1% bar. Judging each walk
+ * against its own count keeps a truncated slice visible wherever it happens.
+ *
+ * Returns one phrased reason per problem, empty when every walk delivered.
+ */
+export function truncatedWalks(
+  walks: WalkCoverage[],
+  failedDepartments: string[],
+  complete: boolean
+): string[] {
+  if (!complete) return [];
   const reasons: string[] = [];
-  if (input.failedDepartments.length > 0) {
+  if (failedDepartments.length > 0) {
     reasons.push(
-      `${input.failedDepartments.length} department(s) could not be walked (${input.failedDepartments.join(", ")}) ` +
+      `${failedDepartments.length} department(s) could not be walked (${failedDepartments.join(", ")}) ` +
         `- a whole slice of the catalogue is absent, so delisting was frozen. Nothing was marked gone.`
     );
   }
-  const gap = input.published - input.delivered;
-  if (input.published > 0 && gap > 0 && isMeaningfulShortfall(gap, input.published)) {
+  for (const w of walks) {
+    if (w.expected === null || w.expected <= 0) continue;
+    if (!isTruncatedWalk({ delivered: w.delivered, published: w.expected, failedDepartments: [], complete })) continue;
+    const gap = w.expected - w.delivered;
     reasons.push(
-      `the grid served ${input.delivered.toLocaleString()} tiles of the ${input.published.toLocaleString()} the store ` +
-        `published (${gap.toLocaleString()} short, ${((100 * gap) / input.published).toFixed(1)}%) - part of the ` +
-        `catalogue was never offered to us, so absence is not evidence and delisting was frozen. Nothing was marked gone.`
+      `${w.label}: the grid served ${w.delivered.toLocaleString()} tiles of the ${w.expected.toLocaleString()} it ` +
+        `published (${gap.toLocaleString()} short, ${((100 * gap) / w.expected).toFixed(1)}%) - part of that ` +
+        `category was never offered, so absence is not evidence and delisting was frozen. Nothing was marked gone.`
     );
   }
   return reasons;

@@ -13,16 +13,19 @@ import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
  * difference. So the ONLY thing that makes a crawl faster is fetching fewer
  * products, which is what the mode chooses:
  *
- * - "root" walks `cgid=root`, the whole 54,859-product catalogue, and keeps food
- *   by each product's own category path. Provably complete; ~70 minutes.
+ * - "root" walks `cgid=root`, ~55,000 products, keeping food by each product's
+ *   own category path. ~70 minutes.
  * - "departments" walks only the five food department ids. ~23 minutes.
+ * - "full" walks root AND the departments and unions them. ~93 minutes.
  *
- * Departments are faster but not provably complete: those ids are curated
- * collections, and measured against a root walk they omit products Auchan itself
- * labels as food (`Congelados_2026` reported 1,146 where root found 1,208).
- * Running one mode and then the other is therefore the completeness audit -
- * both upsert into the same table by (store, storeProductId), so what a
- * departments run missed is exactly what a following root run adds.
+ * NEITHER root nor departments is a superset of the other, so neither is
+ * complete on its own. Departments omit products root finds (`Congelados_2026`
+ * reported 1,146 where root found 1,208); and root omits products the
+ * departments find - a live run confirmed ~49 priced food products (heavily
+ * bio and drinks) that root's grid never returns though their pages and
+ * department tiles carry a price. The complete catalogue is their UNION, which
+ * is what "full" walks - both feed one run-wide dedup and one upsert path, so a
+ * product listed by either is caught exactly once.
  *
  * Everything below the fetch is shared by both modes: tile parsing, the food
  * whitelist, run-wide dedup, the segment tally. DB-free; the runner persists.
@@ -48,7 +51,7 @@ const PAGE_SIZE = 200;
 /** How many example products to keep per segment, for judging what gets dropped. */
 const SAMPLES_PER_SEGMENT = 5;
 
-export type AuchanCrawlMode = "root" | "departments";
+export type AuchanCrawlMode = "root" | "departments" | "full";
 
 /**
  * Ordinary runs take the fast path. `root` is run deliberately, when
@@ -67,6 +70,15 @@ export interface AuchanWalkSummary {
   cgid: string;
   /** the count that category published for itself, when it published one */
   expected: number | null;
+  /**
+   * Tiles the grid handed over for THIS category, whether or not they parsed.
+   * The right numerator for a per-category truncation check: comparing this
+   * against `expected` asks "did the grid deliver?", which is the grid's job,
+   * and leaves "did we parse it?" to the tile-yield guard. Comparing `fetched`
+   * (parsed hits) against `expected` would re-count out-of-stock unpriced tiles
+   * as a shortfall.
+   */
+  delivered: number;
   /** distinct products the walk returned */
   fetched: number;
   /** how many of those were new to this run (the rest were cross-listed) */
@@ -183,13 +195,16 @@ export async function crawlAuchan(
 ): Promise<AuchanCrawlResult> {
   const mode = opts.mode ?? DEFAULT_AUCHAN_MODE;
 
+  const rootCategory: CrawlCategory = { cgid: "root", label: "catálogo (root)" };
   let categories: CrawlCategory[];
   let failedDepartments: string[] = [];
   if (mode === "root") {
-    categories = [{ cgid: "root", label: "catálogo (root)" }];
+    categories = [rootCategory];
   } else {
     const discovered = await discoverFoodDepartments();
-    categories = discovered.departments;
+    // "full" walks root first (the bulk), then the departments, which add only
+    // what root missed; "departments" walks the five ids alone.
+    categories = mode === "full" ? [rootCategory, ...discovered.departments] : discovered.departments;
     failedDepartments = discovered.failed;
   }
 
@@ -208,6 +223,7 @@ export async function crawlAuchan(
 
   for (const category of categories) {
     let added = 0;
+    let delivered = 0; // tiles this category's grid handed over, for its own coverage
 
     const { expected, distinct } = await walkCategory(category, {
       maxPages: opts.maxPages,
@@ -218,6 +234,7 @@ export async function crawlAuchan(
         tilesUnpriced += parse.unpriced;
         tilesMalformed += parse.malformed;
         withoutCategory += parse.withoutCategory;
+        delivered += parse.seen;
 
         // This page's food, grouped by segment, for streaming.
         const freshFood = new Map<string, SearchHit[]>();
@@ -263,6 +280,7 @@ export async function crawlAuchan(
       label: category.label,
       cgid: category.cgid,
       expected,
+      delivered,
       fetched: distinct,
       added,
     });

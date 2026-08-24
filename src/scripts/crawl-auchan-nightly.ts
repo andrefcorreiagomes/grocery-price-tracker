@@ -9,13 +9,12 @@ import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/c
 import { churnCatastropheReason, isPriceChurnStorm } from "../scrapers/crawl/reidentification";
 import {
   compareSegments,
-  incompleteWalkReasons,
   isEmptyCategoryStorm,
   isTileYieldCollapse,
-  isTruncatedWalk,
   isUnderCollectedWalk,
   shouldConfirmAbsences,
   tileHealthReasons,
+  truncatedWalks,
   underCollectedReason,
   type SegmentCount,
 } from "../scrapers/crawl/auchan-health";
@@ -40,18 +39,20 @@ import { formatHttpStats, HttpError, httpStats, wireBytesOf } from "../scrapers/
  * Three phases, because Auchan permits listing grids and Continente does not, so
  * one walk does the work Continente needs three separate phases for:
  *
- *   1. walk the catalogue (root)   ~275 requests   everything, with prices and categories
+ *   1. walk the catalogue (full)   ~370 requests   everything, with prices and categories
  *   2. confirm the missing         one per missing  is an absent product actually gone
  *   3. report                      none            what changed, and is anything wrong
  *
- * root mode, always: `departments` is measured incomplete, and delisting plus
- * every monitor rest on the walk having seen everything. See auchan-health.ts
+ * `full` mode, always: it walks `cgid=root` AND the five food departments and
+ * unions them, because neither grid is complete on its own - a live run found
+ * ~49 priced food products root omits but the departments list. A partial walk
+ * cannot police itself, so `--max-pages` gates phase 2 off. See auchan-health.ts
  * for the guards a grid crawl needs that a sitemap crawl does not.
  */
 
 const STORE = "AUCHAN" as const;
-/** The nightly always walks everything; a partial walk cannot police itself. */
-const MODE: AuchanCrawlMode = "root";
+/** The nightly always walks the union of root and the departments. */
+const MODE: AuchanCrawlMode = "full";
 /** Examples carried per list in the report. */
 const SAMPLE = 12;
 
@@ -81,8 +82,8 @@ async function main() {
   const newFood: ProductNote[] = [];
 
   // ---------------------------------------------------------------- phase 1
-  console.log(`phase 1: walking the ${MODE} catalogue${maxPages ? ` (max ${maxPages} pages)` : ""}`);
-  if (complete) console.log("  at ~13 products/sec this is about 70 minutes");
+  console.log(`phase 1: walking the ${MODE} catalogue (root + departments)${maxPages ? ` (max ${maxPages} pages)` : ""}`);
+  if (complete) console.log("  at ~13 products/sec this is about 93 minutes");
 
   const walk = await crawlAuchan({
     mode: MODE,
@@ -123,12 +124,11 @@ async function main() {
   // while the catalogue holds ~17,800 - so phase 2 would fetch a product page
   // for ~17,400 products that were never even looked for. Hours of requests to
   // the store, to confirm absences that are an artefact of the flag.
-  const truncated = isTruncatedWalk({
-    delivered: walk.tilesSeen,
-    published: walk.publishedTotal,
-    failedDepartments: walk.failedDepartments,
-    complete,
-  });
+  // Per-category, not one summed total: the union of root and the departments
+  // overlaps, so a single delivered-vs-published would double-count it and hide
+  // a truncated slice. Each walk is judged against its own published count.
+  const truncationReasons = truncatedWalks(walk.walks, walk.failedDepartments, complete);
+  const truncated = truncationReasons.length > 0;
   const tileHealth = {
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
@@ -216,16 +216,25 @@ async function main() {
     .filter((s) => s.kept)
     .map((s) => ({ cgid: s.segment, label: s.segment, collected: s.count }));
 
+  // Only a complete walk has seen every segment, so only a complete walk can say
+  // one vanished. On a `--max-pages` slice the small segments simply have not
+  // been reached yet - "produtos-locais" (4 products) never lands on page 1 of a
+  // category - and comparing that against a full baseline reports them as gone.
   const previousSegments = await previousSegmentTally(seenAt);
-  const segmentDiff = compareSegments(segmentCounts, previousSegments);
+  const segmentDiff = complete
+    ? compareSegments(segmentCounts, previousSegments)
+    : { appeared: [], vanished: [], firstRun: false };
 
   const sizesNow = await catalogueSizes();
   const catalogueByStore = compareSizes(sizesNow, await previousSizes(seenAt));
 
   const gridHealth: GridHealthExtras = {
     mode: MODE,
-    walked: walk.crawled,
-    published: walk.publishedTotal,
+    distinctWalked: walk.crawled,
+    coverage: walk.walks.map((w) => ({ label: w.label, delivered: w.delivered, published: w.expected })),
+    // In "full" mode walk.walks[0] is root; the rest are departments, whose
+    // `added` is exactly what each contributed beyond what root already had.
+    addedByDepartments: walk.walks.slice(1).reduce((n, w) => n + w.added, 0),
     delisting,
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
@@ -354,12 +363,7 @@ async function main() {
     const reason = underCollectedReason({ missing: missing.length, live, complete });
     if (reason) report = escalate(report, "FAIL", reason);
   }
-  for (const reason of incompleteWalkReasons({
-    delivered: walk.tilesSeen,
-    published: walk.publishedTotal,
-    failedDepartments: walk.failedDepartments,
-    complete,
-  })) {
+  for (const reason of truncationReasons) {
     report = escalate(report, "FAIL", reason);
   }
 

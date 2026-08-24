@@ -203,11 +203,22 @@ export interface DailyReport {
 }
 
 export interface GridHealthExtras {
-  mode: "root" | "departments";
-  /** distinct products the walk fetched, food and non-food together */
-  walked: number;
-  /** what the store's own counter published across the walk */
-  published: number;
+  mode: "root" | "departments" | "full";
+  /** distinct products walked across every category, deduped: the union's size */
+  distinctWalked: number;
+  /**
+   * Coverage per category walked - tiles the grid delivered against the count it
+   * published for itself. One row per category (root, and each department in
+   * "full" mode). Shown instead of a single walked-vs-published line, which is
+   * meaningless once root and the departments overlap and the published counts
+   * would double-count that overlap.
+   */
+  coverage: { label: string; delivered: number; published: number | null }[];
+  /**
+   * Products the department walks added beyond what root returned - the size of
+   * the gap that walking the union closes. 0 in root-only mode.
+   */
+  addedByDepartments: number;
   /**
    * What happened to delisting this run. Three states, not two: "a guard fired"
    * and "this was a partial walk we never asked to be complete" both stop

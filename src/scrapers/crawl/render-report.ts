@@ -337,11 +337,16 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "filter emptying the catalogue, because an empty category reads as non-food.",
         [
           `  mode:                 ${g.mode}`,
-          `  products walked:      ${g.walked.toLocaleString()}` +
-            (g.published > 0
-              ? ` of ${g.published.toLocaleString()} the store published` +
-                (g.walked < g.published ? `  (${(g.published - g.walked).toLocaleString()} short)` : "")
-              : "  (the store published no count this run)"),
+          `  distinct products walked: ${g.distinctWalked.toLocaleString()}` +
+            (g.addedByDepartments > 0
+              ? `   (departments added ${g.addedByDepartments.toLocaleString()} beyond root)`
+              : ""),
+          "  coverage per category (tiles delivered vs the store's own count):",
+          ...g.coverage.map((c) => {
+            const short = c.published !== null && c.delivered < c.published ? `  (${(c.published - c.delivered).toLocaleString()} short)` : "";
+            return `    ${c.label.padEnd(22)} ${c.delivered.toLocaleString().padStart(8)}` +
+              (c.published === null ? "   (no count published)" : ` of ${c.published.toLocaleString()}${short}`);
+          }),
           `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
           `  listed without a price: ${g.tilesUnpriced.toLocaleString()} (out of stock, skipped - not a fault)`,
           `  MALFORMED tiles:      ${g.tilesMalformed.toLocaleString()}` +

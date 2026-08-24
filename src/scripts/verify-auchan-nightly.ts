@@ -9,6 +9,7 @@ import {
   isTruncatedWalk,
   isUnderCollectedWalk,
   shouldConfirmAbsences,
+  truncatedWalks,
   type SegmentCount,
 } from "../scrapers/crawl/auchan-health";
 import { MIN_ATTEMPTED, isPriceChurnStorm, PRICE_CHURN_LIMIT } from "../scrapers/crawl/reidentification";
@@ -104,6 +105,26 @@ export async function verifyAuchanNightly(): Promise<number> {
     "a full grid with an imperfect parse yield is not truncated",
     !isTruncatedWalk({ delivered: 55_200, published: 55_200, failedDepartments: [], complete: true })
   );
+
+  // truncatedWalks: the per-category form the union nightly uses. A healthy
+  // union - root delivering its full count (with unpriced tiles) and every
+  // department delivering its own - fires nothing.
+  const healthyWalks = [
+    { label: "catálogo (root)", delivered: 55_200, expected: 55_196 },
+    { label: "Alimentação", delivered: 8_601, expected: 8_600 },
+    { label: "Congelados", delivered: 1_210, expected: 1_208 },
+  ];
+  check("a healthy union of root + departments is not truncated", truncatedWalks(healthyWalks, [], true).length === 0);
+  // One department cut in half is diluted below 1% in a summed 73k total, but
+  // per-category it is a 50% shortfall and must fire.
+  const oneShort = [
+    { label: "catálogo (root)", delivered: 55_200, expected: 55_196 },
+    { label: "Congelados", delivered: 600, expected: 1_208 },
+  ];
+  check("a single department cut short fires per-category", truncatedWalks(oneShort, [], true).length === 1);
+  check("root's unpriced shortfall alone does not fire", truncatedWalks([healthyWalks[0]], [], true).length === 0);
+  check("a failed department fires", truncatedWalks(healthyWalks, ["congelados"], true).length === 1);
+  check("no walk is judged on a smoke test", truncatedWalks(oneShort, ["x"], false).length === 0);
 
   // Under-collected: the same signal against our own catalogue, above MIN_ATTEMPTED.
   const live = Math.max(MIN_ATTEMPTED + 100, 1000);
@@ -280,6 +301,16 @@ export async function verifyAuchanNightly(): Promise<number> {
   check("a first run reports nothing vanished either", first.vanished.length === 0);
   check("a first run says it is the baseline", first.firstRun);
 
+  // The orchestrator gates the whole comparison on `complete`, because a partial
+  // walk has not reached the small segments and would report them as vanished
+  // against a full baseline. Model that gate: on an incomplete walk, no diff.
+  const gated = (complete: boolean) =>
+    complete
+      ? compareSegments([{ segment: "alimentacao", count: 100, kept: true }], beforeSegs)
+      : { appeared: [], vanished: [], firstRun: false };
+  check("a partial walk reports no vanished segments", gated(false).vanished.length === 0);
+  check("a complete walk still can", gated(true).vanished.length > 0);
+
   // --- database primitives --------------------------------------------------
   console.log("\n  database primitives");
 
@@ -315,6 +346,15 @@ export async function verifyAuchanNightly(): Promise<number> {
   check(
     "missing set is exactly the row whose lastSeenAt did not advance",
     missing.length === 1 && missing[0].storeProductId === `${PREFIX}1`
+  );
+  // The union guarantee: a product streamed under a DEPARTMENT label (id 3, saved
+  // under "bebidas-e-garrafeira", the way a bio/wine product root omits arrives)
+  // is stamped seenAt like any other, so it is absent from the missing set. This
+  // is the whole mechanism by which walking root + departments removes the 49
+  // alive-but-missing products from the WARN.
+  check(
+    "a product seen only via a department is not counted missing",
+    !missing.some((m) => m.storeProductId === `${PREFIX}3`)
   );
 
   // Delisting: a dead page three nights in a row sets delistedAt; not before.
@@ -410,9 +450,13 @@ export async function verifyAuchanNightly(): Promise<number> {
   // --- report render --------------------------------------------------------
   console.log("\n  report render and verdict ladder");
   const gridHealth: GridHealthExtras = {
-    mode: "root",
-    walked: 54_800,
-    published: 54_859,
+    mode: "full",
+    distinctWalked: 54_800,
+    coverage: [
+      { label: "catálogo (root)", delivered: 55_200, published: 55_196 },
+      { label: "Alimentação", delivered: 8_601, published: 8_600 },
+    ],
+    addedByDepartments: 49,
     delisting: "active",
     tilesSeen: 54_900,
     tilesKept: 54_880,
@@ -447,7 +491,9 @@ export async function verifyAuchanNightly(): Promise<number> {
   };
   const rendered = renderReport(base, { explain: false });
   check("the report carries the grid-health section", rendered.includes("Grid health"));
-  check("the report shows the walked-vs-published line", rendered.includes("54,800"));
+  check("the report shows distinct products walked", rendered.includes("54,800"));
+  check("the report lists per-category coverage", rendered.includes("catálogo (root)") && rendered.includes("Alimentação"));
+  check("the report shows what departments added beyond root", rendered.includes("departments added 49 beyond root"));
   check("the report shows alive-but-missing", rendered.includes("alive but missing"));
   check("the report shows unpriced apart from malformed", rendered.includes("listed without a price") && rendered.includes("MALFORMED"));
 
