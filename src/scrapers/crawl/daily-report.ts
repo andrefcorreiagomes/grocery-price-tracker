@@ -254,7 +254,11 @@ export interface GridHealthExtras {
   /** of those, how many reached the third dead night and were delisted */
   delistedNow: number;
   delistedSamples: ProductNote[];
-  /** missing products whose page could not be read - counted as gone, no */
+  /** listed but unavailable (page loads, no price): out of stock, stamped for a slow recheck */
+  unavailable: number;
+  /** already-known out-of-stock products NOT re-fetched this run - the nightly cost this saves */
+  unavailableSkipped: number;
+  /** missing products whose page could not be read - no claim made */
   unreachable: number;
   /** missing from the grid yet the page still answered: the walk has a hole */
   aliveButMissing: number;

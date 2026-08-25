@@ -402,19 +402,26 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         "A grid walk only tells us a product is ABSENT, which is a guess - pagination flickers. So " +
           "every product missing from a complete walk gets one product-page fetch to settle it. A page " +
           "that returns 404/410 is a fact, and three such nights in a row delist the product; one bad " +
-          "night cannot. A page that will not load at all means we could not tell, and is counted " +
-          "apart, never as gone. And a page that still ANSWERS while the product was missing from the " +
-          "grid is the interesting one: the product is alive, so the walk itself has a hole the store's " +
-          "own counter did not reveal.",
+          "night cannot. A page that loads but carries NO price is listed-but-unavailable - out of " +
+          "stock, not gone; its grid tile is priceless too, so it is missing every night, and it is " +
+          "stamped so we recheck it slowly instead of re-fetching it nightly. A page that will not load " +
+          "at all means we could not tell, counted apart, never as gone. And a page that still ANSWERS " +
+          "with a price while the product was missing from the grid is the interesting one: the product " +
+          "is alive, so the walk itself has a hole the store's own counter did not reveal.",
         [
           `  confirmed gone this run (dead page): ${g.confirmedDead.toLocaleString()}`,
           `  of those, delisted (third dead night): ${g.delistedNow.toLocaleString()}`,
           ...notes(g.delistedSamples, "    "),
           "",
+          `  listed but unavailable (out of stock): ${g.unavailable.toLocaleString()}` +
+            (g.unavailableSkipped > 0
+              ? `   (plus ${g.unavailableSkipped.toLocaleString()} already known, not re-fetched tonight)`
+              : ""),
+          "",
           `  alive but missing from the grid:     ${g.aliveButMissing.toLocaleString()}`,
           ...notes(g.aliveButMissingSamples, "    "),
           "",
-          `  could not be reached (not counted as gone): ${g.unreachable.toLocaleString()}`,
+          `  could not be reached (no claim made): ${g.unreachable.toLocaleString()}`,
         ],
         explain
       )

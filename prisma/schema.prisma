@@ -110,6 +110,16 @@ model CatalogueProduct {
   /// successful fetch, so a single bad night cannot accumulate.
   deadCount Int @default(0)
 
+  /// Last time a product-page confirmed this product is LISTED BUT UNAVAILABLE:
+  /// the page loads and the product exists, but carries no price - out of stock,
+  /// or sold by variable weight with no fixed price. Distinct from `delistedAt`
+  /// (the store stopped selling it) and from an unreachable page (we could not
+  /// tell). Its grid tile has no price either, so the walk always skips it and it
+  /// is permanently "missing"; without this marker phase 2 would re-fetch its
+  /// page every single night. Set here, it is rechecked on a slow cadence
+  /// instead, and cleared the moment the product is seen in a grid again.
+  unavailableAt DateTime?
+
   /// Set once `deadCount` reaches 3: we believe the store stopped selling this.
   /// A MARKER, never a deletion - the row and its whole CataloguePrice history
   /// stay, because "this cost EUR 1.15 until it vanished" is real history. It

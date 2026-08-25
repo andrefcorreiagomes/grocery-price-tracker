@@ -14,8 +14,9 @@ import {
 } from "../scrapers/crawl/auchan-health";
 import { MIN_ATTEMPTED, isPriceChurnStorm, PRICE_CHURN_LIMIT } from "../scrapers/crawl/reidentification";
 import { parseAuchanTilesDetailed, parseAuchanTotal } from "../scrapers/search/auchan";
+import { auchanStatusFromHtml } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { recordDead, touchChecked } from "../scrapers/crawl/product-checks";
+import { recordDead, recordUnavailable, touchChecked, UNAVAILABLE_RECHECK_DAYS } from "../scrapers/crawl/product-checks";
 import { recordRun } from "../scrapers/crawl/history";
 import { escalate, renderReport } from "../scrapers/crawl/render-report";
 import type { DailyReport, GridHealthExtras } from "../scrapers/crawl/daily-report";
@@ -262,6 +263,35 @@ export async function verifyAuchanNightly(): Promise<number> {
     parseAuchanTotal('<div class="auc-js-search-results-count">13 resultados</div>') === 13
   );
 
+  // --- product-page status (phase 2's confirm step) -------------------------
+  console.log("\n  product-page status");
+  const ldPage = (block: object | null) =>
+    block ? `<script type="application/ld+json">${JSON.stringify(block)}</script>` : "<html><body>no product data</body></html>";
+  const IN = "https://schema.org/InStock";
+  const OUT = "https://schema.org/OutOfStock";
+  check(
+    "an in-stock page reads as alive",
+    auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { price: "1.99", availability: IN } })) === "alive"
+  );
+  // The correction the live site forced: out of stock KEEPS its price and flips
+  // availability, so a priced-but-OutOfStock page is unavailable, not alive.
+  check(
+    "a priced but OutOfStock page reads as unavailable, not alive",
+    auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { price: "3.19", availability: OUT } })) === "unavailable"
+  );
+  check(
+    "OutOfStock with no price is still unavailable",
+    auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { availability: OUT } })) === "unavailable"
+  );
+  check(
+    "a product with no availability stated reads as alive",
+    auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { price: "1.99" } })) === "alive"
+  );
+  check(
+    "a page with no product block at all reads as unreachable, not gone",
+    auchanStatusFromHtml(ldPage(null)) === "unreachable"
+  );
+
   // --- segment comparison ---------------------------------------------------
   console.log("\n  segment comparison");
   const nowSegs: SegmentCount[] = [
@@ -411,6 +441,43 @@ export async function verifyAuchanNightly(): Promise<number> {
       afterTouch?.lastCheckedAt?.getTime() === n3.getTime()
   );
 
+  // Out of stock: recordUnavailable stamps unavailableAt, touches the clock, and
+  // never advances deadCount (the page answered, so it is not dying).
+  await recordUnavailable(STORE, [`${PREFIX}3`], n3);
+  const oos = await prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}3` } },
+    select: { unavailableAt: true, deadCount: true, delistedAt: true, lastCheckedAt: true },
+  });
+  check(
+    "an unavailable product is stamped, clock touched, never marked dead",
+    oos?.unavailableAt?.getTime() === n3.getTime() &&
+      oos?.deadCount === beforeTouch?.deadCount &&
+      oos?.delistedAt === null
+  );
+
+  // The throttle: a product confirmed unavailable within the window is NOT
+  // re-fetched; one past the window is. This is the orchestrator's toConfirm
+  // filter, tested directly.
+  const nowInstant = new Date(n3.getTime() + 1000);
+  const cutoff = new Date(nowInstant.getTime() - UNAVAILABLE_RECHECK_DAYS * 86_400_000);
+  const recent = { unavailableAt: n3 }; // stamped just now
+  const stale = { unavailableAt: new Date(cutoff.getTime() - 86_400_000) }; // older than the window
+  const shouldFetch = (m: { unavailableAt: Date | null }) => m.unavailableAt === null || m.unavailableAt < cutoff;
+  check("a recently-unavailable product is skipped this run", !shouldFetch(recent));
+  check("an unavailable product past the window is rechecked", shouldFetch(stale));
+  check("a never-unavailable product is always confirmed", shouldFetch({ unavailableAt: null }));
+
+  // The writer clears the marker: seeing the product in a grid again means it is
+  // back in stock. save() runs the update path, which now nulls unavailableAt.
+  const w2 = await openCatalogueWriter(STORE);
+  await w2.save([hit(3, 3.0)], "alimentacao");
+  w2.finish();
+  const restocked = await prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}3` } },
+    select: { unavailableAt: true },
+  });
+  check("seeing a product in a grid clears its unavailable marker", restocked?.unavailableAt === null);
+
   // --- recordRun segment-tally round trip -----------------------------------
   console.log("\n  run record");
   const runInstant = new Date(seenAt.getTime() + 10_000);
@@ -470,6 +537,8 @@ export async function verifyAuchanNightly(): Promise<number> {
     confirmedDead: 3,
     delistedNow: 1,
     delistedSamples: [{ storeProductId: "x", name: "Gone product" }],
+    unavailable: 4,
+    unavailableSkipped: 40,
     unreachable: 0,
     aliveButMissing: 2,
     aliveButMissingSamples: [{ storeProductId: "y", name: "Alive product" }],
@@ -496,6 +565,10 @@ export async function verifyAuchanNightly(): Promise<number> {
   check("the report shows what departments added beyond root", rendered.includes("departments added 49 beyond root"));
   check("the report shows alive-but-missing", rendered.includes("alive but missing"));
   check("the report shows unpriced apart from malformed", rendered.includes("listed without a price") && rendered.includes("MALFORMED"));
+  check(
+    "the report shows out-of-stock apart, and the nightly re-fetch it saves",
+    rendered.includes("listed but unavailable") && rendered.includes("not re-fetched tonight")
+  );
 
   // A partial walk must not be reported as a fired guard: both stop delisting,
   // only one is a fault, and calling a deliberate --max-pages run FROZEN is a

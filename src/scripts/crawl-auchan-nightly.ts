@@ -1,10 +1,15 @@
 import { prisma } from "../lib/db";
 import { crawlAuchan, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
-import { scrapeAuchan } from "../scrapers/auchan";
+import { classifyAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
-import { recordDead, touchChecked } from "../scrapers/crawl/product-checks";
+import {
+  recordDead,
+  recordUnavailable,
+  touchChecked,
+  UNAVAILABLE_RECHECK_DAYS,
+} from "../scrapers/crawl/product-checks";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
 import { churnCatastropheReason, isPriceChurnStorm } from "../scrapers/crawl/reidentification";
 import {
@@ -28,7 +33,7 @@ import {
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import type { DailyReport, GridHealthExtras, ProductNote } from "../scrapers/crawl/daily-report";
-import { formatHttpStats, HttpError, httpStats, wireBytesOf } from "../scrapers/http";
+import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
 
 /**
  * The nightly Auchan run: the one command a scheduler calls.
@@ -108,9 +113,19 @@ async function main() {
   const live = await prisma.catalogueProduct.count({ where: { store: STORE, delistedAt: null } });
   const missing = await prisma.catalogueProduct.findMany({
     where: { store: STORE, delistedAt: null, lastSeenAt: { lt: seenAt } },
-    select: { storeProductId: true, url: true, name: true },
+    select: { storeProductId: true, url: true, name: true, unavailableAt: true },
   });
   const nameOf = new Map(missing.map((m) => [m.storeProductId, m.name]));
+
+  // The full missing set drives the under-collected guard, but we only FETCH the
+  // ones not confirmed unavailable recently. An out-of-stock product is missing
+  // every night (its priceless grid tile is always skipped), and its page has no
+  // price either, so re-fetching it nightly only re-learns the same thing. Once
+  // stamped `unavailableAt` it is left alone for UNAVAILABLE_RECHECK_DAYS, then
+  // looked at again in case it came back or was truly withdrawn.
+  const unavailableCutoff = new Date(seenAt.getTime() - UNAVAILABLE_RECHECK_DAYS * 86_400_000);
+  const toConfirm = missing.filter((m) => m.unavailableAt === null || m.unavailableAt < unavailableCutoff);
+  const skippedUnavailable = missing.length - toConfirm.length;
 
   // The grid guards decide, BEFORE any page is fetched, whether absence is even
   // evidence. A truncated or mis-parsed walk makes the missing set mostly false,
@@ -144,6 +159,7 @@ async function main() {
 
   const confirmedDead: string[] = [];
   let delisted: string[] = [];
+  const unavailable: string[] = [];
   const unreachable: string[] = [];
   const alive: string[] = [];
   let catastrophe: string | null = null;
@@ -159,15 +175,16 @@ async function main() {
     // Not even the clock is touched: these products were never actually
     // attempted, and a skipped run should leave no trace that looks like one.
   } else {
-    console.log(`\nphase 2: confirming ${missing.length.toLocaleString()} products missing from the walk`);
-    for (const m of missing) {
-      try {
-        await scrapeAuchan(m.url);
-        alive.push(m.storeProductId); // the page answered: alive, just absent from the grid
-      } catch (error) {
-        const gone = error instanceof HttpError && (error.status === 404 || error.status === 410);
-        (gone ? confirmedDead : unreachable).push(m.storeProductId);
-      }
+    console.log(
+      `\nphase 2: confirming ${toConfirm.length.toLocaleString()} products missing from the walk` +
+        (skippedUnavailable > 0 ? ` (${skippedUnavailable.toLocaleString()} known out of stock, rechecked later)` : "")
+    );
+    for (const m of toConfirm) {
+      const status = await classifyAuchanPage(m.url);
+      if (status === "gone") confirmedDead.push(m.storeProductId);
+      else if (status === "unavailable") unavailable.push(m.storeProductId);
+      else if (status === "alive") alive.push(m.storeProductId);
+      else unreachable.push(m.storeProductId);
     }
 
     // Guard 1: an implausible fraction of the whole catalogue confirmed dead at
@@ -176,23 +193,24 @@ async function main() {
     catastrophe = churnCatastropheReason({ dead: confirmedDead.length, attempted: live, complete });
     if (catastrophe) {
       console.log(`  !! ${catastrophe}`);
-      await touchChecked(STORE, [...confirmedDead, ...unreachable, ...alive], seenAt);
+      await touchChecked(STORE, [...confirmedDead, ...unavailable, ...unreachable, ...alive], seenAt);
     } else {
       ({ delisted } = await recordDead(STORE, confirmedDead, seenAt));
+      await recordUnavailable(STORE, unavailable, seenAt);
       await touchChecked(STORE, unreachable, seenAt);
-      // Alive but absent: reset the dead counter (it is not dying) but do NOT
-      // advance lastSeenAt, so it stays visible as a hole in the walk until the
-      // grid picks it up again.
+      // Alive but absent: reset the dead counter and any stale unavailable marker
+      // (it is neither dying nor out of stock), but do NOT advance lastSeenAt, so
+      // it stays visible as a hole in the walk until the grid picks it up again.
       if (alive.length > 0) {
         await prisma.catalogueProduct.updateMany({
           where: { store: STORE, storeProductId: { in: alive } },
-          data: { deadCount: 0, lastCheckedAt: seenAt },
+          data: { deadCount: 0, unavailableAt: null, lastCheckedAt: seenAt },
         });
       }
     }
     console.log(
       `  ${confirmedDead.length.toLocaleString()} gone, ${alive.length.toLocaleString()} alive but missing` +
-        `, ${unreachable.length.toLocaleString()} unreachable`
+        `, ${unavailable.length.toLocaleString()} out of stock, ${unreachable.length.toLocaleString()} unreachable`
     );
   }
   // A partial walk is reported apart from a fired guard: both stop anything
@@ -252,6 +270,8 @@ async function main() {
     confirmedDead: confirmedDead.length,
     delistedNow: delisted.length,
     delistedSamples: delisted.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),
+    unavailable: unavailable.length,
+    unavailableSkipped: skippedUnavailable,
     unreachable: unreachable.length,
     aliveButMissing: alive.length,
     aliveButMissingSamples: alive.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),

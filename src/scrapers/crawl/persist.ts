@@ -235,9 +235,12 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 lastSeenAt: seenAt,
                 lastCheckedAt: seenAt,
                 // Answering at all clears a delisting: a product that returns is
-                // not delisted, however many nights it was missing.
+                // not delisted, however many nights it was missing. Seeing it in
+                // a grid also means it is back in stock, so any "unavailable"
+                // marker is stale.
                 deadCount: 0,
                 delistedAt: null,
+                unavailableAt: null,
                 ...enrichment(p),
               },
               select: { id: true, price: true },

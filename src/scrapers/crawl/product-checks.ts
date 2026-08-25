@@ -238,6 +238,28 @@ export async function recordRecategorised(
   });
 }
 
+/**
+ * Record that a product page loaded but carries no price: listed but
+ * unavailable (out of stock, or variable-weight). Stamps `unavailableAt` so the
+ * nightly stops re-confirming it every night - it is rechecked on a slow cadence
+ * instead - and touches the clock. Never advances `deadCount`: the page answered,
+ * so the product is not gone.
+ */
+export async function recordUnavailable(
+  store: Store,
+  storeProductIds: string[],
+  checkedAt: Date
+): Promise<void> {
+  if (storeProductIds.length === 0) return;
+  await prisma.catalogueProduct.updateMany({
+    where: { store, storeProductId: { in: storeProductIds } },
+    data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt },
+  });
+}
+
+/** How long an "unavailable" verdict is trusted before the page is re-checked. */
+export const UNAVAILABLE_RECHECK_DAYS = 14;
+
 /** Mark an attempt without judging it - used when the failure was transient. */
 export async function touchChecked(
   store: Store,
