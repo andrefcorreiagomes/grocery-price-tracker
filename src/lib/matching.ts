@@ -222,8 +222,27 @@ function brandsEqual(a: string, b: string): boolean {
  * clash, or euro/unit divergence) overrides a positive rung however good the
  * name looks.
  */
-export function classifyCandidate(a: Candidate, b: Candidate): Classification {
-  const nameSimilarity = tokenSimilarity(a.name, b.name);
+export function classifyCandidate(
+  a: Candidate,
+  b: Candidate,
+  opts: {
+    /**
+     * A name score computed by the caller, used instead of comparing the raw
+     * names here.
+     *
+     * This module is store-agnostic, so `tokenSimilarity` cannot strip a chain's
+     * own label out of a product name or fold Portuguese plurals - and both
+     * matter enormously. Measured: "Maçã Golden das Serras" against "Maçã Golden
+     * Continente" scores 0.40 on raw tokens and 1.00 once the house labels go;
+     * "Bifes de Peru" against "BIFE DE PERU" scores 0.29 raw. Candidate
+     * GENERATION already computes the better score with `productTokens`, which
+     * knows the store, so the caller passes it in rather than this function
+     * recomputing a worse one and rejecting pairs generation was right about.
+     */
+    nameSimilarity?: number;
+  } = {}
+): Classification {
+  const nameSimilarity = opts.nameSimilarity ?? tokenSimilarity(a.name, b.name);
   const sizeKnown = a.size !== null && b.size !== null;
   const sizeMatches = sizeKnown && sizesMatch(a.size as ParsedSize, b.size as ParsedSize);
 

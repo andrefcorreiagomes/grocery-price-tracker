@@ -342,6 +342,114 @@ enum Verdict {
   DEAD
 }
 
+/// A verdict on one candidate pair: are these two catalogue products, at
+/// different stores, the same thing?
+///
+/// Separate from MatchCandidate because that table is DERIVED - the generator
+/// wipes and rebuilds it on every run, so a verdict stored there would be
+/// destroyed by a re-run with a different threshold. Keyed instead on the two
+/// catalogue ids, which are stable cuids that survive regeneration.
+///
+/// A match is not permanent. A product gets delisted, or re-issued under a new
+/// id, and yesterday's correct pair becomes today's wrong one - so a decision
+/// can be RETIRED rather than silently left standing over a product nobody
+/// sells. Retired, never deleted: the record of what was once matched is what
+/// stops the same bad pair being re-proposed and re-reviewed from scratch.
+model MatchDecision {
+  id  String @id @default(cuid())
+  /// canonically ordered (aId <= bId) so one pair is never stored twice
+  aId String
+  bId String
+
+  verdict MatchVerdict
+  /// HUMAN verdicts are never overwritten by a later AUTO pass: re-running the
+  /// matcher must not silently undo a person's judgement.
+  source  DecisionSource
+
+  /// The evidence behind the verdict, from classifyCandidate, kept so a
+  /// decision can be explained later without recomputing it.
+  rung           String
+  vetoed         Boolean @default(false)
+  nameSimilarity Float
+  sizeRatio      Float?
+  priceGap       Float?
+  reason         String
+
+  decidedAt DateTime @default(now())
+
+  /// Set when the pair stopped being valid - a member was delisted, or was
+  /// superseded by a different id. The pair drops out of grouping from then on,
+  /// and the surviving member returns to the candidate pool for re-matching.
+  retiredAt     DateTime?
+  retiredReason String?
+
+  @@unique([aId, bId])
+  @@index([verdict, retiredAt]) // the grouping read: live confirmed pairs
+  @@index([aId])
+  @@index([bId])
+}
+
+enum MatchVerdict {
+  /// The same product. Feeds grouping.
+  CONFIRMED
+  /// Not the same product.
+  REJECTED
+  /// Cannot be settled from the evidence available; waiting on a human.
+  REVIEW
+}
+
+enum DecisionSource {
+  AUTO
+  HUMAN
+}
+
+/// A set of catalogue products, at different stores, believed to be the same
+/// product - the thing the app compares prices across.
+///
+/// DERIVED, like MatchCandidate: recomputed from scratch on every matcher run by
+/// clustering the currently-valid confirmed pairs. That is deliberate. It means a
+/// group shrinks from a triplet to a pair when one store drops the product, and
+/// grows back when a new match is confirmed, with no incremental repair path to
+/// get wrong.
+///
+/// Deliberately NOT the same thing as `Product`/`StoreListing`, which are the
+/// hand-curated comparisons the live site shows. Auto-derived groups must not
+/// appear on the site silently; promoting one is a separate, deliberate step.
+///
+/// Size-agnostic in shape: two members or six, one store or five. Nothing here
+/// assumes a pair or a triplet, which is what lets a fourth store be added
+/// without a model change.
+model ProductGroup {
+  id        String   @id @default(cuid())
+  /// how many distinct stores are represented - what "is this a triplet?" asks
+  storeCount Int
+  /// how many products, which exceeds storeCount when a chain stocks two SKUs
+  memberCount Int
+  /// true when every link holding this group together was a barcode or
+  /// brand+size+name match, rather than a weaker one
+  strong    Boolean  @default(false)
+  /// guard flags raised while clustering, as JSON; empty on a clean group
+  flags     String?
+  builtAt   DateTime @default(now())
+
+  members ProductGroupMember[]
+
+  @@index([storeCount])
+}
+
+model ProductGroupMember {
+  id      String       @id @default(cuid())
+  group   ProductGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+  /// the CatalogueProduct.id; a plain id rather than a relation because groups
+  /// are wiped and rebuilt, and nothing should cascade back into the catalogue
+  productId String
+  store     Store
+
+  @@unique([groupId, productId])
+  @@index([productId])
+}
+
 model CrawlSection {
   id        String   @id @default(cuid())
   run       CrawlRun @relation(fields: [runId], references: [id], onDelete: Cascade)
