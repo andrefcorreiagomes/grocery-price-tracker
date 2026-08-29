@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db";
+import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
 import { parseSize } from "../lib/matching";
 
@@ -183,6 +184,104 @@ export async function verifyMatching(): Promise<number> {
   check("a triplet minus a delisted member becomes a 2-store group", shrunk.length === 1 && shrunk[0].storeCount === 2);
   check("and the dead member is not in it", !shrunk[0].productIds.includes("c"));
 
+  failures += verifyFoodTypes();
+
   await cleanup();
   return failures;
+}
+
+/**
+ * Food-type classification and the free size backfill. Pure - no database, no
+ * network - because these are judgement calls and the point is that they can be
+ * checked without either.
+ */
+function verifyFoodTypes(): number {
+  const before = failures;
+  console.log("\n  food types: classification");
+
+  // Continente and Auchan file potatoes under a food top-level; Pingo Doce's
+  // path is a flat shelf name, which is why its rule is inverted.
+  const CONT = "Frescos/Legumes/Batata, Batata Doce e Mandioca";
+  const AUCH = "produtos-frescos/legumes/batatas,-alho-e-cebola";
+  const PING = "Frutas e Vegetais/Batatas, Cebolas e Alhos";
+
+  const is = (name: string, store: string, path: string, want: string | null) =>
+    check(
+      `${name.slice(0, 38).padEnd(38)} -> ${String(want)}`,
+      classifyFoodType(name, store, path) === want,
+      `got ${String(classifyFoodType(name, store, path))}`
+    );
+
+  // batata, in all three stores and all three name shapes
+  is("Batata Vermelha Continente", "CONTINENTE", CONT, "batata");
+  is("BATATA BRANCA LAVADA KG", "AUCHAN", AUCH, "batata");
+  is("Batata para Cozer e Assar Embalada", "PINGO_DOCE", PING, "batata");
+
+  // ...and the three foods that share the word but are not it
+  is("Batata Doce Polpa Laranja", "CONTINENTE", CONT, "batata-doce");
+  is("Batatas Fritas Lisas", "CONTINENTE", "Mercearia/Snacks", null);
+  is("Puré de Batata Flocos", "CONTINENTE", "Mercearia/Puré", null);
+
+  console.log("\n  food types: the ordering rule (food type beats cut word)");
+  // These are the cases that bite. A cut word must never win over a real food
+  // type, or "Queijo Fresco de Vaca" is filed as beef.
+  is("Queijo Fresco de Vaca", "CONTINENTE", "Laticínios e Ovos/Queijo", "queijo");
+  is("Fiambre de Peito de Peru", "CONTINENTE", "Frescos/Charcutaria", "fiambre");
+  is("Salsicha de Frango Brasitas", "PINGO_DOCE", "Talho", "salsicha");
+  is("Arroz de Pato Congelado", "AUCHAN", "congelados", "arroz");
+  // ...and where the head IS a cut, it resolves to the animal behind it
+  is("Peito de Frango Embalado", "PINGO_DOCE", "Talho", "frango");
+  is("Lombo de Porco", "PINGO_DOCE", "Talho", "porco");
+  is("Lombo de Atum Descongelado", "PINGO_DOCE", "Peixaria", "atum");
+  is("Miolo de Camarão 40/60 Congelado", "CONTINENTE", "Congelados", "camarao");
+  is("Coxa de Frango", "AUCHAN", "produtos-frescos", "frango");
+
+  console.log("\n  food types: the fallback chain");
+  // "miolo" is the kernel of anything, not just shellfish - 86 of its 134
+  // products are nuts, and a cut-word list restricted to animals lost them all.
+  is("Miolo de Amêndoa com Pele Continente", "CONTINENTE", "Mercearia", "amendoa");
+  is("Miolo de Noz Metades", "CONTINENTE", "Mercearia", "noz");
+  is("Miolo de Avelã Torrada", "CONTINENTE", "Mercearia", "avela");
+  // Wine estates: the head is the estate, the food is later in the name.
+  is("Quinta do Carmo Alentejano Vinho Branco", "CONTINENTE", "Bebidas e Garrafeira/Vinhos", "vinho");
+  is("Herdade dos Grous Alentejo Vinho Rosé", "CONTINENTE", "Bebidas e Garrafeira/Vinhos", "vinho");
+  // Category fallback: nothing in this name says coffee, but the shelf does.
+  is("Cápsulas Dolce Gusto Espresso Napoli", "PINGO_DOCE", "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas", "cafe");
+  check(
+    "the category is read leaf-first, so Café em Cápsulas is café and not chá",
+    classifyFoodType("Cápsulas Compatíveis 16un", "PINGO_DOCE",
+      "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas") === "cafe"
+  );
+  // The scan must not override an exclude: pure de batata is not a potato.
+  is("Puré de Batata Flocos Continente", "CONTINENTE", "Mercearia", null);
+
+  console.log("\n  food types: sections and honesty");
+  check(
+    "a matching head in a NON-food section is rejected",
+    classifyFoodType("Batata Vermelha", "CONTINENTE", "Casa e Jardim") === null
+  );
+  check(
+    "Pingo Doce drinks are food (the bug that read its whole drinks aisle as zero)",
+    isFoodSection("PINGO_DOCE", "Águas, Sumos e Refrigerantes") &&
+      isFoodSection("PINGO_DOCE", "Vinho Tinto") &&
+      isFoodSection("PINGO_DOCE", "Cápsulas de Café")
+  );
+  check(
+    "Pingo Doce non-food is still excluded",
+    !isFoodSection("PINGO_DOCE", "Casa e Eletrodomésticos") &&
+      !isFoodSection("PINGO_DOCE", "Sacos e Sacos de Compras")
+  );
+  check(
+    "an unrecognised head returns null rather than a guess",
+    classifyFoodType("Zurblatt Fantástico 500g", "CONTINENTE", "Mercearia") === null
+  );
+
+  console.log("\n  food types: free size extraction");
+  const size = (name: string) => parseSize(name);
+  check("a pack size in the name is read", size("BATATA VERMELHA AUCHAN 3 KG")?.total === 3);
+  check("grams fold to kg", Math.abs((size("BOLACHA MARIA 200G")?.total ?? 0) - 0.2) < 1e-9);
+  check("a multipack multiplies out", size("LEITE UHT AGROS MEIO GORDO 6X1L")?.total === 6);
+  check("no size in the name is null, not a guess", size("Batata Vermelha") === null);
+
+  return failures - before;
 }

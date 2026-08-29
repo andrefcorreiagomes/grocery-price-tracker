@@ -110,6 +110,16 @@ model CatalogueProduct {
   /// successful fetch, so a single bad night cannot accumulate.
   deadCount Int @default(0)
 
+  /// What KIND of food this is - "batata", "queijo" - shared across stores, so
+  /// "where are potatoes cheapest" has an answer. Distinct from `categoryPath`,
+  /// which is the store's own shelf and too coarse: all three chains file
+  /// potatoes alongside sweet potatoes, onions and garlic. Derived from the
+  /// product NAME by src/lib/food-types.ts and rewritten by `npm run
+  /// classify:food`, so it is safe to recompute after the curated table changes.
+  /// Null for anything unrecognised, which is most of the catalogue and is
+  /// deliberately left honest rather than forced into a bucket.
+  foodType String?
+
   /// Last time a product-page confirmed this product is LISTED BUT UNAVAILABLE:
   /// the page loads and the product exists, but carries no price - out of stock,
   /// or sold by variable weight with no fixed price. Distinct from `delistedAt`
@@ -141,6 +151,7 @@ model CatalogueProduct {
   @@index([eanNormalized]) // EAN match / veto
   @@index([store, delistedAt, lastCheckedAt]) // the nightly queue, stalest first
   @@index([store, supersededById]) // finding tombstones / their successors
+  @@index([foodType, store]) // cheapest-per-store within a food type
   candidatesA MatchCandidate[] @relation("CandidateA")
   candidatesB MatchCandidate[] @relation("CandidateB")
   prices      CataloguePrice[]

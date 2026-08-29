@@ -20,6 +20,8 @@
     "crawl:auchan": "tsx src/scripts/crawl-auchan.ts",
     "crawl:continente:nightly": "tsx src/scripts/crawl-continente-nightly.ts",
     "crawl:auchan:nightly": "tsx src/scripts/crawl-auchan-nightly.ts",
+    "classify:food": "tsx src/scripts/classify-food-types.ts",
+    "backfill:sizes": "tsx src/scripts/backfill-sizes.ts",
     "verify:nightly": "tsx src/scripts/verify-nightly.ts"
   },
   "dependencies": {
