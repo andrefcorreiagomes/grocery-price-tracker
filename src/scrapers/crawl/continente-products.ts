@@ -109,6 +109,19 @@ export interface SitemapResult {
   /** every published product URL, keyed by the id embedded in it */
   urls: Map<string, string>;
   /**
+   * When the sitemap says each product last changed, as epoch milliseconds,
+   * for the ids that publish one.
+   *
+   * The point of keeping it: ~88,000 published ids have never been opened, and
+   * at a few thousand a night the order they are opened in decides what gets
+   * found this month rather than next. Newest-first puts products the store
+   * has just touched at the front, which is where a newly listed product is.
+   * Opening them in sitemap order instead is effectively arbitrary.
+   *
+   * A number, not the published string - see the note at the parse site.
+   */
+  lastmod: Map<string, number>;
+  /**
    * How many product sitemap FILES the index listed - six, at the time of
    * writing.
    *
@@ -170,6 +183,7 @@ export async function discoverProductUrls(): Promise<SitemapResult> {
     .filter((u) => u.includes("product"));
 
   const urls = new Map<string, string>();
+  const lastmod = new Map<string, number>();
   const perFile: { url: string; entries: number }[] = [];
   const unparseableSamples: string[] = [];
   let unparseable = 0;
@@ -177,11 +191,31 @@ export async function discoverProductUrls(): Promise<SitemapResult> {
   for (const map of maps) {
     const xml = await fetchHtml(map);
     let entries = 0;
-    for (const entry of xml.matchAll(/<loc>(https:\/\/www\.continente\.pt\/produto\/[^<]+)<\/loc>/g)) {
+    // Each <loc>, plus the <lastmod> published beside it when there is one.
+    // Continente writes one per product:
+    //
+    //   <url><loc>...-4546577.html</loc><lastmod>2026-08-27T22:41:49+00:00</lastmod>
+    //        <changefreq>daily</changefreq><priority>0.5</priority></url>
+    //
+    // The <lastmod> group is optional and the <url> wrapper is deliberately NOT
+    // required. Anchoring on `<url>` matched the live files but broke on a
+    // bare-<loc> sitemap, and it would break again on `<url >`, an attribute, or
+    // a newline where none was expected. The date belongs to the address it
+    // follows either way.
+    //
+    // Stored as a NUMBER rather than the matched text. A capture is a view into
+    // the 5 MB file it came from, and 105,285 of them would pin every sitemap in
+    // memory for the whole run; `Date.parse` ends that in one step. See
+    // `detached` in scrapers/types.ts for the crash that taught us this.
+    for (const entry of xml.matchAll(
+      /<loc>(https:\/\/www\.continente\.pt\/produto\/[^<]+)<\/loc>(?:\s*<lastmod>([^<]*)<\/lastmod>)?/g
+    )) {
       entries++;
       const id = productIdFromUrl(entry[1]);
       if (id) {
         urls.set(id, entry[1]);
+        const when = entry[2] ? Date.parse(entry[2]) : NaN;
+        if (Number.isFinite(when)) lastmod.set(id, when);
       } else {
         // Counted rather than skipped in silence: this is how 170 URLs went
         // missing for months.
@@ -192,7 +226,7 @@ export async function discoverProductUrls(): Promise<SitemapResult> {
     perFile.push({ url: map, entries });
   }
 
-  return { urls, files: maps.length, perFile, unparseable, unparseableSamples };
+  return { urls, lastmod, files: maps.length, perFile, unparseable, unparseableSamples };
 }
 
 /** Top segment of a category path ("Frescos/Frutas/..." gives "Frescos"). */

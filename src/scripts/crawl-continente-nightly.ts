@@ -132,6 +132,9 @@ async function main() {
   // one night of DISCOVERY and nothing else - letting it throw here would
   // abandon the price refresh that is the point of the run.
   let published = new Map<string, string>();
+  // Empty when the sitemap could not be read, which is safe: every id then
+  // sorts equal and phase 3 falls back to the order it used before.
+  let sitemapLastmod = new Map<string, number>();
   let sitemapFiles = 0;
   let perFile: { url: string; entries: number }[] = [];
   let unparseable = 0;
@@ -140,6 +143,7 @@ async function main() {
   try {
     const sitemap = await discoverProductUrls();
     published = sitemap.urls;
+    sitemapLastmod = sitemap.lastmod;
     sitemapFiles = sitemap.files;
     perFile = sitemap.perFile;
     unparseable = sitemap.unparseable;
@@ -230,6 +234,27 @@ async function main() {
     if (catalogueIds.has(id) || alreadyChecked.has(id)) continue;
     unexamined.push({ storeProductId: id, url });
   }
+
+  // NEWEST FIRST, by the <lastmod> the sitemap publishes for each product.
+  //
+  // About 88,000 published ids have never been opened, and at a few thousand a
+  // night the ORDER decides what is found this month rather than next. Sitemap
+  // order is effectively arbitrary - it is neither alphabetical nor by date -
+  // so the previous behaviour spent the budget on whatever happened to sit at
+  // the front of file 1, which is where the oldest, deadest entries collect.
+  //
+  // `lastmod` is the store saying when it last touched the product, so newest
+  // first puts a just-listed product at the head of the queue instead of 30
+  // nights away. Measured on one file, the dates span 2026-07-17 to 2026-08-27,
+  // so it does discriminate rather than being uniformly "now".
+  //
+  // Ids with no published date sort last: unknown is not the same as recent,
+  // and treating it as recent would let a missing field jump the queue.
+  unexamined.sort(
+    (a, b) =>
+      (sitemapLastmod.get(b.storeProductId) ?? -Infinity) -
+      (sitemapLastmod.get(a.storeProductId) ?? -Infinity)
+  );
 
   // Products we hold that the sitemap has stopped listing. Report-only: a 404
   // from the product page is what actually counts towards delisting.

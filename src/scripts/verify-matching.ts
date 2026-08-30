@@ -13,6 +13,9 @@ import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { detached } from "../scrapers/types";
+import { discoverProductUrls } from "../scrapers/crawl/continente-products";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 /**
  * The matching layer: clustering guards (pure), and the decision/retirement
@@ -200,9 +203,90 @@ export async function verifyMatching(): Promise<number> {
   failures += await verifyRobotsGuards();
   failures += await verifyRotationWarnings();
   failures += verifyNoPageRetention();
+  failures += await verifySitemapLastmod();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * Reading `<lastmod>` out of Continente's product sitemap, so phase 3 opens the
+ * ~88,000 never-seen ids newest-first instead of in whatever order the files
+ * happen to list them.
+ *
+ * Served from a local file rather than the live sitemap - `discoverProductUrls`
+ * reads `CONTINENTE_SITEMAP_URL`, which exists precisely so this path can be
+ * exercised without 6 requests and 30 MB. The fixture is the real published
+ * shape, copied from one of the files:
+ *
+ *   <url><loc>...</loc><lastmod>2026-08-27T22:41:49+00:00</lastmod>
+ *        <changefreq>daily</changefreq><priority>0.5</priority></url>
+ */
+async function verifySitemapLastmod(): Promise<number> {
+  const before = failures;
+  console.log("\n  sitemap lastmod (phase 3 ordering)");
+
+  const entry = (id: string, when: string | null) =>
+    `<url><loc>https://www.continente.pt/produto/coisa-marca-${id}.html</loc>` +
+    (when ? `<lastmod>${when}</lastmod>` : "") +
+    `<changefreq>daily</changefreq><priority>0.5</priority></url>`;
+
+  const products =
+    `<?xml version="1.0" ?><urlset>` +
+    entry("111", "2026-07-17T10:59:51+00:00") + // oldest
+    entry("222", "2026-08-27T22:41:49+00:00") + // newest
+    entry("333", null) + // publishes no date
+    `</urlset>`;
+
+  // Served over HTTP on a loopback port, because `fetchHtml` speaks http only -
+  // and because going through the real fetch path is the point: it proves the
+  // parse against the shape the store actually publishes, not against a string
+  // handed straight to a helper.
+  const server = createServer((req, res) => {
+    res.writeHead(200, { "content-type": "application/xml" });
+    res.end(
+      req.url === "/index.xml"
+        ? `<?xml version="1.0" ?><sitemapindex><sitemap>` +
+            `<loc>http://127.0.0.1:${port}/sitemap_1-product.xml</loc>` +
+            `</sitemap></sitemapindex>`
+        : products
+    );
+  });
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  const port = (server.address() as AddressInfo).port;
+
+  try {
+    process.env.CONTINENTE_SITEMAP_URL = `http://127.0.0.1:${port}/index.xml`;
+    const sitemap = await discoverProductUrls();
+
+    check("every product url is still found", sitemap.urls.size === 3, `${sitemap.urls.size} of 3`);
+    check(
+      "a published lastmod is read as a date",
+      sitemap.lastmod.get("222") === Date.parse("2026-08-27T22:41:49+00:00")
+    );
+    check(
+      "an entry without a lastmod is absent, not zero",
+      !sitemap.lastmod.has("333") && sitemap.lastmod.size === 2,
+      "zero would sort as 1970 and be indistinguishable from a real old date"
+    );
+
+    // The ordering phase 3 applies, with the same comparator.
+    const order = ["111", "333", "222"]
+      .slice()
+      .sort(
+        (a, b) => (sitemap.lastmod.get(b) ?? -Infinity) - (sitemap.lastmod.get(a) ?? -Infinity)
+      );
+    check(
+      "newest first, and undated ids sort last",
+      order.join(",") === "222,111,333",
+      order.join(" then ")
+    );
+  } finally {
+    delete process.env.CONTINENTE_SITEMAP_URL;
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+
+  return failures - before;
 }
 
 /**
