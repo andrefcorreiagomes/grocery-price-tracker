@@ -12,6 +12,7 @@ import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categori
 import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
+import { sectionWarnings } from "../scrapers/crawl/history";
 import { detached } from "../scrapers/types";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
@@ -204,9 +205,96 @@ export async function verifyMatching(): Promise<number> {
   failures += await verifyRotationWarnings();
   failures += verifyNoPageRetention();
   failures += await verifySitemapLastmod();
+  failures += verifySectionComparison();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * Run-over-run section comparison, keyed on the LABEL rather than on `cgid`.
+ *
+ * The case is taken verbatim from the night Continente switched routes. The
+ * grid crawler had recorded `frescos`, `laticinios`, `mercearias`; the
+ * product-page crawler records the display label, because it groups by each
+ * product's own category path. Keyed on cgid, the comparison read that as all
+ * six sections vanishing - in a run that had just fetched 17,088 products
+ * across those very sections.
+ *
+ * Both sides are copied out of the CrawlRun rows the two runs actually wrote,
+ * so the fixture cannot quietly agree with whatever the test author assumed.
+ *
+ * Tests `sectionWarnings` rather than `compareWithPrevious`, which reads the
+ * store's NEWEST run from the database. Writing a fixture row there would mean
+ * future-dating it to win that ordering, and one left behind by a crashed test
+ * would poison every real comparison for that store afterwards - a worse
+ * failure than the one being guarded against. The first version of this test
+ * did try it, back-dated the row, and silently compared against Auchan's real
+ * August run instead.
+ */
+function verifySectionComparison(): number {
+  const before = failures;
+  console.log("\n  section comparison across a change of crawler");
+
+  // Verbatim from the night Continente switched routes, both sides copied out
+  // of the recorded CrawlRun rows rather than invented.
+  const previous = {
+    startedAt: new Date("2026-08-21T15:29:00Z"),
+    total: 17090,
+    sections: [
+      { cgid: "frescos", label: "Frescos", collected: 3320 },
+      { cgid: "laticinios", label: "Laticínios e Ovos", collected: 1164 },
+      { cgid: "mercearias", label: "Mercearia", collected: 5004 },
+    ],
+  };
+  // What the product-page crawler writes: the label in both columns, because it
+  // groups by each product's own category path and has no cgid to record.
+  const now = [
+    { cgid: "Frescos", label: "Frescos", collected: 3409 },
+    { cgid: "Laticínios e Ovos", label: "Laticínios e Ovos", collected: 1132 },
+    { cgid: "Mercearia", label: "Mercearia", collected: 4874 },
+  ];
+
+  const warnings = sectionWarnings(previous, 17060, now);
+  check(
+    "changing crawler does not read as sections disappearing",
+    !warnings.some((w) => w.includes("missing from this one")),
+    warnings.find((w) => w.includes("missing from this one")) ?? "no false alarms"
+  );
+  check(
+    "and no drop is invented from the same numbers",
+    warnings.length === 0,
+    warnings.join(" | ") || "no warnings"
+  );
+
+  // An accent or a case difference between the two crawlers must not resurrect
+  // the same false alarm by another route.
+  check(
+    "the label match survives accents and case",
+    sectionWarnings(previous, 17060, [
+      { cgid: "x", label: "FRESCOS", collected: 3409 },
+      { cgid: "y", label: "Laticinios e Ovos", collected: 1164 },
+      { cgid: "z", label: "mercearia", collected: 5004 },
+    ]).length === 0
+  );
+
+  // The alarm must still fire: Mercearia gone entirely, Frescos collapsed.
+  const broken = sectionWarnings(previous, 17060, [
+    { cgid: "Frescos", label: "Frescos", collected: 1000 },
+    { cgid: "Laticínios e Ovos", label: "Laticínios e Ovos", collected: 1132 },
+  ]);
+  check(
+    "a genuinely absent section is still reported",
+    broken.some((w) => w.startsWith("Mercearia") && w.includes("missing from this one")),
+    broken.find((w) => w.includes("missing")) ?? "(nothing reported)"
+  );
+  check(
+    "and a genuine collapse is still reported",
+    broken.some((w) => w.startsWith("Frescos:") && w.includes("fewer")),
+    broken.find((w) => w.startsWith("Frescos:")) ?? "(nothing reported)"
+  );
+
+  return failures - before;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/db";
 import type { Store } from "@/generated/prisma/client";
+import { stripAccents } from "../../lib/matching";
 
 /**
  * Comparing a crawl against the one before it.
@@ -18,7 +19,17 @@ const SECTION_DROP = 0.2;
 const TOTAL_DROP = 0.1;
 
 export interface RunSection {
+  /**
+   * Whatever the crawler that wrote this row calls a section. The grid crawlers
+   * write the store's own category id; the product-page crawlers have none and
+   * repeat the label, because they group by each product's own category path.
+   *
+   * So it is NOT a stable identity across routes, and nothing compares on it -
+   * see the note in `compareWithPrevious`. Kept because it is the store's real
+   * id where one exists, which is worth having in the record.
+   */
   cgid: string;
+  /** The section's display name. This is what run-over-run comparison keys on. */
   label: string;
   collected: number;
   expected?: number | null;
@@ -190,7 +201,34 @@ export async function compareWithPrevious(
   });
 
   if (!previous) return [];
+  return sectionWarnings(
+    { startedAt: previous.startedAt, total: previous.total, sections: previous.sections },
+    total,
+    sections
+  );
+}
 
+/** The previous run, reduced to what a comparison actually reads. */
+export interface PreviousRun {
+  startedAt: Date;
+  total: number;
+  sections: RunSection[];
+}
+
+/**
+ * The comparison itself, with no database in it.
+ *
+ * Separated so the judgement can be tested against real recorded values without
+ * writing a CrawlRun row. Doing that needs the row to be the store's NEWEST, and
+ * a future-dated fixture left behind by a crashed test would then poison every
+ * real comparison for that store - a worse failure than the one being guarded
+ * against.
+ */
+export function sectionWarnings(
+  previous: PreviousRun,
+  total: number,
+  sections: RunSection[]
+): string[] {
   const warnings: string[] = [];
   const when = previous.startedAt.toISOString().slice(0, 16).replace("T", " ");
 
@@ -202,9 +240,28 @@ export async function compareWithPrevious(
     );
   }
 
-  const before = new Map(previous.sections.map((s) => [s.cgid, s]));
+  // Keyed on LABEL, not on `cgid`.
+  //
+  // `cgid` is whatever the crawler that wrote the row called a section, and it
+  // changes when the route changes. The grid crawler wrote Continente's own
+  // ids - `frescos`, `laticinios`, `mercearias` - while the compliant
+  // product-page crawler has no cgid at all and writes the display label, since
+  // it groups by each product's own category path.
+  //
+  // Keying on cgid therefore read the switch between the two as six sections
+  // disappearing at once, in a run that had just fetched 17,088 products across
+  // those very sections. Six false alarms, and on exactly the signal that most
+  // needs to be believed when it is real.
+  //
+  // The label is what both routes agree on, so it is what the comparison keys
+  // on. Matched case-insensitively and accent-blind for the same reason: the
+  // point is to survive a change of crawler, not to be defeated by one writing
+  // "Laticinios" where the other wrote "Laticínios".
+  const key = (s: { label: string }) => stripAccents(s.label).toLowerCase().trim();
+
+  const before = new Map(previous.sections.map((s) => [key(s), s]));
   for (const section of sections) {
-    const was = before.get(section.cgid);
+    const was = before.get(key(section));
     if (!was || was.collected === 0) continue;
     if (section.collected < was.collected * (1 - SECTION_DROP)) {
       warnings.push(
@@ -216,10 +273,10 @@ export async function compareWithPrevious(
 
   // A section that was crawled last time and is absent now: the category was
   // dropped from the config, or its id changed and it is being skipped.
-  const now = new Set(sections.map((s) => s.cgid));
+  const now = new Set(sections.map(key));
   for (const was of previous.sections) {
-    if (!now.has(was.cgid)) {
-      warnings.push(`${was.label} (${was.cgid}) was crawled last run and is missing from this one`);
+    if (!now.has(key(was))) {
+      warnings.push(`${was.label} was crawled last run and is missing from this one`);
     }
   }
 
