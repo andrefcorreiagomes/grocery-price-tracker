@@ -11,6 +11,7 @@ import {
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
+import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 
 /**
  * The matching layer: clustering guards (pure), and the decision/retirement
@@ -196,9 +197,62 @@ export async function verifyMatching(): Promise<number> {
   failures += verifyFoodTypes();
   failures += verifyPingoDoceSitemap();
   failures += await verifyRobotsGuards();
+  failures += await verifyRotationWarnings();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * Two ways the rotation report misreported itself, both found by running a
+ * 20-product slice against the live site and reading what it printed. Neither
+ * was reachable offline before, because both only appear on a PARTIAL run.
+ */
+async function verifyRotationWarnings(): Promise<number> {
+  const before = failures;
+  console.log("\n  the rotation report, on a partial run");
+
+  const base = {
+    store: "CONTINENTE" as const,
+    seenAt: new Date(),
+    refreshed: 13,
+    deadSamples: [],
+    nonFood: 0,
+    prices: { unchanged: 0, changed: 0, opened: 0, skipped: 0 },
+    http: [],
+    publishedCounts: new Map<string, number>(),
+    newProducts: [],
+    newCount: 0,
+  };
+
+  const said = (report: { problems: string[] }, needle: RegExp) =>
+    report.problems.some((p) => needle.test(p));
+
+  // 17,293 products refreshed 13 at a time is "1331 days to a full pass" - which
+  // is arithmetic on a deliberate slice, not a finding about the catalogue.
+  const partial = await buildRotationReport({ ...base, complete: false, dead: 9 });
+  check(
+    "a --limit run does not claim the full pass takes 1331 days",
+    !said(partial, /a full pass takes/),
+    "the rate means nothing when the budget was deliberately tiny"
+  );
+
+  const full = await buildRotationReport({ ...base, complete: true, dead: 9 });
+  check(
+    "a complete run still reports a genuinely slow rate",
+    said(full, /a full pass takes/),
+    "standing the warning down must not disable it everywhere"
+  );
+
+  // "9 confirmed delisted" in the headline against "delisted this run: 0" in the
+  // body, from one run. Same words, two different quantities.
+  check(
+    "dead pages are not called delistings",
+    said(partial, /answered with a dead page/) && !said(partial, /confirmed delisted/),
+    "delisting takes three such nights, and is counted separately"
+  );
+
+  return failures - before;
 }
 
 /**

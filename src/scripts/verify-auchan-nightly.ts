@@ -603,7 +603,7 @@ export async function verifyAuchanNightly(): Promise<number> {
         staleness: { today: 100, week: 0, month: 0, older: 0 },
         daysToFullCoverage: 1,
         oldestSeenAt: null,
-        confirmedDelisted: 0,
+        deadPagesThisRun: 0,
         deadSamples: [],
         enrichment: { total: 100, withBarcode: 0, withSize: 0 },
         sections: [{ label: "alimentacao", ours: 100, published: null }],

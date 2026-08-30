@@ -169,7 +169,7 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           "package size that no listing tile has, so enrichment coverage should climb run over run; if " +
           "it stalls while products are being refreshed, the page parser has broken.",
         [
-          `  confirmed delisted this run: ${r.confirmedDelisted.toLocaleString()}`,
+          `  answered with a dead page this run: ${r.deadPagesThisRun.toLocaleString()}`,
           ...notes(r.deadSamples, "    "),
           "",
           `  catalogue with a barcode: ${r.enrichment.withBarcode.toLocaleString()} (${pct(r.enrichment.withBarcode)})`,

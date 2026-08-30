@@ -3,6 +3,7 @@ import type { Store } from "@/generated/prisma/client";
 import { megabytes, totalStats, type HostStats } from "../http";
 import type { DailyReport, ProductNote } from "./daily-report";
 import type { PriceHistorySummary } from "./price-history";
+import { DEAD_NIGHTS_BEFORE_DELISTING } from "./product-checks";
 
 /**
  * The report for a crawl that refreshes a SLICE of the catalogue, rather than
@@ -34,7 +35,10 @@ export interface RotationInput {
   complete: boolean;
   seenAt: Date;
   refreshed: number;
-  /** pages that returned no product: confirmed delistings, not guesses */
+  /**
+   * Pages that returned no product THIS RUN. Not delistings: that takes three
+   * consecutive such nights, and is reported separately.
+   */
   dead: number;
   deadSamples: ProductNote[];
   nonFood: number;
@@ -59,7 +63,13 @@ export interface RotationExtras {
   /** at this run's rate, days until every product has been refreshed */
   daysToFullCoverage: number | null;
   oldestSeenAt: string | null;
-  confirmedDelisted: number;
+  /**
+   * Pages that returned nothing THIS RUN. Was called `confirmedDelisted`, which
+   * it never was: delisting takes three consecutive dead nights and is reported
+   * separately, so one run printed "9 confirmed delisted" in its headline and
+   * "delisted this run: 0" in its body.
+   */
+  deadPagesThisRun: number;
   deadSamples: ProductNote[];
   enrichment: { total: number; withBarcode: number; withSize: number };
   /** our catalogue against the count each section publishes for itself */
@@ -118,7 +128,7 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
     staleness,
     daysToFullCoverage,
     oldestSeenAt: oldest ? oldest.toISOString() : null,
-    confirmedDelisted: input.dead,
+    deadPagesThisRun: input.dead,
     deadSamples: input.deadSamples.slice(0, SAMPLE),
     enrichment: { total: all.length, withBarcode, withSize },
     sections,
@@ -167,13 +177,27 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
   if (staleness.older > 0) {
     warnings.push(`${staleness.older} product(s) have not been confirmed in over a month`);
   }
-  if (daysToFullCoverage !== null && daysToFullCoverage > 14) {
+  // Only a run that used its real budget can say anything about the RATE. A
+  // `--limit=20` smoke test divides the catalogue by twenty and reports "a full
+  // pass takes 1331 days", which is arithmetic on a deliberate slice, not a
+  // finding - and it appeared beside a section whose own prose says slice
+  // figures are meaningless. The same reason the coverage check already stands
+  // down on a partial run.
+  if (input.complete && daysToFullCoverage !== null && daysToFullCoverage > 14) {
     warnings.push(
       `at this rate a full pass takes ${daysToFullCoverage} days; prices will be that stale at worst`
     );
   }
   if (input.dead > 0) {
-    warnings.push(`${input.dead} product(s) are confirmed delisted - their pages return nothing`);
+    // NOT "confirmed delisted". `input.dead` counts pages that returned nothing
+    // THIS RUN; delisting needs three such nights in a row, and the body of the
+    // same report prints "delisted this run (third dead night)" separately. The
+    // two used identical words for different quantities, so one run said "9
+    // confirmed delisted" in its headline and "delisted this run: 0" below it.
+    warnings.push(
+      `${input.dead} product(s) answered with a dead page` +
+        ` - each advances toward delisting, which takes ${DEAD_NIGHTS_BEFORE_DELISTING} such nights`
+    );
   }
   if (http.retries > 0) warnings.push(`${http.retries} request(s) had to be retried`);
   problems.push(...warnings);
