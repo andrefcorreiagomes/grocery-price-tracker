@@ -1,4 +1,3 @@
-import { fetchHtml } from "../http";
 import { parseContinenteTiles, parseContinenteTotal } from "../search/continente";
 import type { SearchHit } from "../search/types";
 import { CONTINENTE_FOOD_CATEGORIES } from "./continente-categories";
@@ -7,18 +6,48 @@ import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
 /**
  * The FAST Continente crawler: a whole category grid per request.
  *
- * NOTE ON robots.txt. Continente disallows `/*?cgid`, `/*?start=` and `/*?sz`,
- * which is exactly how this crawler paginates, and points crawlers at its
- * sitemap instead. So this route is not compliant, and it is kept because it is
- * ~30x cheaper: 562 requests and 14 minutes against ~17,000 requests and about
- * five hours for the compliant one in `continente-products.ts`. Choose between
- * them deliberately; both are wired to their own npm script.
+ * DISALLOWED, AND DISABLED. Continente's robots.txt forbids the URL this
+ * builds, twice over - confirmed against the live file:
  *
- * Walks a food category's grid endpoint page
- * by page and returns the deduplicated products. Deliberately DB-free - it
- * fetches and parses; the runner script persists - mirroring how the search
- * extractors return `SearchHit[]` for a caller to store.
+ *     Disallow: /*?cgid      the category
+ *     Disallow: /*&sz        the page size
+ *
+ * This was KNOWN, and the note here used to say so: the route was kept because
+ * it is ~30x cheaper (562 requests and 14 minutes, against ~17,000 requests and
+ * about five hours for `continente-products.ts`), with the instruction to
+ * "choose between them deliberately".
+ *
+ * That is why it is now refused rather than merely documented. The choosing
+ * stopped happening: `npm run crawl:all` called this with no flag and no
+ * warning, so the default "crawl everything" command took the disallowed route
+ * every time, and it is where the catalogue's Continente rows came from. A
+ * comment cannot enforce a decision that the default quietly makes for you.
+ *
+ * The compliant routes, both already built:
+ *
+ *     crawl:continente:products   one product page at a time, ~5 h, and it
+ *                                 returns the barcode and pack size too
+ *     crawl:continente:nightly    the same, orchestrated, with the sitemap and
+ *                                 the section landing pages robots.txt invites
+ *
+ * Kept rather than deleted, because the pagination lesson recorded below is
+ * worth keeping and the tile parsers are still used elsewhere. Only the request
+ * path is refused.
  */
+
+const DISALLOWED =
+  "Continente's robots.txt disallows ?cgid and &sz - the category and page-size " +
+  "parameters this request paginates with. Use `npm run crawl:continente:products` " +
+  "or `npm run crawl:continente:nightly`, which read one product page at a time.";
+
+/**
+ * Stands in for the `fetchHtml` this crawler used to call. Declared as
+ * returning the HTML it will never return, so the code below still typechecks
+ * against a real string.
+ */
+function refuseDisallowed(url: string): string {
+  throw new Error(`${DISALLOWED}\n  refused: ${url}`);
+}
 
 const GRID_URL =
   "https://www.continente.pt/on/demandware.store/Sites-continente-Site/default/Search-UpdateGrid";
@@ -45,7 +74,12 @@ export async function crawlContinenteCategory(
 
   for (let page = 0; opts.maxPages === undefined || page < opts.maxPages; page++) {
     const start = page * PAGE_SIZE;
-    const html = await fetchHtml(
+    // The refusal stands exactly where the disallowed request would go, in
+    // place of the `fetchHtml` that used to be here. Refusing at the top of the
+    // function instead would make the whole body unreachable, and TypeScript
+    // stops narrowing inside unreachable code - the pagination logic below
+    // silently loses its null checks.
+    const html = refuseDisallowed(
       `${GRID_URL}?cgid=${encodeURIComponent(category.cgid)}&start=${start}&sz=${PAGE_SIZE}`
     );
     const hits = parseContinenteTiles(html);

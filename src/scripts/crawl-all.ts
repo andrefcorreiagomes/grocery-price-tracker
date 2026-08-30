@@ -1,26 +1,32 @@
 import { prisma } from "../lib/db";
 import { crawlAuchan, DEFAULT_AUCHAN_MODE, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
-import { crawlContinente } from "../scrapers/crawl/continente";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport, isMeaningfulShortfall } from "../scrapers/crawl/report";
 import { formatHttpStats } from "../scrapers/http";
 
 /**
- * Crawl all three catalogues at once.
+ * The fast catalogue crawl. In practice that now means AUCHAN ONLY.
  *
  *   npm run crawl:all
  *   npm run crawl:all -- --mode=root      # Auchan walks its whole catalogue
- *   npm run crawl:all -- --max-pages=2    # smoke test, applies to every store
+ *   npm run crawl:all -- --max-pages=2    # smoke test
  *
- * The stores are crawled CONCURRENTLY. This is safe and it is not impolite:
- * `fetchHtml` rate-limits per host, so each store still sees one request per
- * second - the three queues simply run side by side instead of end to end, and
- * the run costs the slowest store rather than the sum of all three.
+ * This used to crawl all three. Continente and Pingo Doce both reach their
+ * catalogues through listing grids their robots.txt disallows, so both are now
+ * skipped here and print the compliant command instead. Auchan is the only one
+ * of the three whose robots.txt ALLOWS grids, which is why it is the only store
+ * that can still be crawled in minutes - and, not coincidentally, the only one
+ * whose catalogue is 92% sized.
  *
- * Database writes are the exception: SQLite takes one writer at a time, so each
- * store's results are queued and saved in turn as its crawl finishes. Saving is
- * quick next to a ten-minute crawl, so serialising it costs nothing.
+ * The name is kept, and the skips are printed rather than silently dropped, so
+ * that a run of this cannot be mistaken for a three-store crawl. Renaming it to
+ * `crawl:auchan` would collide with the existing single-store script and would
+ * quietly change what a scheduler already calls.
+ *
+ * Database writes: SQLite takes one writer at a time, so results are queued and
+ * saved in turn. Kept because the structure still holds if a store ever regains
+ * a fast route.
  *
  * One store failing does not abandon the others; whatever the others collected
  * is still saved and reported, and the exit code reflects any failure.
@@ -42,17 +48,27 @@ function minutesSince(startedAt: number): string {
   return `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s`;
 }
 
-async function runContinente(maxPages: number | undefined, startedAt: number) {
-  const results = await crawlContinente({ maxPages });
-  const { summaries, prices } = await queueWrite(() => persistCatalogue("CONTINENTE", results));
-  console.log(`[${minutesSince(startedAt)}] Continente finished`);
-
-  const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
+/**
+ * Continente is no longer crawled here, for the same reason as Pingo Doce.
+ *
+ * This script used to call the grid crawler, whose URL Continente's robots.txt
+ * disallows on `?cgid` and `&sz`. That route was kept deliberately as a fast
+ * option, but calling it from here made it the DEFAULT rather than a choice -
+ * which is precisely how a deliberate exception stops being deliberate.
+ *
+ * The compliant route takes about five hours and does not belong in a run that
+ * otherwise finishes in minutes.
+ */
+function skipContinente() {
   return {
-    title: `CONTINENTE - ${total} products across ${summaries.length} section(s), ${prices.changed} price change(s)`,
-    lines,
-    short,
-    total,
+    title: "CONTINENTE - skipped",
+    lines: [
+      "  The listing grids are disallowed by robots.txt (?cgid, &sz), so there is no fast route.",
+      "    npm run crawl:continente:nightly   the catalogue, one product page at a time, ~5 h",
+      "    npm run crawl:continente           coverage check against the store's own counts",
+    ],
+    short: [] as string[],
+    total: 0,
   };
 }
 
@@ -161,13 +177,13 @@ async function main() {
 
   const startedAt = Date.now();
   console.log(
-    `Crawling Continente, Pingo Doce and Auchan [${mode}] concurrently` +
-      `${maxPages ? ` (max ${maxPages} pages each)` : ""}...\n`
+    `Crawling Auchan [${mode}]${maxPages ? ` (max ${maxPages} pages)` : ""}.` +
+      ` Continente and Pingo Doce are skipped - see below.\n`
   );
 
   const stores = ["Continente", "Pingo Doce", "Auchan"];
   const settled = await Promise.allSettled([
-    runContinente(maxPages, startedAt),
+    Promise.resolve(skipContinente()),
     Promise.resolve(skipPingoDoce()),
     runAuchan(mode, maxPages, startedAt),
   ]);

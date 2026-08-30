@@ -10,6 +10,7 @@ import {
 } from "../scrapers/crawl/pingodoce-sitemap";
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { coverageRows } from "../scrapers/crawl/pingodoce";
+import { crawlContinente } from "../scrapers/crawl/continente";
 
 /**
  * The matching layer: clustering guards (pure), and the decision/retirement
@@ -194,9 +195,57 @@ export async function verifyMatching(): Promise<number> {
 
   failures += verifyFoodTypes();
   failures += verifyPingoDoceSitemap();
+  failures += await verifyRobotsGuards();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * Continente's grid crawler, which reaches its catalogue through a URL
+ * Continente's robots.txt disallows on `?cgid` and `&sz`.
+ *
+ * It is refused at the line that would issue the request, so this test SENDS NO
+ * REQUEST. That is also what makes the assertion strict: it is not "it threw",
+ * it is "it threw THE REFUSAL". If the guard were ever removed the call would
+ * reach `fetchHtml` and throw something else - or worse, succeed against the
+ * live site - and either way this fails.
+ *
+ * There is no Pingo Doce equivalent here, and the asymmetry is deliberate
+ * rather than an omission: its grid crawler was not guarded but removed, and
+ * that module now walks department listing pages instead. Nothing is left to
+ * refuse. The `no query string` check above is what stands in its place.
+ *
+ * Continente's is kept and guarded rather than removed because its violation
+ * was already KNOWN and written down - the route was retained on purpose as a
+ * fast option. What failed was not the knowledge but the default: `crawl:all`
+ * called it with no flag, so the deliberate choice was never actually made. A
+ * comment cannot enforce that. This can.
+ */
+async function verifyRobotsGuards(): Promise<number> {
+  const before = failures;
+  console.log("\n  robots.txt: the disallowed grid route");
+
+  let message = "(it did not throw)";
+  try {
+    await crawlContinente({ maxPages: 1 });
+  } catch (error) {
+    message = (error as Error).message;
+  }
+
+  check(
+    "the Continente grid crawler refuses instead of fetching",
+    /robots\.txt disallows \?cgid and &sz/.test(message),
+    message.split("\n")[0].slice(0, 66)
+  );
+  // The refusal names the exact URL it declined, so whoever hits it can see for
+  // themselves which rule it falls under.
+  check(
+    "and names the URL it declined",
+    message.includes("Search-UpdateGrid?cgid=") && message.includes("&sz=")
+  );
+
+  return failures - before;
 }
 
 /**

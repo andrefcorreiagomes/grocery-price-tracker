@@ -1,198 +1,143 @@
 import { prisma } from "../lib/db";
-import { crawlContinente } from "../scrapers/crawl/continente";
 import {
-  CONTINENTE_FOOD_CATEGORIES,
+  CONTINENTE_FOOD_SECTIONS,
   auditCategories,
+  auditCategorySlugs,
   discoverCategories,
   discoverCategorySlugs,
-  auditCategorySlugs,
+  fetchPublishedCounts,
   type CategoryAudit,
 } from "../scrapers/crawl/continente-categories";
-import { persistCatalogue } from "../scrapers/crawl/persist";
-import { coverageReport } from "../scrapers/crawl/report";
-import { formatHttpStats, httpStats } from "../scrapers/http";
-import {
-  compareWithBaseline,
-  compareWithPrevious,
-  previousRunFor,
-  recordRun,
-  rollingBaseline,
-} from "../scrapers/crawl/history";
-import { buildDailyReport, buildFailureReport, snapshotBefore } from "../scrapers/crawl/daily-report";
-import { renderReport, writeReport } from "../scrapers/crawl/render-report";
+import { formatHttpStats } from "../scrapers/http";
 
 /**
- * Crawl Continente's food catalogue into the CatalogueProduct table.
+ * Continente coverage check: does the shop think it sells more than we know
+ * about, and has a new food section appeared that nobody told us to crawl?
  *
- *   npm run crawl:continente                       # all food sections (~19k)
- *   npm run crawl:continente -- --category=laticinios
- *   npm run crawl:continente -- --brief              # report without the explanations
- *   npm run crawl:continente -- --category=laticinios --max-pages=3   # smoke test
+ *   npm run crawl:continente
  *
- * Listing data only - name, brand, price, store category, url. Barcode and size
- * are left null; they come later from product-page enrichment. Idempotent:
- * upserts by (store, storeProductId), so re-running refreshes prices rather than
- * duplicating.
+ * About a dozen requests. Every one of them is a route robots.txt invites - the
+ * section landing pages, the published category tree, the category sitemap.
+ *
+ * THIS IS NOT A CATALOGUE CRAWL, and this command used to be one. The old
+ * version walked listing grids whose URL Continente disallows on `?cgid` and
+ * `&sz`. That route was kept on purpose as a fast option, but being the thing
+ * `crawl:all` and this script both called by default is what made "choose
+ * deliberately" stop meaning anything.
+ *
+ * The catalogue now comes from one product page at a time:
+ *
+ *   npm run crawl:continente:nightly     orchestrated, with reports and history
+ *   npm run crawl:continente:products    the bare crawl
+ *
+ * What is left here is the part of the old script that was always compliant and
+ * is the most useful per request: the store's own numbers, and the audit that
+ * catches a section appearing that we would otherwise never ask for.
  */
-const priceLine = (p: { unchanged: number; changed: number; opened: number; skipped: number }) =>
-  `prices: ${p.changed} changed, ${p.unchanged} held, ${p.opened} new` +
-  (p.skipped ? `, ${p.skipped} without a price` : "");
+
+/** Top segment of a stored category path ("Frescos/Frutas" gives "Frescos"). */
+function topSection(path: string | null): string {
+  return (path ?? "").split("/")[0].trim();
+}
 
 async function main() {
-  const args = process.argv.slice(2);
-  const cgid = args.find((a) => a.startsWith("--category="))?.split("=")[1];
-  const maxPagesRaw = args.find((a) => a.startsWith("--max-pages="))?.split("=")[1];
-  const maxPages = maxPagesRaw ? Number(maxPagesRaw) : undefined;
+  console.log("Reading Continente's published counts and category tree...\n");
 
-  if (maxPagesRaw && (!Number.isInteger(maxPages) || (maxPages as number) < 1)) {
-    console.error(`--max-pages must be a positive integer, got "${maxPagesRaw}"`);
-    process.exit(1);
-  }
-
-  const categories = cgid
-    ? CONTINENTE_FOOD_CATEGORIES.filter((c) => c.cgid === cgid)
-    : undefined;
-  if (cgid && (!categories || categories.length === 0)) {
-    console.error(
-      `unknown category "${cgid}". known: ${CONTINENTE_FOOD_CATEGORIES.map((c) => c.cgid).join(", ")}`
-    );
-    process.exit(1);
-  }
-
-  console.log(
-    `Crawling Continente ${cgid ? `[${cgid}]` : "(all food sections)"}` +
-      `${maxPages ? ` max ${maxPages} pages/category` : ""}...`
-  );
-
-  // What does Continente actually publish today? A category that vanished or was
-  // renamed already fails loudly - its grid answers HTTP 500 and the crawl
-  // throws - but a NEW food department would otherwise be invisible, because we
-  // would simply never ask for it.
-  let audit: CategoryAudit | null = null;
+  // The store's own product count per section, off each landing page.
   let published = new Map<string, number>();
   try {
-    const discovered = await discoverCategories();
-    audit = auditCategories(discovered);
-    published = new Map(discovered.map((c) => [c.label, c.hitCount]));
+    published = await fetchPublishedCounts();
+  } catch (error) {
+    console.error(`could not read the section landing pages: ${(error as Error).message}`);
+  }
+
+  // A category that vanished or was renamed fails loudly elsewhere; this catches
+  // the opposite and quieter case - a food department appearing that nobody told
+  // us about, which we would simply never ask for.
+  let audit: CategoryAudit | null = null;
+  try {
+    audit = auditCategories(await discoverCategories());
   } catch (error) {
     console.error(`could not read the published category tree: ${(error as Error).message}`);
   }
 
-  // Second, independent source. Cheap (361 KB), invited by robots.txt, and it
-  // sees sub-categories the homepage nav does not.
-  let sitemapSlugs: string[] = [];
+  // Second, independent source. Cheap, invited by robots.txt, and it sees
+  // sub-categories the homepage nav does not.
   let sitemapUnknown: string[] = [];
   try {
-    sitemapSlugs = await discoverCategorySlugs();
-    sitemapUnknown = auditCategorySlugs(sitemapSlugs);
+    sitemapUnknown = auditCategorySlugs(await discoverCategorySlugs());
   } catch (error) {
     console.error(`could not read the category sitemap: ${(error as Error).message}`);
   }
 
-  // The previous run has to be read BEFORE this one is recorded, and the
-  // catalogue has to be read before the crawl saves over it: name, category,
-  // price and lastSeenAt are all overwritten in place, so this is the only
-  // moment their previous values still exist.
-  const previousRun = await previousRunFor("CONTINENTE");
-  const baseline = await rollingBaseline("CONTINENTE");
-  const before = await snapshotBefore("CONTINENTE");
-
-  let results;
-  let saved;
-  try {
-    results = await crawlContinente({ categories, maxPages });
-    saved = await persistCatalogue("CONTINENTE", results);
-  } catch (error) {
-    // The run that breaks is the one most worth a written record, and it used to
-    // be the only one that produced none.
-    const failure = buildFailureReport({
-      store: "CONTINENTE",
-      seenAt: new Date(),
-      error,
-      audit,
-      http: httpStats(),
-      baseline: { runs: baseline.runs, since: baseline.since },
-    });
-    const where = await writeReport(failure);
-    console.error(`\n${renderReport(failure)}`);
-    console.error(`\nreport written to ${where.text}`);
-    process.exitCode = 1;
-    return;
-  }
-  const { summaries, prices, seenAt } = saved;
-
-  // The store's own count is the yardstick: everything it lists should be either
-  // collected here or already collected by an earlier section.
-  const { lines, total, short } = coverageReport(results, summaries, 22, maxPages !== undefined);
-  for (const line of lines) console.log(line);
-  console.log(`\n${priceLine(prices)}`);
-
-  // A partial run is not comparable to a full one by construction, so it is
-  // neither recorded as history nor reported on - recording it would poison the
-  // next comparison.
-  const partial = maxPages !== undefined || cgid !== undefined;
-  const sections = results.map((r, i) => ({
-    cgid: r.category.cgid,
-    label: r.category.label,
-    collected: summaries[i]?.total ?? r.products.length,
-    expected: r.expected,
-  }));
-
-  if (partial) {
-    console.log("\nrequests:");
-    for (const line of formatHttpStats()) console.log(line);
-    console.log(`\nDone: ${total} products across ${summaries.length} section(s).`);
-    console.log("(partial run: no report written, no history recorded)");
-    return;
+  const stored = await prisma.catalogueProduct.findMany({
+    where: { store: "CONTINENTE", delistedAt: null },
+    select: { categoryPath: true },
+  });
+  const held = new Map<string, number>();
+  let outsideFood = 0;
+  for (const row of stored) {
+    const section = topSection(row.categoryPath);
+    if (!CONTINENTE_FOOD_SECTIONS.has(section)) {
+      outsideFood++;
+      continue;
+    }
+    held.set(section, (held.get(section) ?? 0) + 1);
   }
 
-  // Both comparisons: against the run before (catches a sudden break) and
-  // against the rolling median (catches a slow leak that never trips a
-  // day-over-day threshold).
-  const drift = [
-    ...(await compareWithPrevious("CONTINENTE", total, sections)),
-    ...compareWithBaseline(baseline, total, sections),
-  ];
-  const http = httpStats();
+  console.log("section".padEnd(24) + "store says".padStart(11) + "we hold".padStart(9) + "  gap");
+  let publishedTotal = 0;
+  let heldTotal = 0;
+  for (const section of CONTINENTE_FOOD_SECTIONS) {
+    const store = published.get(section) ?? null;
+    const ours = held.get(section) ?? 0;
+    publishedTotal += store ?? 0;
+    heldTotal += ours;
 
-  const report = await buildDailyReport({
-    store: "CONTINENTE",
-    seenAt,
-    before,
-    results,
-    audit: audit ?? { unknown: [], missing: [] },
-    publishedCounts: published,
-    prices,
-    http,
-    drift,
-    shortSections: short,
-    sitemapSlugs,
-    sitemapUnknown,
-    baseline: { runs: baseline.runs, since: baseline.since },
-    previousRun,
-  });
+    let note = "";
+    if (store === null) note = "  no count published";
+    else if (store - ours > 0) note = `  ${store - ours} not collected`;
+    else if (store - ours < 0) note = `  ${ours - store} held beyond the listing`;
 
-  // Explanations are on by default: whoever reads this has usually not thought
-  // about the crawler in weeks, and a bare number is one they learn to skip.
-  // --brief drops them once the checks are familiar.
-  const explain = !args.includes("--brief");
-  const written = await writeReport(report, { explain });
-  console.log(`\n${renderReport(report, { explain })}`);
-  console.log(`\nreport written to ${written.text} and ${written.json}`);
+    console.log(
+      section.padEnd(24) + String(store ?? "-").padStart(11) + String(ours).padStart(9) + note
+    );
+  }
+  console.log(
+    "\n" + "TOTAL".padEnd(24) + String(publishedTotal).padStart(11) + String(heldTotal).padStart(9)
+  );
 
-  await recordRun("CONTINENTE", total, sections, {
-    http: {
-      requests: http.reduce((n, h) => n + h.requests, 0),
-      bytes: http.reduce((n, h) => n + h.bytes, 0),
-      fetchMs: http.reduce((n, h) => n + h.fetchMs, 0),
-      retries: http.reduce((n, h) => n + h.retries, 0),
-    },
-    seenAt,
-  });
+  // Sections overlap - an organic rice sits in both Mercearia and Bio e Saudável
+  // - and each product is filed under whichever section listed it first. So the
+  // rows are not comparable one to one; only the total means anything.
+  console.log(
+    "\nSections overlap, and each product is filed under the FIRST that listed it," +
+      "\nso read the total rather than the rows."
+  );
+  if (outsideFood > 0) {
+    console.log(`\n${outsideFood} stored row(s) sit outside the food sections.`);
+  }
 
-  // The verdict is the machine-readable half: a scheduler should not have to
-  // read prose to find out that a crawl went wrong.
-  if (report.verdict === "FAIL") process.exitCode = 1;
+  if (audit) {
+    if (audit.unknown.length > 0) {
+      console.log(`\nWARNING: ${audit.unknown.length} published categor(ies) we do not crawl:`);
+      for (const c of audit.unknown.slice(0, 15)) console.log(`  ${c.cgid}  ${c.label}`);
+    }
+    if (audit.missing.length > 0) {
+      console.log(`\nWARNING: ${audit.missing.length} configured categor(ies) Continente no longer publishes:`);
+      for (const cgid of audit.missing) console.log(`  ${cgid}`);
+    }
+    if (audit.unknown.length === 0 && audit.missing.length === 0) {
+      console.log("\nCategory tree matches what we are configured to crawl.");
+    }
+  }
+  if (sitemapUnknown.length > 0) {
+    console.log(`\n${sitemapUnknown.length} category slug(s) in the sitemap that the nav does not show:`);
+    for (const slug of sitemapUnknown.slice(0, 15)) console.log(`  ${slug}`);
+  }
+
+  console.log("\nrequests:");
+  for (const line of formatHttpStats()) console.log(line);
 }
 
 main()
