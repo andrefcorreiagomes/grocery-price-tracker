@@ -22,6 +22,8 @@ async function main() {
 
   let succeeded = 0;
   let failed = 0;
+  // listed, but with no price to snapshot - see the skip below
+  let unpriced = 0;
   // promo counts per store - see the canary note where these are printed
   const promoSeen: Record<string, { promo: number; total: number }> = {};
 
@@ -35,6 +37,18 @@ async function main() {
         regularPrice: result.regularPrice,
         promoEndsAt: result.promoEndsAt,
       };
+
+      // A product page can load a real product that carries no sellable price -
+      // out of stock, or sold by variable weight. There is no honest snapshot to
+      // write for that day: a zero would be read as a price, and carrying
+      // yesterday's forward would invent an observation. Recording nothing
+      // leaves a gap in the series, which is exactly what happened.
+      if (result.price === null) {
+        console.log(`SKIP ${listing.store} ${listing.product.name} - listed without a price`);
+        unpriced++;
+        await sleep(1000);
+        continue;
+      }
 
       await prisma.priceSnapshot.upsert({
         where: { storeListingId_date: { storeListingId: listing.id, date } },
@@ -69,7 +83,10 @@ async function main() {
     await sleep(1000);
   }
 
-  console.log(`\nDone: ${succeeded} succeeded, ${failed} failed.`);
+  console.log(
+    `\nDone: ${succeeded} succeeded, ${failed} failed` +
+      (unpriced ? `, ${unpriced} listed without a price` : "") + "."
+  );
 
   // Canary. A missing promo marker is read as "not on promotion" rather than
   // throwing, so if a store changes its markup this would silently report no
@@ -80,7 +97,10 @@ async function main() {
   }
 
   if (failed > 0) {
-    appendLog(`Run summary: ${succeeded} succeeded, ${failed} failed.`);
+    appendLog(
+      `Run summary: ${succeeded} succeeded, ${failed} failed` +
+        (unpriced ? `, ${unpriced} listed without a price` : "") + "."
+    );
   }
 }
 

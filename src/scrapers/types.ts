@@ -1,7 +1,17 @@
 export interface ScrapeResult {
   name: string;
   brand: string | null;
-  price: number;
+  /**
+   * The listed price, or null when the page loads a real product that carries
+   * no sellable price - out of stock, or sold by variable weight.
+   *
+   * Nullable because a product PAGE can say this and a listing tile cannot: the
+   * grids simply omit such products, which is why no zero ever reached the
+   * database from the grid crawlers. Pingo Doce publishes "0,00 EUR" plus an
+   * "Indisponível" badge, and reading that as a price of zero would put a free
+   * product at the top of every cheapest-per-store ranking.
+   */
+  price: number | null;
   ean: string | null;
   /**
    * The store's own category path for this product, when the page carries it.

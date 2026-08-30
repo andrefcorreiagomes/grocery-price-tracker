@@ -1,7 +1,12 @@
 export interface SearchHit {
   id: string;
   name: string;
-  price: number;
+  /**
+   * Null only from the product-page crawlers, for a product listed without a
+   * sellable price. Listing tiles omit those products entirely, so a row built
+   * from a grid always has a number here.
+   */
+  price: number | null;
   brand: string;
   category: string;
   url: string;

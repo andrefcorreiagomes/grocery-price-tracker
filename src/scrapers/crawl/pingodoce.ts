@@ -1,96 +1,129 @@
-import { fetchHtml } from "../http";
+import { fetchHtml, HttpError } from "../http";
 import { parsePingoDoceTiles, parsePingoDoceTotal } from "../search/pingodoce";
 import type { SearchHit } from "../search/types";
-import { PINGO_DOCE_FOOD_CATEGORIES } from "./pingodoce-categories";
-import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
+import { PINGO_DOCE_FOOD_CATEGORIES, type PingoDoceDepartment } from "./pingodoce-categories";
 
 /**
- * Catalogue crawler for Pingo Doce. Walks a food category's grid page by page
- * and returns the deduplicated products. DB-free - the runner persists.
+ * Pingo Doce's department listing pages: the store's own product counts, and a
+ * small sample of each department, over a route robots.txt allows.
+ *
+ * WHAT THIS USED TO BE. Until it was checked, this file walked
+ * `/on/demandware.store/.../Search-Show?cgid=&start=&sz=` page by page and
+ * returned whole departments. Pingo Doce's robots.txt disallows the endpoint
+ * and all three parameters - four separate rules - so that route is gone.
+ *
+ * WHY IT IS STILL WORTH HAVING. A plain department page
+ * (`/home/produtos/mercearia`) is allowed, is advertised in the store's own
+ * sitemap, and publishes the department's TOTAL product count. That count is
+ * the only independent yardstick the project has for Pingo Doce: the sitemap
+ * says what URLs exist, the product pages say what each one holds, and neither
+ * can answer "does the shop think it sells more than we know about?".
+ *
+ * WHAT IT CANNOT DO, measured over all 276 food category pages rather than
+ * assumed:
+ *
+ *     231 of 276 pages rendered exactly 14 tiles
+ *     226 of 276 showed fewer products than their own published count
+ *     2,583 distinct products reachable, of 9,059 published - 28.4%
+ *     0 of them carrying a pack size
+ *
+ * Fourteen is a hard ceiling: the "load more" control posts to
+ * `Search-UpdateGrid`, under the disallowed `/on/demandware.store/`. So this is
+ * a coverage check and a cheap price sample, and it is NOT a catalogue crawl.
+ * The catalogue comes from `pingodoce-products.ts`, one product page at a time.
+ *
+ * The tile parsers below are unchanged and still correct - they were never the
+ * problem. Only the address they are pointed at has changed.
  */
 
-const SEARCH_URL =
-  "https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Search-Show";
-
-/**
- * Pingo Doce honours a large `sz`. Measured: 500 products arrive in one 5.4 MB
- * response in 1.8 s, against 1.2 s for 100 - so paging at 500 takes the whole
- * catalogue in ~15 requests instead of ~90 for almost no extra time. Not raised
- * to 1000, which returned a 10 MB response.
- */
-const PAGE_SIZE = 500;
-
-export interface CategoryCrawl {
-  products: SearchHit[];
-  /** the store's own product count for the category, when published */
-  expected: number | null;
+export interface DepartmentCount {
+  department: PingoDoceDepartment;
+  /**
+   * The store's own count for the department, or null when the page stopped
+   * publishing one - which is itself worth reporting, since it is this file's
+   * whole reason for existing.
+   */
+  published: number | null;
+  /**
+   * The tiles the page rendered. At most ~14, and always the same ones, so this
+   * is a SAMPLE and must never be mistaken for the department. Named `sample`
+   * rather than `products` so no caller can read it as a crawl result by
+   * accident.
+   */
+  sample: SearchHit[];
+  /** set when the page could not be read at all */
+  error?: string;
 }
 
-export async function crawlPingoDoceCategory(
-  category: CrawlCategory,
-  opts: { maxPages?: number; onProgress?: (p: CrawlProgress) => void } = {}
-): Promise<CategoryCrawl> {
-  const byId = new Map<string, SearchHit>();
-  let expected: number | null = null;
+/**
+ * Read each food department's listing page. One request per department -
+ * nineteen in total, about twenty seconds.
+ *
+ * A department that fails is recorded and the walk continues: a missing count
+ * degrades one row of a report, and abandoning the run would lose the other
+ * eighteen.
+ */
+export async function readPingoDoceDepartments(
+  opts: { departments?: PingoDoceDepartment[] } = {}
+): Promise<DepartmentCount[]> {
+  const departments = opts.departments ?? PINGO_DOCE_FOOD_CATEGORIES;
+  const results: DepartmentCount[] = [];
 
-  for (let page = 0; opts.maxPages === undefined || page < opts.maxPages; page++) {
-    const start = page * PAGE_SIZE;
-    const html = await fetchHtml(
-      `${SEARCH_URL}?cgid=${encodeURIComponent(category.cgid)}&start=${start}&sz=${PAGE_SIZE}`
-    );
-    const hits = parsePingoDoceTiles(html);
-    if (page === 0) expected = parsePingoDoceTotal(html);
-    if (hits.length === 0) break; // ran off the end of the category
-
-    let fresh = 0;
-    for (const hit of hits) {
-      if (!byId.has(hit.id)) {
-        byId.set(hit.id, hit);
-        fresh++;
-      }
-    }
-    opts.onProgress?.({ category, page: page + 1, collected: byId.size });
-
-    if (fresh === 0) break; // every id already seen: pagination has wrapped
-
-    if (expected !== null) {
-      // Drive pagination from the store's own count. A full page of 100 tiles
-      // does not always parse to 100 products, so treating a short page as the
-      // last one ends the crawl early - that bug cost more than half the
-      // catalogue on the first run.
-      if (start + PAGE_SIZE >= expected) break;
-    } else if (hits.length < PAGE_SIZE) {
-      break; // no published count to steer by: fall back to the short page
+  for (const department of departments) {
+    try {
+      const html = await fetchHtml(department.url);
+      results.push({
+        department,
+        published: parsePingoDoceTotal(html),
+        sample: parsePingoDoceTiles(html),
+      });
+    } catch (error) {
+      const err = error as Error;
+      results.push({
+        department,
+        published: null,
+        sample: [],
+        error: err instanceof HttpError ? `HTTP ${err.status}` : err.message.slice(0, 80),
+      });
     }
   }
 
-  return { products: [...byId.values()], expected };
-}
-
-/** Crawl several categories in sequence (defaults to all Pingo Doce food). */
-export async function crawlPingoDoce(
-  opts: { categories?: CrawlCategory[]; maxPages?: number; onProgress?: (p: CrawlProgress) => void } = {}
-): Promise<CategoryResult[]> {
-  const categories = opts.categories ?? PINGO_DOCE_FOOD_CATEGORIES;
-  // Dedup across the whole run: a product listed in two departments is kept
-  // once, attributed to the first that lists it. See crawlContinente.
-  const seen = new Set<string>();
-  const results: CategoryResult[] = [];
-  for (const category of categories) {
-    const { products, expected } = await crawlPingoDoceCategory(category, {
-      maxPages: opts.maxPages,
-      onProgress: opts.onProgress,
-    });
-    let duplicates = 0;
-    const fresh = products.filter((p) => {
-      if (seen.has(p.id)) {
-        duplicates++;
-        return false;
-      }
-      seen.add(p.id);
-      return true;
-    });
-    results.push({ category, products: fresh, expected: expected ?? undefined, duplicates });
-  }
   return results;
+}
+
+export interface CoverageRow {
+  label: string;
+  /** what the store says the department holds */
+  published: number | null;
+  /** what we hold for it */
+  held: number;
+  /** published minus held, or null when the store published no count */
+  gap: number | null;
+  error?: string;
+}
+
+/**
+ * Compare each department's published count against what the catalogue holds.
+ *
+ * `held` is counted by the caller from the database, because this module stays
+ * DB-free like every other crawler here.
+ *
+ * A NEGATIVE gap is not an error and must not be reported as one: we hold
+ * products the department no longer lists, which is what delisted-but-not-yet-
+ * confirmed rows look like, and they are kept on purpose.
+ */
+export function coverageRows(
+  counts: DepartmentCount[],
+  heldBySlug: Map<string, number>
+): CoverageRow[] {
+  return counts.map((c) => {
+    const held = heldBySlug.get(c.department.slug) ?? 0;
+    return {
+      label: c.department.label,
+      published: c.published,
+      held,
+      gap: c.published === null ? null : c.published - held,
+      error: c.error,
+    };
+  });
 }

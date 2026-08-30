@@ -1,7 +1,6 @@
 import { prisma } from "../lib/db";
 import { crawlAuchan, DEFAULT_AUCHAN_MODE, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
 import { crawlContinente } from "../scrapers/crawl/continente";
-import { crawlPingoDoce } from "../scrapers/crawl/pingodoce";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
 import { persistCatalogue } from "../scrapers/crawl/persist";
 import { coverageReport, isMeaningfulShortfall } from "../scrapers/crawl/report";
@@ -57,17 +56,27 @@ async function runContinente(maxPages: number | undefined, startedAt: number) {
   };
 }
 
-async function runPingoDoce(maxPages: number | undefined, startedAt: number) {
-  const results = await crawlPingoDoce({ maxPages });
-  const { summaries, prices } = await queueWrite(() => persistCatalogue("PINGO_DOCE", results));
-  console.log(`[${minutesSince(startedAt)}] Pingo Doce finished`);
-
-  const { lines, total, short } = coverageReport(results, summaries, 30, maxPages !== undefined);
+/**
+ * Pingo Doce is no longer crawled here.
+ *
+ * Its grid crawler broke robots.txt on four separate rules and no longer
+ * exists. The compliant route reads one product page at a time and takes about
+ * two and a half hours, which does not belong inside a "crawl everything" run
+ * that otherwise finishes in minutes.
+ *
+ * Reported as a skip rather than silently dropped, so a run of this script
+ * cannot be mistaken for a three-store crawl.
+ */
+function skipPingoDoce() {
   return {
-    title: `PINGO DOCE - ${total} products across ${summaries.length} department(s), ${prices.changed} price change(s)`,
-    lines,
-    short,
-    total,
+    title: "PINGO DOCE - skipped",
+    lines: [
+      "  The listing grids are disallowed by robots.txt, so there is no fast route.",
+      "    npm run crawl:pingodoce:products   the catalogue, one product page at a time, ~2.5 h",
+      "    npm run crawl:pingodoce            coverage check against the store's own counts, ~20 s",
+    ],
+    short: [] as string[],
+    total: 0,
   };
 }
 
@@ -159,7 +168,7 @@ async function main() {
   const stores = ["Continente", "Pingo Doce", "Auchan"];
   const settled = await Promise.allSettled([
     runContinente(maxPages, startedAt),
-    runPingoDoce(maxPages, startedAt),
+    Promise.resolve(skipPingoDoce()),
     runAuchan(mode, maxPages, startedAt),
   ]);
 

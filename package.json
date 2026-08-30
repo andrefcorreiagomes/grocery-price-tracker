@@ -17,6 +17,7 @@
     "crawl:continente": "tsx src/scripts/crawl-continente.ts",
     "crawl:continente:products": "tsx src/scripts/crawl-continente-products.ts",
     "crawl:pingodoce": "tsx src/scripts/crawl-pingodoce.ts",
+    "crawl:pingodoce:products": "tsx src/scripts/crawl-pingodoce-products.ts",
     "crawl:auchan": "tsx src/scripts/crawl-auchan.ts",
     "crawl:continente:nightly": "tsx src/scripts/crawl-continente-nightly.ts",
     "crawl:auchan:nightly": "tsx src/scripts/crawl-auchan-nightly.ts",

@@ -25,13 +25,24 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
 
   const $ = cheerio.load(html);
   const priceText = $(".prices .price").first().text().trim();
-  const price = parsePortuguesePrice(priceText);
+  const parsed = parsePortuguesePrice(priceText);
 
-  if (price === null) {
+  if (parsed === null) {
     throw new Error(
       `Pingo Doce: could not find/parse price ("${priceText}") at ${url}`
     );
   }
+
+  // "0,00 €" is how Pingo Doce says a product is not sellable, not a price. The
+  // page is otherwise complete - name, brand, pack size all present - and it
+  // renders an "Indisponível" badge alongside. Measured across the sitemap, the
+  // whole of the promotions, own-brand and seasonal aisles read this way, as do
+  // individual out-of-stock products in ordinary departments.
+  //
+  // A zero must never survive as a price: it is the minimum of every set it
+  // joins, so one of these in the catalogue makes the cheapest product of its
+  // food type free, in every store comparison, forever.
+  const price = parsed === 0 ? null : parsed;
 
   const size = parsePackageSize($("h1.product-unit-measure").first().text());
   // The barcode rides on a nutritional-info URL in the page, and that URL is
@@ -45,7 +56,11 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
     brand: normalizePingoDoceBrand(product.brand?.name),
     price,
     ean: eanMatch ? eanMatch[1] : null,
-    // only Continente has a product-page crawl so far; see continente.ts
+    // Deliberately null, and NOT read from the page. Pingo Doce's breadcrumb
+    // renders the leaf alone - ["Produtos /", "Vinho Tinto", "Vinho Tinto"] -
+    // with no department above it. The URL carries the full hierarchy, so the
+    // catalogue crawler builds the path from there instead; see
+    // `categoryPathFromUrl` in crawl/pingodoce-sitemap.ts.
     categoryPath: null,
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,

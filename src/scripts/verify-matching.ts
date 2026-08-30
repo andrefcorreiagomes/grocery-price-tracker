@@ -2,6 +2,14 @@ import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
 import { parseSize } from "../lib/matching";
+import {
+  categoryPathFromUrl,
+  labelFromSlug,
+  productIdFromUrl,
+  PINGO_DOCE_SECTIONS,
+} from "../scrapers/crawl/pingodoce-sitemap";
+import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
+import { coverageRows } from "../scrapers/crawl/pingodoce";
 
 /**
  * The matching layer: clustering guards (pure), and the decision/retirement
@@ -185,9 +193,110 @@ export async function verifyMatching(): Promise<number> {
   check("and the dead member is not in it", !shrunk[0].productIds.includes("c"));
 
   failures += verifyFoodTypes();
+  failures += verifyPingoDoceSitemap();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * Pingo Doce sitemap discovery: the URL is the only place its department is
+ * written down, so everything downstream of a bad parse here is wrong quietly.
+ * Pure - no network - because these are string rules.
+ */
+function verifyPingoDoceSitemap(): number {
+  const before = failures;
+  console.log("\n  pingo doce: sitemap discovery");
+
+  const veg =
+    "https://www.pingodoce.pt/home/produtos/frutas-e-vegetais/vegetais/outros-vegetais/alho-frances-cortado-embalado-pingo-doce-893466.html";
+  const wine =
+    "https://www.pingodoce.pt/home/produtos/vinhos/vinho-tinto/vinho-tinto-alentejo-borba-sovibor-borba-sovibor-859.html";
+
+  check("the id is the URL's last segment", productIdFromUrl(veg) === "893466");
+  check("a short slug parses too", productIdFromUrl(wine) === "859");
+  check(
+    "a category listing page has no product id",
+    productIdFromUrl("https://www.pingodoce.pt/home/produtos/limpeza/roupa/detergentes") === null
+  );
+
+  check(
+    "the URL gives the full department path the breadcrumb never does",
+    categoryPathFromUrl(veg) === "Frutas e Vegetais/Vegetais/Outros Vegetais"
+  );
+  check(
+    "a bare shelf name gains its department",
+    categoryPathFromUrl(wine) === "Vinhos/Vinho Tinto"
+  );
+
+  // The exact-text match in isFoodSection is why the top-level labels are
+  // hand-written with their accents rather than title-cased from the slug.
+  check(
+    "food departments survive the food-section filter",
+    isFoodSection("PINGO_DOCE", categoryPathFromUrl(veg)) &&
+      isFoodSection("PINGO_DOCE", categoryPathFromUrl(wine))
+  );
+  check(
+    "an accented non-food department is still excluded",
+    !isFoodSection(
+      "PINGO_DOCE",
+      categoryPathFromUrl(
+        "https://www.pingodoce.pt/home/produtos/casa-e-eletrodomesticos/cozinha/tachos/tacho-inox-24cm-1234.html"
+      )
+    ),
+    "Casa e Eletrodomésticos, not \"Casa E Eletrodomesticos\""
+  );
+
+  check(
+    "sub-category slugs keep Portuguese connectives lowercase",
+    labelFromSlug("tomates-pepinos-e-pimentos") === "Tomates Pepinos e Pimentos" &&
+      labelFromSlug("bolsas-de-fruta") === "Bolsas de Fruta"
+  );
+
+  // The department list is DERIVED from the sections table, so the two can
+  // never disagree. What is worth checking is that the derivation still selects
+  // food only, and still builds an address robots.txt permits.
+  check(
+    "the food departments are exactly the food-kind sections",
+    PINGO_DOCE_FOOD_CATEGORIES.length ===
+      Object.values(PINGO_DOCE_SECTIONS).filter((s) => s.kind === "food").length &&
+      PINGO_DOCE_FOOD_CATEGORIES.every((d) => PINGO_DOCE_SECTIONS[d.slug]?.kind === "food"),
+    `${PINGO_DOCE_FOOD_CATEGORIES.length} departments`
+  );
+
+  // The whole point of the rewrite. A query string on any of these would put the
+  // request straight back under the rules that disallowed the old crawler.
+  check(
+    "every department page is a plain path with no query string",
+    PINGO_DOCE_FOOD_CATEGORIES.every(
+      (d) =>
+        d.url.startsWith("https://www.pingodoce.pt/home/produtos/") &&
+        !d.url.includes("?") &&
+        !d.url.includes("/on/demandware.store/")
+    ),
+    "no ?cgid=, ?start= or ?sz=, and not the disallowed endpoint"
+  );
+
+  check(
+    "a department page's tile sample is never mistaken for its full contents",
+    // 14 is the hard ceiling measured across all 276 food category pages; the
+    // "load more" beyond it posts to a disallowed endpoint.
+    coverageRows(
+      [
+        {
+          department: PINGO_DOCE_FOOD_CATEGORIES[0],
+          published: 1410,
+          sample: new Array(14).fill(null).map((_, i) => ({
+            id: `s${i}`, name: "", price: 1, brand: "", category: "", url: "",
+          })),
+        },
+      ],
+      new Map([[PINGO_DOCE_FOOD_CATEGORIES[0].slug, 1368]])
+    )[0].gap === 42,
+    "the gap is published minus HELD, not published minus the 14 tiles shown"
+  );
+
+  return failures - before;
 }
 
 /**
