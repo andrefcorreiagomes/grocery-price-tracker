@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
-import { finiteOrNull, type ScrapeResult } from "./types";
+import { detached, finiteOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -38,7 +38,9 @@ export async function scrapeContinente(url: string): Promise<ScrapeResult> {
     // it's sold under their own fresh-food program, not literally unbranded
     brand: product.brand?.name || "Continente",
     price,
-    ean: eanMatch ? eanMatch[1] : null,
+    // detached: a capture from `html` would otherwise keep the whole 2 MB page
+    // alive for as long as this row exists. See `detached` in types.ts.
+    ean: eanMatch ? detached(eanMatch[1]) : null,
     categoryPath: parseCategoryPath(html),
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
@@ -89,7 +91,9 @@ function parseCategoryPath(html: string): string | null {
     const match = source.match(new RegExp(`"${key}"\s*:\s*"([^"]*)"`));
     if (match?.[1]) parts.push(decodeEntities(match[1]));
   }
-  return parts.length > 0 ? parts.join("/") : null;
+  // detached for the same reason as `ean`, and it matters more here: this one
+  // is cut from `source`, a SECOND full-size copy of the page.
+  return parts.length > 0 ? detached(parts.join("/")) : null;
 }
 
 /** The dataLayer double-escapes accents (`Ma&ccedil;&atilde;`). */

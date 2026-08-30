@@ -23,7 +23,7 @@
     "crawl:auchan:nightly": "tsx src/scripts/crawl-auchan-nightly.ts",
     "classify:food": "tsx src/scripts/classify-food-types.ts",
     "backfill:sizes": "tsx src/scripts/backfill-sizes.ts",
-    "verify:nightly": "tsx src/scripts/verify-nightly.ts"
+    "verify:nightly": "tsx --expose-gc src/scripts/verify-nightly.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",

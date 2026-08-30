@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
-import type { ScrapeResult } from "./types";
+import { detached, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -55,7 +55,9 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
     name: product.name ?? "",
     brand: normalizePingoDoceBrand(product.brand?.name),
     price,
-    ean: eanMatch ? eanMatch[1] : null,
+    // detached: see `detached` in types.ts - a capture from `html` keeps the
+    // whole page alive, which is what killed the first full Continente pass.
+    ean: eanMatch ? detached(eanMatch[1]) : null,
     // Deliberately null, and NOT read from the page. Pingo Doce's breadcrumb
     // renders the leaf alone - ["Produtos /", "Vinho Tinto", "Vinho Tinto"] -
     // with no department above it. The URL carries the full hierarchy, so the

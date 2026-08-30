@@ -59,3 +59,35 @@ export function validDateOrNull(raw: string | undefined | null): Date | null {
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
+
+/**
+ * A copy of `value` that does not retain the string it was cut from.
+ *
+ * V8 does not copy when you take a substring. `html.match(...)[1]` returns a
+ * SlicedString - a pointer into the original - so a 26-character category path
+ * keeps its whole 2 MB page alive for as long as the field exists. That is
+ * invisible until something holds many of them at once.
+ *
+ * It killed the first full Continente pass. Measured on 300 simulated 2 MB
+ * pages, keeping one short field from each:
+ *
+ *     match() capture, as written    1953.1 KB retained per page
+ *     the same, detached                 0.1 KB retained per page
+ *
+ * The crawl held 2,200 results before running out of heap at 4 GB, which is
+ * 2,200 x 1.9 MB almost exactly. A 300-product slice never showed it: 300 pages
+ * is ~570 MB, comfortably under the limit, so the bug needed a long run to
+ * appear at all.
+ *
+ * Buffer round-trips rather than any string operation, because concatenation
+ * and `.slice()` can both hand back another view instead of a fresh allocation.
+ * Only apply it to short fields kept out of a big string - it copies, so it is
+ * not free, and it is pointless on a string that was never a substring (a
+ * JSON.parse result is already its own allocation).
+ */
+export function detached(value: string): string;
+export function detached(value: null | undefined): null;
+export function detached(value: string | null | undefined): string | null;
+export function detached(value: string | null | undefined): string | null {
+  return value == null ? null : Buffer.from(value, "utf8").toString("utf8");
+}

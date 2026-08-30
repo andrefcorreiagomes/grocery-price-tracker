@@ -12,6 +12,7 @@ import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categori
 import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
+import { detached } from "../scrapers/types";
 
 /**
  * The matching layer: clustering guards (pure), and the decision/retirement
@@ -198,9 +199,78 @@ export async function verifyMatching(): Promise<number> {
   failures += verifyPingoDoceSitemap();
   failures += await verifyRobotsGuards();
   failures += await verifyRotationWarnings();
+  failures += verifyNoPageRetention();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * The bug that killed the first full Continente pass: a short field cut out of
+ * a big page keeps the whole page alive, because V8 substrings are views rather
+ * than copies. The crawl held 2,200 results and died at 4 GB.
+ *
+ * Measured rather than asserted, and measured on the SAME scale that matters -
+ * many pages held at once - because one retained page is invisible and two
+ * thousand are fatal. No network and no database: a simulated page is a string,
+ * which is all the bug was ever about.
+ *
+ * A slice-shaped test would not have caught this. 300 pages is about 570 MB,
+ * comfortably inside the heap, which is exactly why a 300-product live slice
+ * ran clean an hour before the full pass fell over.
+ */
+function verifyNoPageRetention(): number {
+  const before = failures;
+  console.log("\n  page retention (the OOM that killed the first full pass)");
+
+  const PAGES = 200;
+  const PAGE_BYTES = 1_000_000;
+  // Present only under `--expose-gc`. With it the numbers are exact; without
+  // it, the pages just dropped are still counted as live, so the two figures
+  // are compared against EACH OTHER rather than against an absolute - see the
+  // threshold below.
+  const gc = (globalThis as { gc?: () => void }).gc;
+
+  const heldPerPage = (extract: (html: string) => string): number => {
+    gc?.();
+    const kept: string[] = [];
+    const heapBefore = process.memoryUsage().heapUsed;
+    for (let i = 0; i < PAGES; i++) {
+      kept.push(extract(`x${i}`.padEnd(PAGE_BYTES, "abcdefgh") + `"cat":"Mercearia/Atum ${i}"`));
+    }
+    gc?.();
+    const held = (process.memoryUsage().heapUsed - heapBefore) / PAGES;
+    // `kept` must stay reachable across the measurement, or the very thing
+    // under test is collected before it can be measured
+    if (kept.length !== PAGES) throw new Error("unreachable");
+    return held;
+  };
+
+  const naive = heldPerPage((html) => html.match(/"cat":"([^"]*)"/)![1]);
+  const fixed = heldPerPage((html) => detached(html.match(/"cat":"([^"]*)"/)![1]));
+
+  check(
+    "a bare regex capture does retain its whole page",
+    naive > PAGE_BYTES / 2,
+    `${(naive / 1024).toFixed(0)} KB per page - the bug is real, not theoretical`
+  );
+  // Relative, not absolute, so this is honest whether or not --expose-gc is on.
+  // Under gc the fixed figure is ~0 against a full page; without it, uncollected
+  // garbage inflates both and the ratio still separates them cleanly. What must
+  // never happen is the two being ALIKE, which is what dropping `detached`
+  // would produce.
+  check(
+    "detached() keeps the field without the page",
+    fixed < naive / 3,
+    `${(fixed / 1024).toFixed(1)} KB against ${(naive / 1024).toFixed(0)} KB` +
+      (gc ? "" : "   (no --expose-gc: both figures include uncollected garbage)")
+  );
+  check(
+    "and it is still the same text",
+    detached("Mercearia/Atum 7") === "Mercearia/Atum 7" && detached(null) === null
+  );
+
+  return failures - before;
 }
 
 /**
