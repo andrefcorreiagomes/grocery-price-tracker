@@ -14,6 +14,13 @@ import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { sectionWarnings } from "../scrapers/crawl/history";
 import { detached } from "../scrapers/types";
+import {
+  cheapestPerStore,
+  cheapestStore,
+  comparableStoreCount,
+  ownBrandPerStore,
+  type ComparableProduct,
+} from "../lib/comparison";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -205,10 +212,124 @@ export async function verifyMatching(): Promise<number> {
   failures += await verifyRotationWarnings();
   failures += verifyNoPageRetention();
   failures += await verifySitemapLastmod();
+  failures += verifyComparison();
   failures += verifySectionComparison();
 
   await cleanup();
   return failures;
+}
+
+/**
+ * The comparison rules: what each store has to say about one kind of food.
+ *
+ * The cases that matter are the two that look like a blank cell. "Continente
+ * does not sell this" and "Continente sells it but we cannot price it per kilo"
+ * are different facts, and both are common - Continente publishes a size for
+ * 57% of its products, and a fifth of Pingo Doce's pages carry no sellable
+ * price. Rendering them alike would be the page's most frequent lie, so it is
+ * the thing most worth pinning down here.
+ */
+function verifyComparison(): number {
+  const before = failures;
+  console.log("\n  the comparison rules");
+
+  const p = (
+    store: string,
+    name: string,
+    price: number | null,
+    size: number | null,
+    unit: string | null = "kg",
+    brand: string | null = "Marca X"
+  ): ComparableProduct => ({ storeProductId: `${store}-${name}`, store, name, brand, price, packageSize: size, unit });
+
+  // Continente has two, Auchan one dearer, Pingo Doce stocks it but with no size.
+  const rows = [
+    p("CONTINENTE", "Batata Vermelha", 2.25, 3),        // 0.75/kg
+    p("CONTINENTE", "Batata Grande", 4.00, 2),          // 2.00/kg
+    p("AUCHAN", "BATATA VERMELHA 3 KG", 2.37, 3),       // 0.79/kg
+    p("PINGO_DOCE", "Batata a Granel", 1.29, null),     // stocked, unpriceable
+  ];
+  const cheapest = cheapestPerStore(rows, "batata");
+
+  const cell = (s: string) => cheapest.get(s)!;
+  check(
+    "the cheapest is the minimum, not the first row",
+    cell("CONTINENTE").kind === "price" &&
+      Math.abs((cell("CONTINENTE") as { unitPrice: number }).unitPrice - 0.75) < 1e-9,
+    "0.75/kg, not the 2.00/kg listed first"
+  );
+  check("a store with no products reads not-stocked", cheapestPerStore(rows.filter((r) => r.store !== "AUCHAN"), "batata").get("AUCHAN")!.kind === "not-stocked");
+  check(
+    "a store with products but no size reads no-size",
+    cell("PINGO_DOCE").kind === "no-size",
+    "it sells potatoes; we just cannot price them per kilo"
+  );
+  check(
+    "and no-size still names something the store sells",
+    cell("PINGO_DOCE").kind === "no-size" &&
+      (cell("PINGO_DOCE") as { example: ComparableProduct }).example.name === "Batata a Granel"
+  );
+  check(
+    "the two blank states are different values, not both empty",
+    cell("PINGO_DOCE").kind !== cheapestPerStore([], "batata").get("PINGO_DOCE")!.kind,
+    "this is the distinction the page must render differently"
+  );
+
+  // Unit safety. `azeite` is measured in litres, so a row recorded in kg is
+  // excluded rather than silently compared against litres.
+  const azeite = cheapestPerStore(
+    [p("CONTINENTE", "Azeite", 4.39, 0.75, "l"), p("AUCHAN", "AZEITE", 3.0, 1, "kg")],
+    "azeite"
+  );
+  check("litres and kilos are never compared", azeite.get("AUCHAN")!.kind === "no-size");
+  check("and the correctly-measured one still prices", azeite.get("CONTINENTE")!.kind === "price");
+
+  // A zero or negative size must not divide.
+  check(
+    "a zero size is not a free product",
+    cheapestPerStore([p("AUCHAN", "X", 1, 0)], "batata").get("AUCHAN")!.kind === "no-size"
+  );
+  check(
+    "and neither is a missing price",
+    cheapestPerStore([p("AUCHAN", "X", null, 1)], "batata").get("AUCHAN")!.kind === "no-size"
+  );
+
+  // Own-brand asks a different question and may name a different winner.
+  const own = ownBrandPerStore(
+    [
+      p("CONTINENTE", "Batata Continente", 3.0, 3, "kg", "Continente"),   // 1.00/kg
+      p("CONTINENTE", "Batata Marca", 2.25, 3, "kg", "Marca X"),          // 0.75/kg, not own
+      p("AUCHAN", "BATATA AUCHAN", 2.7, 3, "kg", "Auchan"),               // 0.90/kg
+    ],
+    "batata"
+  );
+  check(
+    "own-brand ignores the cheaper third-party product",
+    own.get("CONTINENTE")!.kind === "price" &&
+      Math.abs((own.get("CONTINENTE") as { unitPrice: number }).unitPrice - 1.0) < 1e-9
+  );
+  check(
+    "and can crown a different store than cheapest-overall did",
+    cheapestStore(own) === "AUCHAN"
+  );
+  check(
+    "a store with no own-brand product reads not-stocked for THIS question",
+    own.get("PINGO_DOCE")!.kind === "not-stocked",
+    "true of the own-brand comparison, whatever else it sells"
+  );
+
+  check(
+    "the store count counts PRICED stores, not stocking ones",
+    comparableStoreCount(cheapest) === 2,
+    "three stores stock potatoes; only two can be priced per kilo"
+  );
+  check(
+    "one priced store has no cheapest",
+    cheapestStore(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")) === null,
+    "naming it cheapest would imply it beat something"
+  );
+
+  return failures - before;
 }
 
 /**
