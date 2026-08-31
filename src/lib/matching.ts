@@ -70,16 +70,43 @@ export interface ParsedSize {
  * match. Grams fold to kg and ml/cl to L so cross-store comparison is unit-safe.
  */
 export function parseSize(name: string): ParsedSize | null {
-  const m = stripAccents(name)
-    .toLowerCase()
-    .match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
+  const flat = stripAccents(name).toLowerCase();
+
+  // A RANGE is not a size. Auchan grades fish by weight and writes the grade
+  // where a size would go, in grams but labelled kg:
+  //
+  //   TRUTA SALMONADA 800/1600 KG        a trout graded 800-1600 GRAMS
+  //   DOURADA FRESCA INTEIRA 400/600 KG
+  //
+  // Taking the number nearest the unit read that as 1,600 kg. We genuinely do
+  // not know what one of these weighs, so the honest answer is "unknown" -
+  // and an unknown size is already handled everywhere, whereas a wrong one
+  // sorts to the top of every cheapest-per-kilo ranking.
+  if (/\d+\s*\/\s*\d+\s*(?:kg|gr?s?|g|lt?|ml|cl)\b/.test(flat)) return null;
+
+  const m = flat.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
   if (!m) return null;
 
   const packCount = m[1] ? Number(m[1]) : 1;
-  const each = Number(m[2].replace(",", "."));
+  let each = Number(m[2].replace(",", "."));
   if (!Number.isFinite(each) || !Number.isFinite(packCount) || each <= 0) return null;
 
   const raw = m[3];
+
+  // Auchan writes volumes as CENTILITRES with the decimal point dropped, and
+  // labels them L. Read literally these were 100x too large:
+  //
+  //   033L -> 0.33    050L -> 0.50    075L -> 0.75
+  //   100L -> 1.00    150L -> 1.50
+  //
+  // Applied only to LITRES and only to exactly three digits with no separator.
+  // No grocery item is sold in 100-999 litres, so nothing real is caught.
+  // Grams are left alone: 500 g is both plausible and common.
+  const isLitres = raw === "l" || raw === "lt";
+  if (isLitres && /^\d{3}$/.test(m[2])) {
+    each = each / 100;
+  }
+
   let unit: SizeUnit;
   let eachBase: number;
   if (raw === "kg") {
@@ -98,6 +125,43 @@ export function parseSize(name: string): ParsedSize | null {
     unit = "l"; // l, lt
     eachBase = each;
   }
+
+  // A single container of ten litres or more is not a grocery product, so a
+  // value this large means the name was misread and we do not know the size.
+  //
+  // It is the TWO-digit form of the notation above, and unlike the three-digit
+  // form it cannot be decoded, because the two readings contradict each other
+  // on real products:
+  //
+  //   6X33L   is 0.33 L cans        -> the digits are centilitres
+  //   4X15L   is 1.5 L bottles      -> the decimal goes after the first digit
+  //
+  // Both are Auchan water and soft drinks; nothing in the string separates
+  // them. Guessing would be right about half the time and silently wrong the
+  // rest, and a size that is too large lands at the top of every
+  // cheapest-per-kilo ranking. Unknown is already handled everywhere, so it is
+  // the answer that cannot mislead.
+  // Ten litres, or thirty kilos, in ONE container is not a grocery product, so
+  // a value this large means the name was misread and the size is unknown.
+  //
+  // For volumes it is the TWO-digit form of the notation above, which unlike
+  // the three-digit form cannot be decoded, because the two readings
+  // contradict each other on real products:
+  //
+  //   6X33L   is 0.33 L cans       -> the digits are centilitres
+  //   4X15L   is 1.5 L bottles     -> the decimal goes after the first digit
+  //
+  // Both are Auchan water and soft drinks and nothing in the string separates
+  // them. Guessing would be right about half the time and silently wrong the
+  // rest. For weights it catches a calibre written where a size goes, as in
+  // `CHOURICAO PROBAR T/80 KG`, an 80 kg sausage.
+  //
+  // The thresholds are set above the largest real thing each unit sells: a 10 L
+  // water garrafao and a 25 kg sack both survive. Unknown is already handled
+  // everywhere, and a size that is too large lands at the top of every
+  // cheapest-per-kilo ranking, so it is the answer that cannot mislead.
+  if (unit === "l" && eachBase > 10) return null;
+  if (unit === "kg" && eachBase > 30) return null;
 
   return { total: packCount * eachBase, unit, packCount };
 }

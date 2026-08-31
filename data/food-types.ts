@@ -233,8 +233,23 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // oat drink under `leite` (its shelf is "Leite e Bebidas Vegetais") and a rice
   // drink under `arroz`. A plant drink is not milk and not rice, and mixing them
   // into either would make "cheapest leite" compare different things.
+  // The rule used to require the word "de" (`bebida de aveia`), which is how
+  // Continente and Pingo Doce write it. Auchan usually drops it, and those
+  // names then fell through to whatever shelf they sat on - measured:
+  //
+  //   BEBIDA ARROZ UHT AUCHAN ...      became `arroz`    (a rice DRINK as rice)
+  //   BEBIDA AMENDOAS AUCHAN ...       became `amendoa`  (a drink as nuts)
+  //   BEBIDA SOJA AUCHAN ...           became nothing at all
+  //   BEBIDA ALPRO SOJA NATURAL 1 LT   became nothing at all
+  //
+  // So the plant word alone is enough, with or without "de". Alpro is listed by
+  // name because every product it makes is a plant drink, which catches the
+  // ones naming no plant at all ("BEBIDA ALPRO BARISTA", "NOT MILK").
+  //
+  // Tested against the ACCENT-STRIPPED name, so `amendoa` here covers `amêndoa`
+  // in the product; the old rule's separate accented alternatives were dead.
   { id: "bebida-vegetal", label: "Bebida vegetal", unit: "l", heads: ["bebida"],
-    require: /vegetal|de aveia|de soja|de arroz|de amendoa|de amêndoa|de caju|de coco/i },
+    require: /vegetal|alpro|oatly|\b(aveia|soja|arroz|amendoas?|caju|coco|avela|espelta)\b/i },
   { id: "leite", label: "Leite", unit: "l", heads: ["leite"] },
   { id: "manteiga", label: "Manteiga", unit: "kg", heads: ["manteiga"] },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },

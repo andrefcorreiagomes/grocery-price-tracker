@@ -737,5 +737,72 @@ function verifyFoodTypes(): number {
   check("a multipack multiplies out", size("LEITE UHT AGROS MEIO GORDO 6X1L")?.total === 6);
   check("no size in the name is null, not a guess", size("Batata Vermelha") === null);
 
+  // Auchan leaves the decimal point out of volumes, so the first digit is the
+  // whole part. Read literally these became 198 L, 300 L and 600 L, and a size
+  // that is too large makes the price per kilo too small - which sorts it
+  // straight to the top of every "cheapest" ranking.
+  console.log("\n  food types: Auchan's two size notations");
+  const near = (got: number | undefined, want: number) => Math.abs((got ?? -1) - want) < 1e-9;
+  check(
+    "a three-digit volume has an implied decimal point",
+    near(size("CERVEJA SEM ALCOOL SUPER BOCK PILSENER 0.0% 6X033L")?.total, 1.98),
+    "6 x 0.33 L = 1.98 L, not 198 L"
+  );
+  check("and again at half a litre", near(size("AGUA C/ GAS VIMEIRO 6X050L (SDR)")?.total, 3));
+  check(
+    "and where the whole part is not zero",
+    near(size("AGUA S/GAS VIMEIRO ORIGINAL 4X150L (SDR)")?.total, 6),
+    "4 x 1.50 L = 6 L, not 600 L"
+  );
+  check("a plain litre value is untouched", size("SUMO LARANJA 2L")?.total === 2);
+  check("and so are grams, where 500 is genuinely 500", near(size("BOLACHA 500G")?.total, 0.5));
+
+  // A weight GRADE is not a size. Auchan grades fish in grams but labels it kg.
+  check(
+    "a weight range is unknown, not the larger number",
+    size("TRUTA SALMONADA 800/1600 KG") === null,
+    "we do not know what one fish weighs, so we must not claim to"
+  );
+  check("another grade, same answer", size("DOURADA FRESCA INTEIRA 400/600 KG") === null);
+  check(
+    "a slash that is not a range still parses",
+    near(size("LEITE UHT M/GORDO GRESSO 1L")?.total, 1),
+    "M/GORDO is meio gordo, not a range"
+  );
+
+  // The two-digit form of the same notation cannot be decoded: 6X33L is 0.33 L
+  // cans while 4X15L is 1.5 L bottles, and nothing in the string tells them
+  // apart. Refusing to answer beats being right half the time.
+  check("an undecodable volume is unknown, not a guess", size("REFRIGERANTE 7UP LATA 6X33L") === null);
+  check("and the other reading of it too", size("AGUA SERRA DA ESTRELA 4X15L") === null);
+  check("a calibre where a size goes is unknown", size("CHOURICAO PROBAR T/80 KG") === null);
+  check("a 10 L garrafao still parses", near(size("AGUA GARRAFAO 10L")?.total, 10));
+  check("and a 5 kg sack of rice", near(size("ARROZ AGULHA 5 KG")?.total, 5));
+
+  // Auchan usually drops the "de" that the other two chains write.
+  console.log("\n  food types: plant drinks");
+  const t = (name: string) => classifyFoodType(name, "AUCHAN", "alimentação/bebidas");
+  check("BEBIDA ARROZ is a drink, not rice", t("BEBIDA ARROZ UHT AUCHAN SEM GLUTEN 1L") === "bebida-vegetal");
+  check("BEBIDA AMENDOAS is a drink, not nuts", t("BEBIDA AMÊNDOAS AUCHAN SEM AÇÚCARES 1L") === "bebida-vegetal");
+  check("BEBIDA SOJA is classified at all", t("BEBIDA SOJA AUCHAN SEM GLÚTEN 1L") === "bebida-vegetal");
+  check("an Alpro naming no plant is still a plant drink", t("BEBIDA ALPRO BARISTA 1L") === "bebida-vegetal");
+  check(
+    "the written-out form still works",
+    classifyFoodType("Bebida Vegetal de Aveia", "CONTINENTE", "Laticínios e Ovos") === "bebida-vegetal"
+  );
+  check(
+    "a dairy drink is NOT swept in",
+    // A full path, not the bare section: "Laticínios e Ovos" alone tokenises to
+    // `ovos` and the fallback answers `ovo`. That is the category fallback
+    // being coarse, not the plant-drink rule, and it is why the shelf is only
+    // ever consulted last.
+    classifyFoodType(
+      "Bebida Láctea Infantil 1 a 3 anos",
+      "CONTINENTE",
+      "Laticínios e Ovos/Leite/Leite Infantil"
+    ) === "leite",
+    "widening the rule must not start eating milk"
+  );
+
   return failures - before;
 }

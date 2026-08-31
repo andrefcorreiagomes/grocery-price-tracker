@@ -50,6 +50,34 @@ async function main() {
       `${before.toLocaleString()} already sized (${((100 * before) / food.length).toFixed(1)}%)`
   );
 
+  // Sizes already stored that cannot be true, re-read with today's parser.
+  //
+  // Normally this script only FILLS blanks, because a stored size may have come
+  // from a product page and is better than anything a name can give. The
+  // exception is a size that is impossible on its face: no grocery item is 198
+  // litres. Those came from two Auchan notations the parser used to misread -
+  // `6X033L` as 198 L rather than 6 x 0.33, and the fish grade `800/1600 KG` as
+  // 1,600 kg - and they matter out of all proportion to their number, because a
+  // size that is too large makes the price per kilo too small, which puts them
+  // at the top of every cheapest-per-kilo ranking.
+  //
+  // Deliberately narrow: only rows above the threshold are touched, so a
+  // correct size can never be overwritten by a worse guess from the name. When
+  // the name now parses to nothing, the size is CLEARED - unknown is the honest
+  // answer for a fish graded 400/600, and unknown is already handled everywhere.
+  const IMPOSSIBLE_SIZE = 30; // kg or litres, for a single consumer product
+  const repairs: { id: string; packageSize: number | null; unit: string | null; was: number }[] = [];
+  for (const r of food) {
+    if (r.packageSize === null || r.packageSize <= IMPOSSIBLE_SIZE) continue;
+    const parsed = parseSize(r.name);
+    repairs.push({
+      id: r.id,
+      packageSize: parsed?.total ?? null,
+      unit: parsed?.unit ?? null,
+      was: r.packageSize,
+    });
+  }
+
   const updates: { id: string; packageSize: number; unit: string; via: string }[] = [];
   for (const r of food) {
     if (r.packageSize !== null) continue;
@@ -87,6 +115,15 @@ async function main() {
     console.log(`  ${u.via.padEnd(7)} ${String(u.packageSize).padStart(6)} ${u.unit}  ${p?.name.slice(0, 46)}`);
   }
 
+  if (repairs.length > 0) {
+    console.log(`\nand ${repairs.length} impossible size(s) to repair (over ${IMPOSSIBLE_SIZE} kg/L):`);
+    for (const r of repairs) {
+      const p = food.find((f) => f.id === r.id);
+      const now = r.packageSize === null ? "unknown" : `${r.packageSize} ${r.unit}`;
+      console.log(`  ${String(r.was).padStart(7)} -> ${now.padEnd(10)} ${p?.name.slice(0, 48)}`);
+    }
+  }
+
   if (dry) {
     console.log("\n--dry: nothing written.");
   } else {
@@ -111,6 +148,22 @@ async function main() {
         written += batch.length;
       }
     }
+    // One at a time: there are a few dozen of these, each with its own answer,
+    // and several land on null - which updateMany cannot express per row.
+    for (const r of repairs) {
+      await prisma.catalogueProduct.update({
+        where: { id: r.id },
+        data: { packageSize: r.packageSize, unit: r.unit },
+      });
+    }
+    if (repairs.length > 0) {
+      const cleared = repairs.filter((r) => r.packageSize === null).length;
+      console.log(
+        `repaired ${repairs.length} impossible size(s)` +
+          `, of which ${cleared} were cleared to unknown.`
+      );
+    }
+
     const after = await prisma.catalogueProduct.count({
       where: { delistedAt: null, packageSize: { not: null } },
     });
