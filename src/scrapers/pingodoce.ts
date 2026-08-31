@@ -3,6 +3,14 @@ import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
 import { detached, type ScrapeResult } from "./types";
 
+/**
+ * At or below this, Pingo Doce is not quoting a price. It publishes "0,00 EUR"
+ * for a product that is listed but not sellable, and one cent for a handful it
+ * cannot price at all. Nothing in a supermarket costs a cent, and the next
+ * cheapest real price in the catalogue is five, so the cut is unambiguous.
+ */
+const PLACEHOLDER_PRICE = 0.01;
+
 interface SchemaProduct {
   "@type"?: string;
   name?: string;
@@ -42,7 +50,13 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
   // A zero must never survive as a price: it is the minimum of every set it
   // joins, so one of these in the catalogue makes the cheapest product of its
   // food type free, in every store comparison, forever.
-  const price = parsed === 0 ? null : parsed;
+  //
+  // One cent is the same thing wearing a different hat. Measured across the
+  // catalogue, six products carry it - a picanha, two fresh prawns, a bread,
+  // a yogurt, a tin of frankfurters - and nothing in a supermarket costs a
+  // cent. The next cheapest real price is EUR 0.05, so the two groups do not
+  // overlap and the cut is unambiguous.
+  const price = parsed <= PLACEHOLDER_PRICE ? null : parsed;
 
   const size = parsePackageSize($("h1.product-unit-measure").first().text());
   // The barcode rides on a nutritional-info URL in the page, and that URL is

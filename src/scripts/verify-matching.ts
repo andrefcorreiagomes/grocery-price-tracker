@@ -900,6 +900,19 @@ function verifyFoodTypes(): number {
   check("a 10 L garrafao still parses", near(size("AGUA GARRAFAO 10L")?.total, 10));
   check("and a 5 kg sack of rice", near(size("ARROZ AGULHA 5 KG")?.total, 5));
 
+  // Portuguese writes thousands with a dot, and Auchan leaves it in front of a
+  // small unit, where it reads as a decimal point.
+  console.log("\n  food types: a thousands dot before a small unit");
+  check("1.200 GR is 1200 grams", near(size("MARISCADA COZIDA UNIDADE 1.200 GR")?.total, 1.2));
+  check("0.375G is 375 grams", near(size("RATATOUILLE BONDUELLE 0.375G")?.total, 0.375));
+  check("0.250ML is 250 millilitres", near(size("KOMBUCHA PLENO CHA VERDE BIO 0.250ML")?.total, 0.25));
+  // One and two decimals are genuinely used for the tiny expensive things, and
+  // must survive: these come out near the real EUR 10,000/kg for saffron and
+  // EUR 3,800/kg for vanilla.
+  check("0.3 G of saffron really is 0.3 grams", near(size("ACAFRAO MOIDO 3 DOSES 0.3 G")?.total, 0.0003));
+  check("a 1.2 g vanilla pod likewise", near(size("VAGEM ESPIGA DE BAUNILHA SAQUETA 1.2G")?.total, 0.0012));
+  check("and 1.500 KG is still 1.5 kg, not 1500", near(size("ARROZ 1.500 KG")?.total, 1.5));
+
   // Auchan usually drops the "de" that the other two chains write.
   console.log("\n  food types: plant drinks");
   const t = (name: string) => classifyFoodType(name, "AUCHAN", "alimentação/bebidas");

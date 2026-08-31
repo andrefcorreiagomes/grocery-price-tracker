@@ -93,6 +93,27 @@ export function parseSize(name: string): ParsedSize | null {
 
   const raw = m[3];
 
+  // Portuguese writes a THOUSANDS separator as a dot, and Auchan leaves it in
+  // front of a small unit, where it reads as a decimal point:
+  //
+  //   MARISCADA COZIDA UNIDADE 1.200 GR   is 1200 g, read as 1.2 g
+  //   RATATOUILLE BONDUELLE 0.375G        is  375 g, read as 0.375 g
+  //   KOMBUCHA PLENO CHA VERDE BIO 0.250ML is 250 ml, read as 0.25 ml
+  //
+  // Exactly THREE digits after the dot, and only before g/gr/ml/cl. That is
+  // what a thousands group looks like, and nothing is sold in fractions of a
+  // gram - whereas one or two decimals genuinely are used for the tiny
+  // expensive things, and must be left alone:
+  //
+  //   ACAFRAO AUCHAN MOIDO 3 DOSES 0.3 G   really is 0.3 g of saffron
+  //   VAGEM ESPIGA DE BAUNILHA SAQUETA 1.2G really is a 1.2 g vanilla pod
+  //
+  // Those come out at roughly EUR 10,000 and 3,800 per kilo, which is what
+  // saffron and vanilla actually cost.
+  if (/^\d+\.\d{3}$/.test(m[2]) && (raw.startsWith("g") || raw === "ml" || raw === "cl")) {
+    each = each * 1000;
+  }
+
   // Auchan writes volumes as CENTILITRES with the decimal point dropped, and
   // labels them L. Read literally these were 100x too large:
   //

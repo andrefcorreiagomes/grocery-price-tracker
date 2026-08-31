@@ -59,34 +59,43 @@ async function main() {
   // used to misread: `6X033L` as 198 L rather than 6 x 0.33, and the fish grade
   // `800/1600 KG` as 1,600 kg.
   //
-  // TWO conditions, and both are needed.
+  // The rule is PROVENANCE, not size. `enrichedAt` is set only when a product
+  // PAGE was read, and a page states the size outright - better evidence than
+  // any name, never to be overwritten by re-reading one. A row without it got
+  // its size from its name, so re-deriving that name with today's parser is
+  // exactly right, and the stored value is simply the old parser's answer.
   //
-  // A large total is not on its own evidence of a bug. An 18 L pack of milk is
-  // a real 18 x 1 L pack; 15 L of tea is Auchan writing 1.5 L as `15L`. Size
-  // alone cannot separate them, and clearing the first would destroy good data.
-  //
-  // What separates them is where the size came from. `enrichedAt` is set only
-  // when a product PAGE was read, and a page states the size outright - better
-  // evidence than any name, and never to be overwritten by re-reading one. A
-  // row without it got its size from its name, so re-reading that name with
-  // today's parser is exactly the right thing to do.
+  // A size threshold was tried first and cannot work, in either direction. At
+  // the large end, an 18 L pack of milk is a real 18 x 1 L pack while 15 L of
+  // tea is Auchan writing 1.5 L as `15L`. At the small end, 0.375 g of
+  // ratatouille is a misread thousands separator while 0.3 g of saffron is a
+  // genuine three doses. Size cannot separate either pair; provenance plus a
+  // re-parse separates both.
   //
   // When the name now parses to nothing the size is CLEARED. Unknown is the
   // honest answer for a fish graded 400/600, and unknown is already handled
   // everywhere downstream.
-  const IMPOSSIBLE_L = 10;
-  const IMPOSSIBLE_KG = 30;
   const repairs: { id: string; packageSize: number | null; unit: string | null; was: number }[] = [];
   for (const r of food) {
     if (r.packageSize === null) continue;
     if (r.enrichedAt !== null) continue; // a product page said so; leave it alone
-    const limit = r.unit === "l" ? IMPOSSIBLE_L : IMPOSSIBLE_KG;
-    if (r.packageSize <= limit) continue;
+
     const parsed = parseSize(r.name);
+    if (parsed !== null && parsed.total === r.packageSize && parsed.unit === r.unit) continue;
+
+    // Sold loose by weight, so the listed price IS the price per kilo and the
+    // size is 1. The same rule the fill pass below applies, repeated here
+    // because these names often carry a grade the parser now refuses - `SALMAO
+    // INTEIRO AUCHAN 4/5 KG` is a whole salmon graded 4-5 kg, priced per kilo.
+    // Without this they would be cleared to unknown and only refilled on the
+    // next run, since the fill pass has already gone by the time repairs apply.
+    const perKg = parsed === null && SOLD_PER_KG.test(r.name);
+    if (perKg && r.packageSize === 1 && r.unit === "kg") continue; // already right
+
     repairs.push({
       id: r.id,
-      packageSize: parsed?.total ?? null,
-      unit: parsed?.unit ?? null,
+      packageSize: perKg ? 1 : parsed?.total ?? null,
+      unit: perKg ? "kg" : parsed?.unit ?? null,
       was: r.packageSize,
     });
   }
