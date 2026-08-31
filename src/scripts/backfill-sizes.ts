@@ -40,7 +40,7 @@ async function main() {
 
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null },
-    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true },
+    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, enrichedAt: true },
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
 
@@ -52,23 +52,36 @@ async function main() {
 
   // Sizes already stored that cannot be true, re-read with today's parser.
   //
-  // Normally this script only FILLS blanks, because a stored size may have come
-  // from a product page and is better than anything a name can give. The
-  // exception is a size that is impossible on its face: no grocery item is 198
-  // litres. Those came from two Auchan notations the parser used to misread -
-  // `6X033L` as 198 L rather than 6 x 0.33, and the fish grade `800/1600 KG` as
-  // 1,600 kg - and they matter out of all proportion to their number, because a
-  // size that is too large makes the price per kilo too small, which puts them
-  // at the top of every cheapest-per-kilo ranking.
+  // Normally this script only FILLS blanks. It repairs here because a size that
+  // is too large makes the price per kilo too small, and a page that ranks by
+  // cheapest puts exactly those rows first - so a handful of them would be the
+  // first thing every visitor saw. They came from Auchan notations the parser
+  // used to misread: `6X033L` as 198 L rather than 6 x 0.33, and the fish grade
+  // `800/1600 KG` as 1,600 kg.
   //
-  // Deliberately narrow: only rows above the threshold are touched, so a
-  // correct size can never be overwritten by a worse guess from the name. When
-  // the name now parses to nothing, the size is CLEARED - unknown is the honest
-  // answer for a fish graded 400/600, and unknown is already handled everywhere.
-  const IMPOSSIBLE_SIZE = 30; // kg or litres, for a single consumer product
+  // TWO conditions, and both are needed.
+  //
+  // A large total is not on its own evidence of a bug. An 18 L pack of milk is
+  // a real 18 x 1 L pack; 15 L of tea is Auchan writing 1.5 L as `15L`. Size
+  // alone cannot separate them, and clearing the first would destroy good data.
+  //
+  // What separates them is where the size came from. `enrichedAt` is set only
+  // when a product PAGE was read, and a page states the size outright - better
+  // evidence than any name, and never to be overwritten by re-reading one. A
+  // row without it got its size from its name, so re-reading that name with
+  // today's parser is exactly the right thing to do.
+  //
+  // When the name now parses to nothing the size is CLEARED. Unknown is the
+  // honest answer for a fish graded 400/600, and unknown is already handled
+  // everywhere downstream.
+  const IMPOSSIBLE_L = 10;
+  const IMPOSSIBLE_KG = 30;
   const repairs: { id: string; packageSize: number | null; unit: string | null; was: number }[] = [];
   for (const r of food) {
-    if (r.packageSize === null || r.packageSize <= IMPOSSIBLE_SIZE) continue;
+    if (r.packageSize === null) continue;
+    if (r.enrichedAt !== null) continue; // a product page said so; leave it alone
+    const limit = r.unit === "l" ? IMPOSSIBLE_L : IMPOSSIBLE_KG;
+    if (r.packageSize <= limit) continue;
     const parsed = parseSize(r.name);
     repairs.push({
       id: r.id,
@@ -116,7 +129,7 @@ async function main() {
   }
 
   if (repairs.length > 0) {
-    console.log(`\nand ${repairs.length} impossible size(s) to repair (over ${IMPOSSIBLE_SIZE} kg/L):`);
+    console.log(`\nand ${repairs.length} impossible size(s) to repair:`);
     for (const r of repairs) {
       const p = food.find((f) => f.id === r.id);
       const now = r.packageSize === null ? "unknown" : `${r.packageSize} ${r.unit}`;
