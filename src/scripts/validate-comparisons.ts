@@ -117,6 +117,7 @@ export function reportFor(id: string, rows: ComparableProduct[]): TypeReport {
   // data/food-types.ts - so it is reported apart from the judgement calls.
   const kg = usable.filter((r) => r.unit === "kg").length;
   const l = usable.filter((r) => r.unit === "l").length;
+  // "either" is a declared answer - two rankings - not a missing one.
   const mixesUnits = !type?.unit && kg > 0 && l > 0;
   if (mixesUnits) {
     problems.push({ kind: "unit", text: `no unit declared: ${kg} priced by weight, ${l} by volume` });

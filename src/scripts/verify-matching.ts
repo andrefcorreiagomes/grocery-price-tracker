@@ -19,6 +19,7 @@ import {
   cheapestStore,
   comparableStoreCount,
   ownBrandPerStore,
+  unitsFor,
   type ComparableProduct,
 } from "../lib/comparison";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
@@ -327,6 +328,49 @@ function verifyComparison(): number {
     "one priced store has no cheapest",
     cheapestStore(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")) === null,
     "naming it cheapest would imply it beat something"
+  );
+
+  // A few foods really are sold both ways and get one ranking per unit rather
+  // than one unit chosen for them. Tarts are two different foods sharing a
+  // word; mayonnaise is one food the stores record inconsistently.
+  console.log("\n  foods measured both ways");
+  const tartes = [
+    p("CONTINENTE", "Tarte de Maçã", 6.0, 1, "kg"),          // 6.00/kg
+    p("CONTINENTE", "Tarte Gelada Capuccino", 4.0, 0.8, "l"), // 5.00/l
+    p("AUCHAN", "TARTE MACA", 5.0, 1, "kg"),                  // 5.00/kg
+  ];
+  check(
+    "a food sold both ways offers both rankings",
+    unitsFor("tarte", tartes).join(",") === "kg,l",
+    "baked tarts by weight, frozen tarts by volume"
+  );
+  check(
+    "and only the units actually present",
+    unitsFor("tarte", [tartes[0]]).join(",") === "kg",
+    "no empty second table just because the table allows one"
+  );
+  check(
+    "a single-unit food still offers exactly one",
+    unitsFor("batata", rows).join(",") === "kg"
+  );
+
+  const byWeight = cheapestPerStore(tartes, "tarte", "kg");
+  const byVolume = cheapestPerStore(tartes, "tarte", "l");
+  check(
+    "the weight ranking sees only the weight products",
+    byWeight.get("AUCHAN")!.kind === "price" &&
+      Math.abs((byWeight.get("AUCHAN") as { unitPrice: number }).unitPrice - 5) < 1e-9
+  );
+  check(
+    "the volume ranking sees only the volume ones",
+    byVolume.get("CONTINENTE")!.kind === "price" &&
+      (byVolume.get("CONTINENTE") as { product: ComparableProduct }).product.name ===
+        "Tarte Gelada Capuccino"
+  );
+  check(
+    "a store present only in the other unit reads no-size, not not-stocked",
+    byVolume.get("AUCHAN")!.kind === "no-size",
+    "Auchan sells tarts; it sells no tart measured by volume"
   );
 
   return failures - before;

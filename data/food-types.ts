@@ -42,8 +42,26 @@ export interface FoodType {
    * first.
    */
   require?: RegExp;
-  /** the unit a euro-per-unit comparison should use, when it is knowable */
-  unit?: "kg" | "l";
+  /**
+   * How a euro-per-unit comparison should measure this food.
+   *
+   * `"kg"` or `"l"` means one ranking, and anything the stores recorded the
+   * other way is excluded rather than converted - grams and millilitres measure
+   * different things and there is no honest arithmetic between them.
+   *
+   * `"either"` means the food is genuinely sold BOTH ways and gets TWO
+   * rankings, one per unit, shown side by side. It is not a way of ducking the
+   * choice: it is for foods where one ranking would be wrong however it was
+   * decided. Tarts are the clearest case - a baked apple tart is sold by weight
+   * and a frozen ice-cream tart by volume, and they are not the same food.
+   * Mayonnaise is the other kind: one product that the stores simply record
+   * differently, where picking one unit would discard about half the jars.
+   *
+   * Undeclared is a bug, not a third option, and `validate:comparisons` reports
+   * it: with no unit the comparison has no grounds to reject anything and ranks
+   * a bottle priced per litre against a packet priced per kilo.
+   */
+  unit?: "kg" | "l" | "either";
 }
 
 /**
@@ -256,14 +274,23 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pudim", label: "Pudim", unit: "kg", heads: ["pudim"] },
   { id: "vegurte", label: "Vegurte", unit: "kg", heads: ["vegurte", "vegegurte"] },
   { id: "nata", label: "Natas", unit: "l", heads: ["nata"] },
-  { id: "ovo", label: "Ovos", heads: ["ovo"] },
+  // Split: shell eggs are sold by weight, pasteurised egg white by volume, and
+  // both are genuinely egg. What is NOT egg is a chocolate Kinder egg or "ovos
+  // moles", the Aveiro egg-yolk sweet - both were landing here on the word.
+  { id: "ovo", label: "Ovos", unit: "either", heads: ["ovo"],
+    exclude: /chocolate|kinder|surpresa|moles|bombom/i },
   { id: "requeijao", label: "Requeijão", unit: "kg", heads: ["requeijao"] },
   { id: "mousse", label: "Mousse", unit: "kg", heads: ["mousse"] },
   { id: "bifidus", label: "Bífidus", unit: "kg", heads: ["bifidu"] },
 
   // --- Mercearia -----------------------------------------------------------
   { id: "bolacha", label: "Bolacha", unit: "kg", heads: ["bolacha", "biscoito"] },
-  { id: "molho", label: "Molho", heads: ["molho"] },
+  // Split: jarred pesto and tomato are sold by weight, bechamel and soy sauce
+  // by volume. `com molho` excludes a DISH that comes with a sauce - "Pernil
+  // Assado com Molho de Cerveja" is roast pork, and reached here because the
+  // cut-word scan reads past `pernil` and finds `molho`.
+  { id: "molho", label: "Molho", unit: "either", heads: ["molho"],
+    exclude: /com molho/i },
   // massa the pasta, not massa the dough
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli"],
     exclude: /massa folhada|massa quebrada|massa de pizza|massa areada/i },
@@ -279,7 +306,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa"] },
   { id: "caldo", label: "Caldo", unit: "kg", heads: ["caldo"] },
   { id: "tempero", label: "Tempero", unit: "kg", heads: ["tempero"] },
-  { id: "maionese", label: "Maionese", heads: ["maionese"] },
+  // Split, though for the other reason: every one of these is a jar of
+  // mayonnaise and the stores simply record it differently - 46 by weight, 57
+  // by volume, and inconsistently WITHIN each chain. Picking one unit would
+  // throw away about half the jars, so both rankings are shown.
+  { id: "maionese", label: "Maionese", unit: "either", heads: ["maionese"] },
   { id: "polpa", label: "Polpa", unit: "kg", heads: ["polpa"] },
   { id: "azeitona", label: "Azeitona", unit: "kg", heads: ["azeitona"] },
   { id: "acucar", label: "Açúcar", unit: "kg", heads: ["acucar"] },
@@ -312,7 +343,12 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "lentilha", label: "Lentilha", unit: "kg", heads: ["lentilha"] },
   { id: "grao", label: "Grão", unit: "kg", heads: ["grao"] },
   { id: "tremoco", label: "Tremoço", unit: "kg", heads: ["tremoco"] },
-  { id: "fermento", label: "Fermento", heads: ["fermento"] },
+  // Everything here is a powder, sold by weight. The 13 products recorded by
+  // volume were not yeast at all - vanilla essence and food colouring, which
+  // arrived through the shelf rather than the name - so the name must now say
+  // so. Nothing replaces them: unclassified is honest.
+  { id: "fermento", label: "Fermento", unit: "kg", heads: ["fermento"],
+    require: /fermento|levedura/i },
   { id: "canela", label: "Canela", unit: "kg", heads: ["canela"] },
 
   // --- Padaria e pastelaria ------------------------------------------------
@@ -320,7 +356,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
     exclude: /pao ralado|pao de lo/i },
   { id: "bolo", label: "Bolo", unit: "kg", heads: ["bolo", "torta", "madalena"] },
   { id: "croissant", label: "Croissant", unit: "kg", heads: ["croissant"] },
-  { id: "tarte", label: "Tarte", heads: ["tarte"] },
+  // Split: a baked apple tart is sold by weight and a frozen ice-cream tart by
+  // volume, and they are not the same food.
+  { id: "tarte", label: "Tarte", unit: "either", heads: ["tarte"] },
 
   // --- Congelados e refeições ----------------------------------------------
   { id: "gelado", label: "Gelado", unit: "l", heads: ["gelado"] },

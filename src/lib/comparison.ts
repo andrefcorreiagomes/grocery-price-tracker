@@ -54,20 +54,50 @@ export const STORES = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"] as const;
 /**
  * Can this product take part in a price-per-kilo comparison of `foodType`?
  *
- * The unit check is the one that prevents nonsense. A kind of food is measured
- * in kilos or in litres, never both, and a product recorded in the other one
- * cannot be converted - olive oil sold by the litre and olive oil sold by the
- * kilo are different measurements of different things. So it is EXCLUDED rather
- * than converted, the same rule the matching layer already applies in
- * `sizeSpreadOk`.
+ * The unit check is what prevents nonsense. Grams and millilitres measure
+ * different things and there is no honest arithmetic between them, so a product
+ * recorded in the wrong one is EXCLUDED rather than converted - the same rule
+ * the matching layer already applies in `sizeSpreadOk`.
+ *
+ * Most foods declare one unit. A few are genuinely sold both ways and declare
+ * `"either"`, which does not relax the rule: it means TWO rankings, and the
+ * caller narrows to one with `measuredIn`. Ask `unitsFor` for the list.
  */
-export function comparable(p: ComparableProduct, foodTypeId: string): boolean {
+export function comparable(
+  p: ComparableProduct,
+  foodTypeId: string,
+  /** narrows to one ranking; required for a food measured both ways */
+  measuredIn?: "kg" | "l"
+): boolean {
   if (p.price === null || p.packageSize === null || p.packageSize <= 0) return false;
-  const expected = FOOD_TYPE_BY_ID.get(foodTypeId)?.unit;
-  // A food type that declares no unit accepts either, since there is nothing to
-  // contradict; one that declares a unit accepts only that one.
-  if (expected && p.unit !== expected) return false;
-  return p.unit === "kg" || p.unit === "l";
+  if (p.unit !== "kg" && p.unit !== "l") return false;
+
+  if (measuredIn) return p.unit === measuredIn;
+
+  const declared = FOOD_TYPE_BY_ID.get(foodTypeId)?.unit;
+  // "either" means the food is genuinely sold both ways and gets one ranking
+  // per unit; with no `measuredIn` there is nothing to narrow to, so both pass
+  // and the caller is expected to have asked `unitsFor` first.
+  if (!declared || declared === "either") return true;
+  return p.unit === declared;
+}
+
+/**
+ * The rankings this kind of food should produce: one unit, or both.
+ *
+ * A food declared `"either"` yields a ranking per unit ACTUALLY PRESENT, so a
+ * page never renders an empty second table just because the table said it could
+ * exist. Everything else yields its declared unit.
+ */
+export function unitsFor(foodTypeId: string, rows: ComparableProduct[]): ("kg" | "l")[] {
+  const declared = FOOD_TYPE_BY_ID.get(foodTypeId)?.unit;
+  if (declared === "kg" || declared === "l") return [declared];
+
+  const present: ("kg" | "l")[] = [];
+  for (const u of ["kg", "l"] as const) {
+    if (rows.some((r) => comparable(r, foodTypeId, u))) present.push(u);
+  }
+  return present;
 }
 
 /**
@@ -80,7 +110,8 @@ export function comparable(p: ComparableProduct, foodTypeId: string): boolean {
 function cheapestOf(
   stocked: ComparableProduct[],
   candidates: ComparableProduct[],
-  foodTypeId: string
+  foodTypeId: string,
+  measuredIn?: "kg" | "l"
 ): Map<string, Cell> {
   const byStore = new Map<string, Cell>();
 
@@ -93,7 +124,7 @@ function cheapestOf(
 
     let best: { product: ComparableProduct; unitPrice: number } | null = null;
     for (const p of candidates) {
-      if (p.store !== store || !comparable(p, foodTypeId)) continue;
+      if (p.store !== store || !comparable(p, foodTypeId, measuredIn)) continue;
       const each = unitPrice(p.price as number, p.packageSize as number);
       if (best === null || each < best.unitPrice) best = { product: p, unitPrice: each };
     }
@@ -118,9 +149,10 @@ function cheapestOf(
  */
 export function cheapestPerStore(
   rows: ComparableProduct[],
-  foodTypeId: string
+  foodTypeId: string,
+  measuredIn?: "kg" | "l"
 ): Map<string, Cell> {
-  return cheapestOf(rows, rows, foodTypeId);
+  return cheapestOf(rows, rows, foodTypeId, measuredIn);
 }
 
 /**
@@ -137,10 +169,11 @@ export function cheapestPerStore(
  */
 export function ownBrandPerStore(
   rows: ComparableProduct[],
-  foodTypeId: string
+  foodTypeId: string,
+  measuredIn?: "kg" | "l"
 ): Map<string, Cell> {
   const own = rows.filter((p) => isOwnBrand(p.brand, p.store));
-  return cheapestOf(own, own, foodTypeId);
+  return cheapestOf(own, own, foodTypeId, measuredIn);
 }
 
 /**
@@ -153,9 +186,10 @@ export function ownBrandPerStore(
  */
 export function namedGroup(
   members: ComparableProduct[],
-  foodTypeId: string
+  foodTypeId: string,
+  measuredIn?: "kg" | "l"
 ): Map<string, Cell> {
-  return cheapestOf(members, members, foodTypeId);
+  return cheapestOf(members, members, foodTypeId, measuredIn);
 }
 
 /**
