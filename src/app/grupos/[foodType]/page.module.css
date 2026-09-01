@@ -1,0 +1,135 @@
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+  width: 100%;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.main h1 {
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.count {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.unitBlock {
+  margin-top: 2.2rem;
+}
+
+.unitHeading {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.group {
+  margin-top: 1.8rem;
+}
+
+.group h3 {
+  font-size: 1.05rem;
+}
+
+.note {
+  margin-top: 0.25rem;
+  max-width: 62ch;
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.stores {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.store {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.storeName {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 4px;
+  min-height: 4.6rem;
+}
+
+/* The cheapest of the three. A ring rather than a fill, so the price stays the
+   loudest thing in the cell. */
+.best {
+  border-color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+
+.figure {
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.per {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.product {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--foreground) 62%, transparent);
+  overflow-wrap: anywhere;
+}
+
+/* The two blank states, deliberately unalike. "Não vende" is a settled fact and
+   reads quiet; "sem peso" is a gap in what we know and reads as unfinished, so
+   nobody mistakes one for the other. */
+.absent {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+
+.unknown {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 75%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--foreground) 40%, transparent);
+  align-self: flex-start;
+  padding-bottom: 1px;
+}
+
+@media (max-width: 40rem) {
+  .stores {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+  .cell {
+    min-height: 0;
+  }
+}
