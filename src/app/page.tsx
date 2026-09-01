@@ -16,6 +16,14 @@ export default async function Home() {
         Escolha uma categoria para comparar.
       </p>
 
+      <Link href="/grupos" className={styles.cabazCard}>
+        <span className={styles.cabazTitle}>Onde é mais barato?</span>
+        <span className={styles.cabazSubtitle}>
+          O preço ao quilo e ao litro de 166 alimentos, das batatas ao azeite, nas
+          três cadeias
+        </span>
+      </Link>
+
       <Link href="/cabaz" className={styles.cabazCard}>
         <span className={styles.cabazTitle}>Montar o meu cabaz</span>
         <span className={styles.cabazSubtitle}>

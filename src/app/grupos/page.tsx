@@ -1,4 +1,4 @@
-import Link from "next/link";
+import FoodTypeFilter from "@/components/FoodTypeFilter";
 import { getComparableFoodTypes, getFreshness } from "@/lib/grupos";
 import { STORE_LABELS } from "@/lib/stores";
 import type { Store } from "@/generated/prisma/client";
@@ -6,8 +6,6 @@ import styles from "./page.module.css";
 
 // Prices change under us; read them live rather than from a build-time snapshot.
 export const dynamic = "force-dynamic";
-
-const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L" };
 
 export default async function GruposPage() {
   const [types, freshness] = await Promise.all([getComparableFoodTypes(), getFreshness()]);
@@ -23,35 +21,9 @@ export default async function GruposPage() {
         </p>
       </header>
 
-      <ul className={styles.list}>
-        {types.map((t) => (
-          <li key={`${t.id}-${t.unit}`}>
-            <Link href={`/grupos/${encodeURIComponent(t.id)}?un=${t.unit}`} className={styles.row}>
-              <span className={styles.name}>
-                {t.label}
-                {/* Only shown when a food is sold both ways, so the two entries
-                    are told apart at a glance rather than looking duplicated. */}
-                {types.filter((x) => x.id === t.id).length > 1 && (
-                  <span className={styles.qualifier}>
-                    {t.unit === "kg" ? " (ao peso)" : " (ao volume)"}
-                  </span>
-                )}
-              </span>
-              <span className={styles.price}>
-                {t.cheapestPrice !== null && (
-                  <>
-                    desde <strong>{t.cheapestPrice.toFixed(2)} €</strong>
-                    <span className={styles.per}>/{UNIT_LABEL[t.unit]}</span>
-                  </>
-                )}
-              </span>
-              <span className={styles.winner}>
-                {t.winner ? STORE_LABELS[t.winner as Store] : "—"}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {/* The list is rendered by a Client Component so it can be filtered as you
+          type. The data still comes from the server - nothing is fetched again. */}
+      <FoodTypeFilter entries={types} />
 
       <footer className={styles.footer}>
         <p>

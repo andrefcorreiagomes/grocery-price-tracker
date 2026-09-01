@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFoodTypePage, type Ranking } from "@/lib/grupos";
+import { getFoodTypePage, getFreshness, MAX_NAMED_GROUPS, type Ranking } from "@/lib/grupos";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
 import type { Cell } from "@/lib/comparison";
 import styles from "./page.module.css";
@@ -98,6 +98,52 @@ function UnitBlock({ ranking, showUnit }: { ranking: Ranking; showUnit: boolean 
         unit={ranking.unit}
         winner={null}
       />
+
+      {ranking.named.found > 0 && (
+        <section className={styles.group}>
+          <h3>O mesmo produto nas duas cadeias</h3>
+          <p className={styles.note}>
+            Produtos que confirmámos ser exactamente o mesmo artigo em duas cadeias.
+            Nenhum aparece nas três, porque o Pingo Doce não publica código de barras
+            e sem ele não é possível ter a certeza.
+            {ranking.named.comparable > 0 && " Ordenados pela maior diferença de preço."}
+          </p>
+          {ranking.named.shown.map((g) => (
+            <div key={g.id} className={styles.named}>
+              <h4 className={styles.namedTitle}>{g.name}</h4>
+              <div className={styles.stores}>
+                {STORE_ORDER.map((store) => (
+                  <div key={store} className={styles.store}>
+                    <span className={styles.storeName}>{STORE_LABELS[store]}</span>
+                    <StoreCell
+                      cell={g.cells.get(store) as Cell}
+                      unit={ranking.unit}
+                      best={g.winner === store}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {ranking.named.comparable === 0 && (
+            <p className={styles.note}>
+              {/* igual -> iguais, not "igualis": Portuguese -al pluralises to
+                  -ais. Written out rather than assembled from a stem. */}
+              {ranking.named.found === 1
+                ? "Encontrámos 1 produto igual"
+                : `Encontrámos ${ranking.named.found} produtos iguais`}{" "}
+              em duas cadeias, mas nenhum pode ser comparado: numa das lojas falta o
+              peso, e sem peso não há preço ao quilo.
+            </p>
+          )}
+          {ranking.named.comparable > MAX_NAMED_GROUPS && (
+            <p className={styles.note}>
+              Mostramos {MAX_NAMED_GROUPS} de {ranking.named.comparable} produtos
+              iguais — os de maior diferença de preço.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -108,7 +154,10 @@ export default async function FoodTypePage({
   params: Promise<{ foodType: string }>;
 }) {
   const { foodType } = await params;
-  const page = await getFoodTypePage(decodeURIComponent(foodType));
+  const [page, freshness] = await Promise.all([
+    getFoodTypePage(decodeURIComponent(foodType)),
+    getFreshness(),
+  ]);
   if (!page) notFound();
 
   return (
@@ -131,6 +180,19 @@ export default async function FoodTypePage({
           possível calcular um preço por quilo.
         </p>
       )}
+
+      {/* Per chain, not one date: they genuinely differ, and comparing a price
+          from today against one from last week deserves to say so. */}
+      <footer className={styles.footer}>
+        Preços recolhidos:{" "}
+        {freshness.map((f, i) => (
+          <span key={f.store}>
+            {i > 0 && " · "}
+            {STORE_LABELS[f.store as keyof typeof STORE_LABELS]}{" "}
+            {f.lastSeenAt.toLocaleDateString("pt-PT")}
+          </span>
+        ))}
+      </footer>
     </main>
   );
 }

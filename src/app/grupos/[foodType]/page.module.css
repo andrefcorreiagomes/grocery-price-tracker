@@ -133,3 +133,26 @@
     min-height: 0;
   }
 }
+
+/* One confirmed same-product comparison. Indented and hairlined so a run of
+   twenty reads as a list rather than twenty separate sections. */
+.named {
+  margin-top: 1.1rem;
+  padding-left: 0.8rem;
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.namedTitle {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+}
+
+.footer {
+  margin-top: 2.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  font-variant-numeric: tabular-nums;
+}

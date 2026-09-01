@@ -1,7 +1,7 @@
 import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
-import { parseSize } from "../lib/matching";
+import { parseSize, stripAccents } from "../lib/matching";
 import {
   categoryPathFromUrl,
   labelFromSlug,
@@ -13,11 +13,13 @@ import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { sectionWarnings } from "../scrapers/crawl/history";
+import { MAX_NAMED_GROUPS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
 import {
   cheapestPerStore,
   cheapestStore,
   comparableStoreCount,
+  namedGroup,
   ownBrandPerStore,
   unitsFor,
   type ComparableProduct,
@@ -329,6 +331,67 @@ function verifyComparison(): number {
     cheapestStore(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")) === null,
     "naming it cheapest would imply it beat something"
   );
+
+  // The named-product comparison: pick a name, order by price gap, cut at 20.
+  console.log("\n  named-product groups");
+  const g = (name: string, store: string, price: number | null, size: number | null) =>
+    p(store, name, price, size, "kg");
+
+  const pick = (members: ComparableProduct[]) =>
+    members.reduce((a, b) => (b.name.length < a.name.length ? b : a)).name;
+  check(
+    "a group is named by its shortest member",
+    pick([
+      g("Creme para Barrar Nutella Pack Poupança Continente", "CONTINENTE", 4.29, 1),
+      g("Nutella", "AUCHAN", 3.99, 1),
+    ]) === "Nutella",
+    "the shortest is reliably the least store-specific"
+  );
+
+  // Every group today spans two chains, because Pingo Doce publishes no barcode.
+  // The third must read "not stocked" - the Batata do Zé shape.
+  const pair = namedGroup(
+    [g("Batata do Zé", "AUCHAN", 1.15, 1), g("Batata do Zé", "PINGO_DOCE", 1.2, 1)],
+    "batata",
+    "kg"
+  );
+  check(
+    "the chain with no member reads not-stocked",
+    pair.get("CONTINENTE")!.kind === "not-stocked",
+    "not a blank, and not a zero"
+  );
+  check("and the two that have it are priced", cheapestStore(pair) === "AUCHAN");
+
+  // Two prices or it is not a comparison. This is what empties the wine page:
+  // every wine group pairs a sized Auchan bottle with an unsized Continente row.
+  const halfPriced = namedGroup(
+    [
+      p("AUCHAN", "Vinho X", 3.98, 0.75, "l"),
+      // no size: exactly the state 57%-sized Continente is in for wine
+      p("CONTINENTE", "Vinho X", 5.99, null, null),
+    ],
+    "vinho",
+    "l"
+  );
+  check(
+    "a group priced on only one side cannot be compared",
+    [...halfPriced.values()].filter((c) => c.kind === "price").length === 1,
+    "168 wine groups are in this state, and the page says so rather than hiding them"
+  );
+
+  check(
+    "the cut is the 90th percentile of the real distribution",
+    MAX_NAMED_GROUPS === 20,
+    "median 4, 90th 20, max 168; six would have truncated 38% of pages"
+  );
+
+  // The filter on the index. Portuguese food names are full of accents and
+  // nobody types them into a search box.
+  const matches = (query: string, label: string) =>
+    stripAccents(label).toLowerCase().includes(stripAccents(query).toLowerCase().trim());
+  check("the filter finds Açúcar from \"acucar\"", matches("acucar", "Açúcar"));
+  check("and Chá from \"cha\"", matches("cha", "Chá"));
+  check("and does not match everything", !matches("zzzz", "Açúcar"));
 
   // A few foods really are sold both ways and get one ranking per unit rather
   // than one unit chosen for them. Tarts are two different foods sharing a
