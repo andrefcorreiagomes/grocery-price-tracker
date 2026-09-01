@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { adminEnabled } from "@/lib/admin";
 import { getFoodTypeRows } from "@/lib/menu";
 import { MENU_CATEGORIES } from "../../../../data/menu-categories";
 import { saveCategory } from "./actions";
@@ -18,6 +20,10 @@ export const dynamic = "force-dynamic";
  * guess dressed as a decision is the failure worth avoiding here.
  */
 export default async function CategoriasPage() {
+  // Third and innermost. The Proxy already answers 404, but a page that can
+  // only be reached through one guard is one refactor away from being public.
+  if (!adminEnabled()) notFound();
+
   const rows = await getFoodTypeRows();
   const confirmed = rows.filter((r) => r.confirmed).length;
 

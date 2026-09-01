@@ -13,6 +13,7 @@ import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { sectionWarnings } from "../scrapers/crawl/history";
+import { adminEnabled } from "../lib/admin";
 import { MAX_NAMED_GROUPS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
 import {
@@ -331,6 +332,28 @@ function verifyComparison(): number {
     cheapestStore(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")) === null,
     "naming it cheapest would imply it beat something"
   );
+
+  // The admin pages have no password. They do not need one, because they are
+  // not meant to be reachable from the internet - but that only holds while the
+  // switch FAILS CLOSED. A default-on flag that has to be turned off would put
+  // a page where anyone can refile the whole menu one forgotten variable away.
+  console.log("\n  the admin switch fails closed");
+  const previous = process.env.ADMIN_ENABLED;
+  const withEnv = (value: string | undefined) => {
+    if (value === undefined) delete process.env.ADMIN_ENABLED;
+    else process.env.ADMIN_ENABLED = value;
+    return adminEnabled();
+  };
+  try {
+    check("unset means off", withEnv(undefined) === false, "an unconfigured server is safe");
+    check("empty means off", withEnv("") === false);
+    check('"false" means off', withEnv("false") === false);
+    check('"1" means off', withEnv("1") === false, "only the exact word counts");
+    check('"TRUE" means off', withEnv("TRUE") === false, "case matters, so a typo cannot open it");
+    check('only "true" means on', withEnv("true") === true);
+  } finally {
+    withEnv(previous);
+  }
 
   // The named-product comparison: pick a name, order by price gap, cut at 20.
   console.log("\n  named-product groups");
