@@ -52,7 +52,8 @@ async function main() {
   console.log(
     `\n  food products:     ${sitemap.food.length}\n` +
       `  non-food skipped:  ${sitemap.nonFood} (never fetched)\n` +
-      `  unpriced skipped:  ${sitemap.unpriced} (promotions/seasonal aisles, all 0,00 EUR)` +
+      `  of those, from mixed aisles: ${sitemap.fromMixed} (promotions, seasonal, own-brand -\n` +
+      `                               fetched because their URL cannot say what they are)` +
       (sitemap.unfiled.length > 0
         ? `\n  unfiled skipped:   ${sitemap.unfiled.length} (no department in the URL)`
         : "")

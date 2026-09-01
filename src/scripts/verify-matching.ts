@@ -766,6 +766,44 @@ function verifyPingoDoceSitemap(): number {
   // The department list is DERIVED from the sections table, so the two can
   // never disagree. What is worth checking is that the derivation still selects
   // food only, and still builds an address robots.txt permits.
+  // The cross-cutting aisles were skipped wholesale on a six-page sample, which
+  // turned out to be six out-of-season Christmas products. Measured properly,
+  // 494 of the 1,010 are food.
+  check(
+    "a mixed aisle is fetched, not skipped",
+    PINGO_DOCE_SECTIONS["as-nossas-marcas"]?.kind === "mixed" &&
+      PINGO_DOCE_SECTIONS["natal-e-ano-novo"]?.kind === "mixed",
+    "their URL cannot say what a product is, so the name has to"
+  );
+  check(
+    "a non-food aisle is still skipped without a request",
+    PINGO_DOCE_SECTIONS["limpeza"]?.kind === "non-food" &&
+      PINGO_DOCE_SECTIONS["higiene-pessoal-e-beleza"]?.kind === "non-food",
+    "there the URL does settle it - 5,827 pages, 1.6 hours saved"
+  );
+  check(
+    "a mixed-aisle product is judged by its name alone",
+    classifyFoodType(
+      "Queijo Ovelha Amanteigado Seia Médio Pingo Doce",
+      "PINGO_DOCE",
+      "As Nossas Marcas/Pingo Doce"
+    ) === "queijo",
+    "the path says only the brand"
+  );
+  check(
+    "and non-food in the same aisle is not",
+    classifyFoodType("Fraldas Bebé Extra Care Dry T6", "PINGO_DOCE", "As Nossas Marcas/Pingo Doce") === null
+  );
+  check(
+    "toothpaste is not a pasta",
+    classifyFoodType("Pasta de Dentes Branqueadora Pingo Doce", "PINGO_DOCE", "As Nossas Marcas/Pingo Doce") === null,
+    "the one systematic contaminant the measurement found"
+  );
+  check(
+    "but a spreading pasta still is",
+    classifyFoodType("Pasta de Atum", "PINGO_DOCE", "Mercearia/Pates e Pastas") === "pasta"
+  );
+
   check(
     "the food departments are exactly the food-kind sections",
     PINGO_DOCE_FOOD_CATEGORIES.length ===

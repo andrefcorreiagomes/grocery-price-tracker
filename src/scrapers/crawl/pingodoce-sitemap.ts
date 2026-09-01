@@ -50,15 +50,25 @@ export type SectionKind =
   /** pencils, shampoo, dog food; skip without fetching */
   | "non-food"
   /**
-   * A cross-cutting or seasonal aisle - promotions, Christmas, the own-brand
-   * showcase. Skipped, and the reason is specific rather than a guess: their
-   * 1,014 ids appear nowhere else in the sitemap, and every page sampled across
-   * the whole range published `0,00 EUR`. They are catalogue entries with no
-   * sellable price, so they cannot enter a price comparison. Counted and
-   * reported rather than dropped in silence, because a day when they start
-   * carrying prices is a day we want to hear about.
+   * A cross-cutting or seasonal aisle - promotions, Christmas, Easter, the
+   * own-brand showcase - holding BOTH food and non-food, where the URL cannot
+   * tell them apart. Fetched like any food section; what a product IS gets
+   * decided from its NAME by `classifyFoodType`.
+   *
+   * These were skipped wholesale until a re-sample showed that was wrong. The
+   * original reason - "every page sampled published 0,00 EUR" - came from six
+   * pages, and taking a spread across a whole section instead found real
+   * prices. Measured by name across all 1,010, 494 are food; natal-e-ano-novo
+   * and pascoa are food almost entirely. They sampled as priceless because they
+   * were sampled at the end of August, when Christmas and Easter stock is out
+   * of season - a seasonal state mistaken for a permanent property.
+   *
+   * The deeper error was making a SECTION-level decision from a PRODUCT-level
+   * observation. Whether a page carries a price is a fact about one product on
+   * one day, and `scrapePingoDoce` already handles it: `0,00 EUR` stores a null
+   * price, which every query downstream skips.
    */
-  | "unpriced";
+  | "mixed";
 
 interface Section {
   label: string;
@@ -106,13 +116,13 @@ export const PINGO_DOCE_SECTIONS: Record<string, Section> = {
   // Baby food is tracked as its own piece of work.
   "bebe-e-crianca": { label: "Bebé e Criança", kind: "non-food" },
 
-  promocoes: { label: "Promoções", kind: "unpriced" },
-  "as-nossas-marcas": { label: "As Nossas Marcas", kind: "unpriced" },
-  "natal-e-ano-novo": { label: "Natal e Ano Novo", kind: "unpriced" },
-  pascoa: { label: "Páscoa", kind: "unpriced" },
-  "santos-populares": { label: "Santos Populares", kind: "unpriced" },
-  "feira-do-bebe": { label: "Feira do Bebé", kind: "unpriced" },
-  "pingo-doce-master-catalog": { label: "Master Catalog", kind: "unpriced" },
+  promocoes: { label: "Promoções", kind: "mixed" },
+  "as-nossas-marcas": { label: "As Nossas Marcas", kind: "mixed" },
+  "natal-e-ano-novo": { label: "Natal e Ano Novo", kind: "mixed" },
+  pascoa: { label: "Páscoa", kind: "mixed" },
+  "santos-populares": { label: "Santos Populares", kind: "mixed" },
+  "feira-do-bebe": { label: "Feira do Bebé", kind: "mixed" },
+  "pingo-doce-master-catalog": { label: "Master Catalog", kind: "mixed" },
 };
 
 /** Words a Portuguese label keeps lowercase when title-casing a URL slug. */
@@ -197,9 +207,10 @@ export function categoryPathFromUrl(url: string): string | null {
 export interface PingoDoceSitemap {
   /** food-department products: the ones worth a request */
   food: PingoDoceProductUrl[];
-  /** counted, never fetched */
+  /** counted, never fetched - the URL settles these */
   nonFood: number;
-  unpriced: number;
+  /** of `food`, how many came from a mixed aisle rather than a food department */
+  fromMixed: number;
   /**
    * Sections absent from `PINGO_DOCE_SECTIONS`. Should be zero. A new
    * department appearing here is a real event - it is products we would
@@ -245,7 +256,7 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   const perFile: { url: string; entries: number }[] = [];
   const seen = new Set<string>();
   let nonFood = 0;
-  let unpriced = 0;
+  let fromMixed = 0;
   let unparseable = 0;
 
   for (const sitemap of PRODUCT_SITEMAPS) {
@@ -281,20 +292,21 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
       }
       if (known.kind === "non-food") {
         nonFood++;
-      } else if (known.kind === "unpriced") {
-        unpriced++;
-      } else {
-        food.push({
-          storeProductId,
-          url,
-          section,
-          categoryPath: categoryPathFromUrl(url) ?? known.label,
-        });
+        continue;
       }
+      // A mixed aisle is fetched exactly like a food department. What the
+      // product IS gets decided later, from its name.
+      if (known.kind === "mixed") fromMixed++;
+      food.push({
+        storeProductId,
+        url,
+        section,
+        categoryPath: categoryPathFromUrl(url) ?? known.label,
+      });
     }
 
     perFile.push({ url: sitemap, entries });
   }
 
-  return { food, nonFood, unpriced, unknownSections, unfiled, unparseable, unparseableSamples, perFile };
+  return { food, nonFood, fromMixed, unknownSections, unfiled, unparseable, unparseableSamples, perFile };
 }

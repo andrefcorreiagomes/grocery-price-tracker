@@ -328,7 +328,13 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "polpa", label: "Polpa", unit: "kg", heads: ["polpa"] },
   { id: "azeitona", label: "Azeitona", unit: "kg", heads: ["azeitona"] },
   { id: "acucar", label: "Açúcar", unit: "kg", heads: ["acucar"] },
-  { id: "pasta", label: "Pasta (barrar)", unit: "kg", heads: ["pasta"] },
+  // Toothpaste is a `pasta` by head noun and is not food. It never showed up
+  // while the own-brand aisle was skipped wholesale, because toothpaste's usual
+  // home is `higiene-pessoal-e-beleza`, which the URL excludes; crawling that
+  // aisle brings 7 of them in through a path that says nothing about what they
+  // are. The only systematic contaminant of the 494 food products there.
+  { id: "pasta", label: "Pasta (barrar)", unit: "kg", heads: ["pasta"],
+    exclude: /\bde dentes\b/i },
   { id: "oleo", label: "Óleo", unit: "l", heads: ["oleo"] },
   { id: "mel", label: "Mel", unit: "kg", heads: ["mel"] },
   { id: "sal", label: "Sal", unit: "kg", heads: ["sal"] },
