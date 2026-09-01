@@ -84,6 +84,25 @@ export function parseSize(name: string): ParsedSize | null {
   // sorts to the top of every cheapest-per-kilo ranking.
   if (/\d+\s*\/\s*\d+\s*(?:kg|gr?s?|g|lt?|ml|cl)\b/.test(flat)) return null;
 
+  // The same thing written out with "a" for "to", which is how the fish counter
+  // states a grade rather than a weight:
+  //
+  //   ROBALO GRANDE 800G A 1KG        a sea bass graded 800 g to 1 kg
+  //   SALMAO CABEÇA 2KG A 3KG
+  //
+  // Taking the first number called that salmon head 2 kg, and at EUR 1.89 the
+  // cheapest salmon in the country.
+  if (/\d+\s*(?:kg|gr?s?|g|lt?|ml|cl)\s+a\s+\d+\s*(?:kg|gr?s?|g|lt?|ml|cl)\b/.test(flat)) return null;
+
+  // `L'Or` is a coffee brand, not a litre. Continente writes the roast strength
+  // into the name and the brand straight after it, so "Cápsulas de Café
+  // Fortissimo Int 10 L'Or" read as 10 LITRES of coffee - and at EUR 4.99 that
+  // is EUR 0.50 a litre, the cheapest coffee in the catalogue by a distance.
+  //
+  // Anchored on the apostrophe, which is what separates the brand from a real
+  // unit: "10 L" keeps its meaning, "10 L'Or" does not.
+  if (/\d\s*l\s*['’]/.test(flat)) return null;
+
   const m = flat.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
   if (!m) return null;
 

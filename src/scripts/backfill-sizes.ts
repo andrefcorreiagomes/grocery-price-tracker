@@ -40,7 +40,7 @@ async function main() {
 
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null },
-    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, enrichedAt: true },
+    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, enrichedAt: true, foodType: true },
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
 
@@ -78,6 +78,18 @@ async function main() {
   const repairs: { id: string; packageSize: number | null; unit: string | null; was: number }[] = [];
   for (const r of food) {
     if (r.packageSize === null) continue;
+
+    // NOT repaired here: a stored unit that contradicts the food type's own.
+    //
+    // Tried, and it is the wrong way round. Clearing every such row would have
+    // touched 765 products and destroyed good data - "Chantilly" at 0.25 L and
+    // "Iogurte Líquido Cremoso" at 0.75 L are correctly measured in litres,
+    // under food types declared kg. When hundreds of products disagree with the
+    // table, the TABLE is what is wrong, and the answer is to declare that food
+    // "either", not to erase the products.
+    //
+    // `validate:comparisons` reports the disagreement instead, so it is a
+    // prompt to look at the declaration rather than a licence to overwrite.
     if (r.enrichedAt !== null) continue; // a product page said so; leave it alone
 
     const parsed = parseSize(r.name);

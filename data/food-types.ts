@@ -294,7 +294,21 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // massa the pasta, not massa the dough
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli"],
     exclude: /massa folhada|massa quebrada|massa de pizza|massa areada/i },
-  { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate"] },
+  // Sweets that are not chocolate, which reach here through the shelf rather
+  // than the name: "Chocolates e Guloseimas" holds both, and a name like
+  // "Rebuçados de Mentol" has no head of its own, so the category answered.
+  // Mint sweets at EUR 4.36/kg then led the cheapest-chocolate ranking.
+  //
+  // An EXCLUDE and not a REQUIRE: 480 of the 1,599 never say "chocolate" and
+  // most of them are chocolate anyway - Kinder Bueno, Lindt Lindor, Maltesers,
+  // Kit Kat. Demanding the word would drop hundreds of real ones to catch a few
+  // dozen strays.
+  // The sweet words only disqualify a product that never mentions chocolate:
+  // a plain `caramelo` exclusion also threw out "Tablete de Chocolate com
+  // Caramelo", which is chocolate with caramel in it. Measured, the blunt
+  // version removed 285 products where the guarded one removes far fewer.
+  { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate"],
+    exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz)/i },
   { id: "arroz", label: "Arroz", unit: "kg", heads: ["arroz"], exclude: /arroz doce/i },
   { id: "gelatina", label: "Gelatina", unit: "kg", heads: ["gelatina"] },
   { id: "farinha", label: "Farinha", unit: "kg", heads: ["farinha"] },

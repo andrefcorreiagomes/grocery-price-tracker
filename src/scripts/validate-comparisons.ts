@@ -123,6 +123,25 @@ export function reportFor(id: string, rows: ComparableProduct[]): TypeReport {
     problems.push({ kind: "unit", text: `no unit declared: ${kg} priced by weight, ${l} by volume` });
   }
 
+  // Products the store measures the OTHER way from what this food type
+  // declares. A few are a bad parse; many mean the declaration is wrong and the
+  // food is really sold both ways - "Chantilly" in litres under a kg type. So
+  // it is reported as something to look at, never acted on: clearing every such
+  // row was tried and would have erased 765 correctly-measured products.
+  const declared = type?.unit;
+  if (declared && declared !== "either") {
+    const other = rows.filter(
+      (r) => r.price !== null && r.packageSize !== null &&
+        (r.unit === "kg" || r.unit === "l") && r.unit !== declared
+    ).length;
+    if (other > 0 && other >= usable.length * 0.05) {
+      problems.push({
+        kind: "unit",
+        text: `declared ${declared}, but ${other} products are measured the other way`,
+      });
+    }
+  }
+
   const tooCheap = prices.filter((p) => p < MIN_UNIT_PRICE).length;
   const tooDear = prices.filter((p) => p > MAX_UNIT_PRICE).length;
   if (tooCheap > 0) {
