@@ -1,0 +1,132 @@
+.main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+  width: 100%;
+}
+
+.main h1 {
+  font-size: clamp(1.7rem, 4vw, 2.2rem);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.lede {
+  margin-top: 0.7rem;
+  max-width: 62ch;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.progress {
+  margin-top: 1.2rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92rem;
+}
+
+.group {
+  margin-top: 2.2rem;
+}
+
+.group h2 {
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.n {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  letter-spacing: 0;
+}
+
+.list {
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+/* Confirmed rows recede; the ones still to review keep full contrast, so the
+   remaining work is what the eye lands on. */
+.done {
+  opacity: 0.55;
+}
+
+.pending {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.meta {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.select {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 4px;
+  background: var(--background);
+  color: inherit;
+}
+
+.save {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.save:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.select:focus-visible,
+.save:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 36rem) {
+  .list li {
+    align-items: flex-start;
+  }
+  .form {
+    width: 100%;
+  }
+  .select {
+    flex: 1;
+    min-width: 0;
+  }
+}

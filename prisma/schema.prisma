@@ -508,3 +508,29 @@ model CataloguePrice {
   @@index([productId, isOpen])
   @@index([productId, firstSeenAt])
 }
+
+/// Where a kind of food sits in the app's own menu.
+///
+/// A food type is what a shopper has in mind ("batata"); a CATEGORY is the
+/// heading it lives under ("Legumes"). The catalogue knows the first and has no
+/// idea about the second, which is why the app's Carne and Fruta sections hold
+/// only the 275 hand-picked products and none of the 44,000 catalogue ones.
+///
+/// Separate from `data/food-types.ts` on purpose. That table is curated in code
+/// because its judgements are about language - which head nouns mean cheese.
+/// This one is edited through a page in the app, because filing 166 foods under
+/// headings is a job for whoever runs the site, not a code change.
+model FoodTypeCategory {
+  /// the FoodType.id from data/food-types.ts
+  foodType String @id
+  /// the menu heading, e.g. "Carne"
+  category String
+  /// Whether a person said so. False means it is still only the proposal
+  /// derived from the store's own department, which is right about most foods
+  /// and wrong about some, and must never be mistaken for a decision.
+  confirmed Boolean @default(false)
+  decidedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([confirmed])
+}
