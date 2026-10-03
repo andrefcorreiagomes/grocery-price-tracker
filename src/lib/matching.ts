@@ -70,7 +70,11 @@ export interface ParsedSize {
  * match. Grams fold to kg and ml/cl to L so cross-store comparison is unit-safe.
  */
 export function parseSize(name: string): ParsedSize | null {
-  const flat = stripAccents(name).toLowerCase();
+  // "Nº20" is a model number, not a quantity. Auchan's made-to-order cakes are
+  // "BOLO CAKE DESIGN PRODUÇÃO PRÓPRIA Nº20 KG" - design 20, sold by the kilo -
+  // and reading 20 kg put cake at EUR 0.95/kg, the cheapest in the country.
+  // Removed rather than refused, so a real size elsewhere in the name survives.
+  const flat = stripAccents(name).toLowerCase().replace(/\bn\.?\s*[º°]\s*\d+/g, " ");
 
   // A RANGE is not a size. Auchan grades fish by weight and writes the grade
   // where a size would go, in grams but labelled kg:

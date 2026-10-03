@@ -16,6 +16,7 @@ import { sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
 import { MAX_NAMED_GROUPS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
+import { correctedSize, implausiblePodSize, pricedPerUnit } from "../scrapers/page-size";
 import {
   cheapestPerStore,
   cheapestStore,
@@ -995,6 +996,59 @@ function verifyFoodTypes(): number {
     classifyFoodType("Cápsulas Compatíveis 16un", "PINGO_DOCE",
       "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas") === "cafe"
   );
+
+  // A shelf that names several foods says what is NEAR a product, not what it
+  // is. Taking the first food named filed 2,271 products wrongly.
+  console.log("\n  food types: shelves that name several foods");
+  is("Puré de Batata Knorr", "CONTINENTE", "Mercearia/Arroz, Massa e Farinha/Puré", null);
+  is("Nectarina Continente", "CONTINENTE", "Frescos/Frutas/Pêssego, Ameixa e Kiwi", null);
+  is("LAÇOS (FARFALLE) AUCHAN 500G", "AUCHAN", "alimentação/mercearia/arroz-e-massa", null);
+  // ...and an undecided shelf does not hand over to its broader parent.
+  is("Coco Ralado Continente", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Preparados para Mousses e Bolos", null);
+  // How many foods a shelf names is decided by the shelf alone: after café's
+  // rules turned a product away, this shelf used to look like a tea shelf.
+  check(
+    "a shelf naming coffee and tea is not a tea shelf for whatever coffee rejects",
+    classifyFoodType("Cápsulas de Achocolatado Dolce Gusto Nesquik", "PINGO_DOCE",
+      "Café, Chá e Achocolatados/Capsulas de Cafe") !== "cha"
+  );
+
+  // What the old shelf rule got right is now claimed by name.
+  console.log("\n  food types: claimed by name instead of by shelf");
+  const cafeShelf = "alimentação/mercearia/café,-chá-e-infusão/cápsula-dolce-gusto-e-compatíveis";
+  is("CÁPSULAS DOLCE GUSTO BUONDI 64 UN", "AUCHAN", cafeShelf, "cafe");
+  is("CÁPSULAS TORRIÉ CAFÉ COM LEITE SOLÚVEL DOLCE GUSTO 16UN", "AUCHAN", cafeShelf, "cafe");
+  is("Cápsulas de Galão", "PINGO_DOCE", "Café, Chá e Achocolatados/Capsulas de Cafe", "cafe");
+  check("capsules of something else are not coffee",
+    classifyFoodType("CÁPSULAS TASSIMO MILKA 8UN", "AUCHAN", cafeShelf) !== "cafe");
+  check("nor are Nesquik capsules, even on a coffee shelf",
+    classifyFoodType("Cápsulas de Achocolatado Dolce Gusto Nesquik", "PINGO_DOCE",
+      "Café, Chá e Achocolatados/Capsulas de Cafe") !== "cafe");
+  // "pastilha" is a coffee pod and also a lozenge; "açafrão" contains "caf".
+  const sweets = "Mercearia/Chocolate, Gomas e Rebuçados/Gomas, Pastilhas e Rebuçados";
+  check("coffee-flavoured sweets are not coffee",
+    classifyFoodType("Rebuçados de Café Mini sem Glúten Villa", "CONTINENTE", sweets) !== "cafe");
+  check("nor is saffron gum, though açafrão contains caf",
+    classifyFoodType("Pastilhas Elásticas de Gengibre e Açafrão True Gum", "CONTINENTE", sweets) !== "cafe");
+  is("Pastilhas Delta Café Platinum 16un", "AUCHAN",
+    "alimentação/mercearia/café,-chá-e-infusão/café-de-máquina,-grão-e-pastilhas", "cafe");
+  check("roasted barley is not coffee, though Delta also sells coffee",
+    classifyFoodType("CEVADA DELTA TORRADA MOÍDA 220 G", "AUCHAN",
+      "alimentação/mercearia/café,-chá-e-infusão/café-saco,-solúvel-e-cevadas") !== "cafe");
+  is("TABLETE LINDT EXCELLENCE 70% 100G", "AUCHAN", "alimentação/mercearia/chocolates-e-achocolatados", "chocolate");
+  is("Chouriça Tradicional Prisca", "CONTINENTE", "Frescos/Charcutaria/Chouriço e Morcela", "chourico");
+  is("PÃES GARCIA CACETE SEM GLÚTEN 5X80G", "AUCHAN", "alimentação/padaria-e-pastelaria", "pao");
+
+  // These two rules held invisible control characters where `\b` belonged, and
+  // matched nothing until that was noticed.
+  console.log("\n  food types: rules that used to match nothing");
+  check("ovos moles are a sweet, not eggs",
+    classifyFoodType("Ovos Moles de Aveiro", "CONTINENTE", "Frescos/Padaria e Pastelaria/Doçaria Regional") !== "ovo");
+  check("a dish with a sauce is not sauce",
+    classifyFoodType("Pernil Assado com Molho de Cerveja", "PINGO_DOCE", "Congelados/Refeicoes e Salgados") !== "molho");
+  check("nor is it the sauce's ingredient",
+    classifyFoodType("Pernil Assado com Molho de Cerveja", "PINGO_DOCE", "Congelados/Refeicoes e Salgados") !== "cerveja",
+    "roast pork in beer sauce is not beer");
   // The scan must not override an exclude: pure de batata is not a potato.
   is("Puré de Batata Flocos Continente", "CONTINENTE", "Mercearia", null);
 
@@ -1065,7 +1119,42 @@ function verifyFoodTypes(): number {
   check("an undecodable volume is unknown, not a guess", size("REFRIGERANTE 7UP LATA 6X33L") === null);
   check("and the other reading of it too", size("AGUA SERRA DA ESTRELA 4X15L") === null);
   check("a calibre where a size goes is unknown", size("CHOURICAO PROBAR T/80 KG") === null);
+  check(
+    "a model number is not a size",
+    size("BOLO CAKE DESIGN PRODUÇÃO PRÓPRIA Nº20 KG") === null,
+    "design number 20, sold by the kilo - not a 20 kg cake"
+  );
+  check("nor with a dot", size("BOLO CAKE DESIGN N.º 7 KG") === null);
+  check("a real size beside a model number survives", near(size("VELA Nº5 BOLO 500G")?.total, 0.5));
   check("a 10 L garrafao still parses", near(size("AGUA GARRAFAO 10L")?.total, 10));
+
+  // Goods sold by weight: the headline price is already per kilo, and the size
+  // label is what one item weighs. Strings as they appear on live pages
+  // (3 October 2026).
+  console.log("\n  page sizes: a price that is already per kilo");
+  check("Continente's per-kilo headline is recognised",
+    pricedPerUnit("2,49€/kg 7,35€/un", 2.49) === "kg", "a whole chicken, emb. 2,95 kg (aprox.)");
+  check("so is Pingo Doce's, promotion text and all",
+    pricedPerUnit("10,99 €/Kg Price reduced from 12,99 €/Kg to", 10.99) === "kg", "a whole salmon, label 4.2 Kg");
+  check("a pack price is not per kilo, whatever the second line says",
+    pricedPerUnit("1,99€ 9,95€/kg", 1.99) === null);
+  check("nor is a plain promotion", pricedPerUnit("3,79 € Price reduced from 4,99 € to", 3.79) === null);
+  check("a per-kilo figure that is not THIS price does not count",
+    pricedPerUnit("4,99€/kg", 2.49) === null, "another product's price must never answer for this one");
+  check("no price, no verdict", pricedPerUnit("2,49€/kg", null) === null);
+  check("a per-kilo price makes the size exactly 1",
+    correctedSize("Frango Inteiro", { total: 2.95, unit: "kg" }, "kg")?.total === 1,
+    "EUR 2.49/kg, not 2.49 / 2.95 = EUR 0.84/kg");
+
+  console.log("\n  page sizes: capsules counted as kilos or litres");
+  check("ten capsules labelled 10 Kg are not 10 kg",
+    correctedSize("Cápsulas de Café Nespresso Baunilha", { total: 10, unit: "kg" }, null) === null);
+  check("nor is an intensity read as litres",
+    implausiblePodSize("Cápsulas de Café Fortissimo Int 10 L'Or", 10, "l"));
+  check("a real capsule weight survives",
+    correctedSize("Cápsulas de Café Expresso", { total: 0.052, unit: "kg" }, null)?.total === 0.052);
+  check("and a 10 kg sack of something that is not a capsule is left alone",
+    correctedSize("Batata Branca Saco", { total: 10, unit: "kg" }, null)?.total === 10);
   check("and a 5 kg sack of rice", near(size("ARROZ AGULHA 5 KG")?.total, 5));
 
   // Portuguese writes thousands with a dot, and Auchan leaves it in front of a

@@ -50,6 +50,9 @@ export const FOOD_TYPE_BY_ID = new Map(FOOD_TYPES.map((t) => [t.id, t]));
  */
 export function foldPlural(token: string): string {
   if (token.length >= 5 && token.endsWith("oes")) return token.slice(0, -3) + "ao";
+  // pães -> pão. Without it "paes" lost only its s and became "pae", so "PÃES
+  // GARCIA CACETE" was not bread.
+  if (token.length >= 4 && token.endsWith("aes")) return token.slice(0, -3) + "ao";
   if (token.length >= 5 && token.endsWith("ais")) return token.slice(0, -3) + "al";
   return token.length >= 4 && token.endsWith("s") ? token.slice(0, -1) : token;
 }
@@ -87,7 +90,14 @@ export function nameTokensForType(name: string, store: string): string[] {
     .map(foldPlural);
 }
 
-/** First type claiming `head` whose require/exclude rules accept `name`. */
+/**
+ * First type claiming `head` whose require/exclude rules accept `name`.
+ *
+ * The rules read the NAME only, even when a shelf is deciding. Letting the
+ * shelf's words count as evidence was tried: "aromas, fermento e corantes"
+ * then satisfied fermento's own require, and filed every vanilla essence and
+ * food colouring on that shelf as baking powder.
+ */
 function resolve(head: string, name: string): FoodType | null {
   const candidates = BY_HEAD.get(head);
   if (!candidates) return null;
@@ -163,18 +173,42 @@ export function classifyFoodType(
     for (const token of tokens.slice(1)) {
       const later = resolve(token, plain);
       if (later) return later.id;
+      // Past "molho" come the sauce's ingredients, not the product: "Pernil
+      // Assado com Molho de Cerveja" is roast pork, not beer.
+      if (token === "molho") break;
     }
   }
 
   // 3. the store's own category says so. Read LEAF FIRST, because the leaf is
   // the most specific: "Café, Chá e Infusão/Café em Cápsulas" must answer café,
   // and reading the broader segment first could answer chá instead.
+  //
+  // The first segment that names ANY food decides, and it decides only if it
+  // names exactly one. A shelf naming several says what is NEAR the product,
+  // not what it is: this used to take the first food named, and measured over
+  // the catalogue that filed 2,271 products from 125 such shelves - bananas as
+  // maçã ("Banana, Maçã e Pera"), farfalle as arroz ("arroz-e-massa"), mashed
+  // potato as arroz ("Arroz, Massa e Farinha/Puré"), oregano as sal. Nor does
+  // an undecided shelf hand over to its parent, which is broader still: that
+  // filed grated coconut as açúcar through "Açúcar e Sobremesas". Undecided is
+  // the honest answer; the names the old rule got right are claimed by name in
+  // data/food-types.ts instead.
+  //
+  // How many foods a shelf names is a property of the SHELF, so it is counted
+  // from the shelf's words alone, before this product's own rules are applied.
+  // Counting after them made "Café, Chá e Achocolatados" look like a tea-only
+  // shelf to any product café's rules had turned away, and filed galão
+  // capsules as chá. Words claimed by the same food types count once: "Café em
+  // Cápsulas" names one food in two words.
   const segments = (categoryPath ?? "").split(/[/>]/).map((s) => s.trim()).filter(Boolean);
   for (const segment of segments.reverse()) {
+    const foods = new Map<string, string>(); // claimants -> the word that names them
     for (const token of categoryTokens(segment)) {
-      const viaCategory = resolve(token, plain);
-      if (viaCategory) return viaCategory.id;
+      const claimants = BY_HEAD.get(token);
+      if (claimants) foods.set(claimants.map((t) => t.id).join(","), token);
     }
+    if (foods.size > 1) return null;
+    if (foods.size === 1) return resolve([...foods.values()][0], plain)?.id ?? null;
   }
 
   return null;

@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
+import { correctedSize, pricedPerUnit } from "./page-size";
 import { detached, finiteOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
@@ -10,8 +11,11 @@ interface SchemaProduct {
 }
 
 export async function scrapeContinente(url: string): Promise<ScrapeResult> {
-  const html = await fetchHtml(url);
+  return parseContinentePage(await fetchHtml(url), url);
+}
 
+/** Reading a page, apart from fetching it, so it can be checked on a saved one. */
+export function parseContinentePage(html: string, url: string): ScrapeResult {
   const product = extractLdJsonBlocks(html).find(
     (block): block is SchemaProduct =>
       typeof block === "object" &&
@@ -24,13 +28,21 @@ export async function scrapeContinente(url: string): Promise<ScrapeResult> {
   }
 
   const $ = cheerio.load(html);
-  const size = parsePackageSize($(".ct-pdp--unit").first().text().trim());
   // The barcode rides on a nutritional-info URL in the page, and that URL is
   // HTML-escaped: "...?pid=4696048&amp;ean=8435250297955". So the character
   // before "ean=" is a semicolon, not an "&", and a plain /[?&]ean=/ misses
   // every one of them - measured, 0 of 124 products until this was allowed for.
   const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
   const price = Number(product.offers.price);
+
+  // Scoped to the product's own price box: the page has exactly one, while
+  // carousels of other products elsewhere carry their own per-kilo prices.
+  const headline = $(".ct-pdp--prices").first().find(".pwc-tile--price-primary").first().text();
+  const size = correctedSize(
+    product.name ?? "",
+    parsePackageSize($(".ct-pdp--unit").first().text().trim()),
+    pricedPerUnit(headline, price)
+  );
 
   return {
     name: product.name ?? "",

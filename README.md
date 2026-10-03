@@ -1,214 +1,268 @@
-# Grocery Price Tracker
+# Grocery Price Tracker (Portugal)
 
-Tracks prices for a curated list of grocery products across Continente,
-Pingo Doce and Auchan, storing one price snapshot per product/store/day so
-you can compare prices and see history over time.
+Compares what food really costs, per kilo and per litre, across Portugal's three
+largest supermarket chains: **Continente**, **Pingo Doce** and **Auchan**. It
+reads each chain's full online catalogue, works out what kind of food every
+product is, and ranks the chains on a like-for-like basis.
 
-## Things that turned out to be hard
+> **Designed and directed by André Gomes. The code was written by Claude,
+> Anthropic's AI coding agent, working under my direction.**
 
-Comparing supermarket prices sounds solved: fetch two numbers, print the smaller
-one. Most of the work here went into cases where the obvious number is quietly
-the wrong one.
+## At a glance
 
-### Every store prices tinned fish on drained weight
+| | |
+|---|---|
+| Products collected | **44,384**: Continente 17,264 · Pingo Doce 9,046 · Auchan 18,074 |
+| Products assigned a kind of food | **38,258** (86%) |
+| Kinds of food defined | **177**, from *abóbora* to *vinho* |
+| Kinds of food that can be compared at all three chains | **162** |
+| Identical products matched across two chains | **944** |
+| Prices as of | the crawls of 30 August to 1 September 2026 |
 
-A tin has two weights: *peso líquido* (net — everything in the tin) and *peso
-escorrido* (drained — just the food). All three stores compute the `€/kg` printed
-on their own pages from the **drained** figure. This tracker originally used net,
-which put its numbers roughly a third below every price tag in the country.
+What these figures count:
 
-Net doesn't just shift the numbers, it hides the difference. The own-brand 120 g
-tuna tin costs €1,12 at all three stores, so on net weight all three read
-€9,33/kg — a perfect three-way tie. On drained weight, that same €1,12 buys 85 g
-of fish at Pingo Doce against 78 g at the other two.
+- **Products collected** are the products each chain listed on its website at
+  the most recent crawl.
+- **Compared at all three chains** means every chain has at least one product
+  of that kind with both a price and a known size, so a price per kilo or per
+  litre can be calculated for each chain.
+- **Identical products** are the same item, for example the same brand and
+  pack, sold by two chains. Every match is a pair rather than a triple, because
+  Pingo Doce does not publish barcodes, and without a barcode two listings
+  cannot be confirmed to be the same item.
 
-The fix is not simply "use drained", because drained weight isn't always
-published or trustworthy. Two exceptions are encoded and commented in place in
-`data/tracked-products.ts`:
+Prices are stored as a history: a new entry is written only when a price
+changes. The catalogue's history starts on 19 August 2026.
 
-- **Auchan publishes no drained figure at all** for the Origens Bio chickpeas. A
-  group can't mix bases, so that group stays on net.
-- **Continente and Auchan disagree about the same Compal tin** — 234 g drained
-  versus 260 g. One of them is wrong, and using drained would invent a €0,64/kg
-  gap between two identical tins both priced €1,49. That group stays on net too.
+## How this was built
 
-A related trap: never match `€/kg` across the whole page. These pages carry
-related-product carousels, and a page-wide regex once returned a neighbour's
-rate, making a tin look like it drained to 85 g when its own product-detail
-element said 78 g. Always scope to the product element.
+I am a mathematician, not a software engineer. I designed this project and
+directed its development; Claude wrote the code. The commit history shows
+this: the commits carry a `Co-Authored-By: Claude` line.
 
-### Pack price or price per kilo? The suffix decides
+My part was deciding what the tool should measure and how, setting the rules it
+had to follow, and checking what it produced: questioning numbers that could
+not be true, and refusing conclusions drawn from too little evidence. The
+problems described below are the ones where those decisions mattered.
 
-Continente labels fixed-weight packs and variable-weight counter goods with the
-same `emb.` field, meaning something different in each case. On a 500 g tray it
-is the pack size. On a turkey leg it is how much *that particular leg* weighed,
-while the displayed price is already the per-kilo rate. "Perna de Peru" comes
-back as `price: 4.99, packageSize: 2.2` — treating 2.2 as a pack size computes
-€2,27/kg and understates the product by half.
+## Respecting each store's rules
 
-The reliable discriminator is the suffix on the headline price:
+Collecting the data is only worth doing if it is done properly, so the
+crawlers follow each chain's published rules, including where that makes them
+much slower.
 
-| Page shows | Meaning | `packageSize` |
+- **robots.txt.** Every website can publish a file stating what automated
+  programs may and may not visit, and the three chains' files differ.
+  Continente and Pingo Doce forbid automated access to their paginated product
+  listings; Auchan allows it. So Auchan's catalogue is read from its listings
+  in minutes, while Continente's and Pingo Doce's are read one product page at
+  a time from the sitemaps they publish, which takes hours. An earlier version
+  of the crawler used the forbidden listings; it was replaced, and the old
+  route is disabled.
+- **A gentle pace.** At most one request per second to each store. A failed
+  request is retried at most twice, with growing waits, and a store's request
+  to slow down (`Retry-After`) is obeyed.
+- **Public pages only.** No logins and no accounts. The prices are the public
+  online prices, which can differ from in-store and loyalty-card prices.
+- **Facts only.** Names, brands, prices, sizes, barcodes and the store's own
+  category. No photographs, product descriptions or customer reviews are
+  collected or shown, and the chains appear by name only, without logos.
+- **Checked over time.** The three robots.txt files and terms of use were
+  recorded on 13 August 2026 and checked again on 2 October 2026. The
+  robots.txt files were unchanged, and none of the terms of use contained a
+  clause on automated access.
+
+Before collecting anything I also worked through the legal position under
+Portuguese and EU law. Portugal's copyright code permits text and data mining,
+including for commercial purposes, unless the site owner has reserved that
+right in a machine-readable form (art. 75.º, n.º 2, al. w) of the CDADC, and
+art. 15.º, al. f) of Decreto-Lei 122/2000, both as amended by Decreto-Lei
+47/2023). None of the three chains has made such a reservation. This is my
+reading, not legal advice.
+
+## Problems worth describing
+
+Comparing supermarket prices sounds solved: fetch two numbers and print the
+smaller one. Most of the work went into cases where the obvious number is
+quietly the wrong one.
+
+### Missing data has two different meanings
+
+When a chain shows no price for, say, rice, there are two very different
+reasons. Either the chain does not sell it, or it sells it but its pack size
+could not be read, so no price per kilo exists. Shown the same way, the second
+case would tell a shopper that a chain does not sell rice when it does. The
+comparison therefore keeps three states for every cell (a price; *not sold*;
+*sold, size unknown*), and the pages never display the last two alike.
+
+### A handful of examples is not a measurement
+
+Twice, a conclusion about a whole group of products was nearly drawn from a
+sample far too small to support it.
+
+- Six pages of one Pingo Doce aisle all showed a price of €0.00, which suggested
+  the aisle was not food and could be dropped: 1,010 products. Measured
+  properly, 494 of them were food. The six pages were out-of-season Christmas
+  stock, sampled in August.
+- 9 of 20 Continente product pages turned out to be dead links, which would mean
+  45% of the catalogue was gone. A sample of 300 put the figure at 2.3%.
+
+The working rule since then: before making a rule about a whole class of
+products, count the class. Counting is cheap here, and it has repeatedly
+overturned the first guess.
+
+### A tin of tuna has two weights
+
+A tin has a net weight (everything in the tin) and a drained weight (the food
+alone). All three chains calculate the price per kilo printed on their pages
+from the drained weight. Using net weight does more than shift the numbers; it
+hides differences. The own-brand 120 g tuna tin costs €1.12 at all three chains,
+so on net weight all three tie at €9.33/kg. On drained weight, the same €1.12
+buys 85 g of fish at Pingo Doce and 78 g at the other two.
+
+### Reading a size out of a product name
+
+Most sizes come from free text, written differently by each chain, and the
+obvious reading is often wrong:
+
+| Written as | Obvious reading | Correct reading |
 |---|---|---|
-| `19,99€/kg` then `3,00€/un` | headline is per kilo; `/un` is the minimum cut | `1` |
-| `1,99€` then `9,95€/kg` | headline is the pack price; `/kg` is derived | pack weight |
+| `MARISCADA COZIDA UNIDADE 1.200 GR` | 1.2 g | 1,200 g: Portuguese separates thousands with a dot |
+| `AGUA C/ GAS VIMEIRO 6X050L` | six 50-litre bottles | six 0.5 L bottles: centilitres, with the decimal point dropped |
+| `BOLO CAKE DESIGN Nº20 KG` | a 20 kg cake | cake design number 20, sold by the kilo |
+| `Cápsulas de Café Fortissimo Int 10 L'Or` | 10 litres of coffee | no size at all: *L'Or* is the brand |
+| `ACAFRAO AUCHAN MOIDO 3 DOSES 0.3 G` | perhaps 300 g | really 0.3 g of saffron, about €10,000/kg |
 
-Counter goods also swap `emb.` for a minimum-order label (`Quant. Mínima = 150
-gr`), which is not a pack size and must never be used as one. It cross-checks:
-€19,99/kg × 0,15 kg = €3,00, exactly the `/un` figure shown. Where a page is
-still ambiguous, the method is to fetch a control listing whose mode is already
-known and compare signatures.
+The last row is why the thousands rule applies only to exactly three digits
+after the dot: one or two decimals are genuinely used for small, expensive
+things. Each rule is tested against the cases it must change and the cases it
+must leave alone.
 
-### Three promotion mechanisms, and two decoys
+### Sorting 44,000 products into 177 kinds of food
 
-Recording whether a price is a promotion needed three unrelated implementations,
-because the stores share no convention:
+Each kind of food is defined by the words that name it, plus exclusions where a
+word misleads: *pasta* is not *pasta de dentes* (toothpaste). Exclusions have to
+be precise. A rule meant to separate sweets from chocolate excluded anything
+mentioning *caramelo*, which silently removed every caramel-filled chocolate
+bar, 285 products, until it was rewritten to exclude caramel only when no
+chocolate is mentioned.
 
-| Store | Signal | What it gives |
-|---|---|---|
-| Continente | `pre_discount_price` in an HTML-escaped analytics `dataLayer` | pre-promotion price, no end date |
-| Pingo Doce | a `.product-promo-end` element reading "Promoção até 17/08" | end date, no pre-promotion price |
-| Auchan | `priceValidUntil` in the ld+json offer | end date, no pre-promotion price |
+Rules were chosen over a trained model on purpose. There was no labelled data
+to train on, and with rules every decision can be read, checked, and traced
+back to the line that made it.
 
-The part worth writing down is the two signals that look right and aren't:
+### A shelf that names several foods
 
-- **Pingo Doce's `dataLayer` carries a `discount` field that reads `0` on
-  discounted items.** The DOM element is the only truthful source.
-- **Auchan's `promo-label` and `promo-badges` class names are byte-identical on
-  promo and non-promo pages.** Matching on them flags everything.
+When a product's name does not say what it is, the store's shelf can. But many
+shelves name several foods, such as Continente's "Banana, Maçã e Pera", and the
+classifier used to take the first one named. Measured across the catalogue,
+that decided 2,271 products on 125 such shelves, and it was wrong more often
+than right: bananas filed as apples, farfalle as rice, oregano as salt, and
+mashed potato on the rice page. Now a shelf decides only when it names exactly
+one food; otherwise the product stays unclassified, which is the honest
+answer. The groups the old rule did get right, such as coffee capsules whose
+names never say "café", are now recognised from their names instead.
 
-Because no store publishes all of it, `regularPrice` and `promoEndsAt` are both
-nullable by design, and `onPromotion: false` on rows written before the feature
-existed means "never captured", not "verified not on promotion".
+Each version of the rule was measured against the whole catalogue before it
+was kept, and several were rejected that way. One counted the shelf's foods only
+after the product's own rules had run, which made "Café, Chá e Achocolatados"
+look like a tea shelf to anything rejected as coffee. The other let the
+shelf's words count as evidence, which filed every vanilla essence on the shelf
+"aromas, fermento e corantes" as baking powder.
 
-The feature corrected a wrong conclusion on its first run. A 58% price gap on
-Nescafé had been read as Pingo Doce simply charging more; the promo data showed
-Continente's €3,99 was a temporary discount against a €6,29 regular price, and
-all three stores were within four cents of each other.
+### A repair that would have done harm
 
-### A search result that looked perfect, and wasn't
+Some products appeared to contradict themselves, for example a kind of food
+measured by weight but sold in litres. An automatic repair was written, then
+measured before it ran: it would have rewritten 765 rows that were correct, such
+as whipped cream that really is sold by volume, in 0.25 L packs. It was withdrawn. The
+contradictions are now reported for review rather than fixed automatically.
 
-Products are added in batches: search all three stores for a term, cluster the
-results into comparable groups, review, then write the approved groups into
-`data/tracked-products.ts`. During one batch three Auchan URLs came back with the
-right product name, the right store ID and the right price — and slugs that had
-been reconstructed rather than read. All three 404'd.
+### Pack price or price per kilo?
 
-The fix was structural rather than a patch. Raw search results are now dumped to
-a file first, and every proposed URL is checked back against that dump by store
-and ID before it can reach the product list. A URL that isn't in the dump doesn't
-exist, however plausible it reads.
+Continente and Pingo Doce use the same size label for a pack (a 500 g tray) and
+for the weight of one particular item sold by the kilo. A whole chicken shows
+`2,49€/kg` and `emb. 2,95 kg (aprox.)`; dividing one by the other priced it at
+€0.84/kg, and a whole salmon at €1.90/kg. The reliable signal is the suffix on
+the headline price itself: `€/kg` means the price is already per kilo, and the
+label is only what one item weighs.
 
-The same process caps each store's search at 60 hits (`SEARCH_LIMIT` in
-`src/scrapers/search/paginate.ts`) — by hit count rather than page count, because
-the three stores return 35, 100 and 100 results per page, so "one page each"
-would sample them at wildly different depths.
+This was first solved by hand for a short list of products and only later
+found to affect the whole catalogue, by scanning every food for prices far
+below what that food usually costs. The rule was then written from five live
+product pages and tested on them before any crawl was run.
 
-### A price that never changes again
+The same scan found the opposite mistake in the stores' own data: Pingo Doce
+labels a box of 10 coffee capsules "10 Kg | 0,38 €/Kg", and Continente's pages
+give L'Or capsules' intensity ("Int 10") as 10 litres. Capsules are never sold
+by the litre or by the kilo, so those sizes are treated as unknown.
 
-Pingo Doce delisted a fish SKU. The URL 404s, and the nightly scrape logs one
-failure and carries on, as designed — but the comparison table kept showing that
-store's last known price, styled identically to prices captured that morning. A
-stale price presented as current is worse than no price.
+### Promotions, and two signals that lie
 
-Every table now carries the date of the most recent successful scrape, and any
-cell that has fallen behind it is marked with its own date. Those are
-deliberately different comparisons: the caption asks *did the scraper run at
-all*, the cell asks *did this one listing fail while the others succeeded*.
+Each chain marks promotions differently, and two of the obvious signals are
+false: Pingo Doce's analytics data reports a discount of `0` on discounted
+items, and Auchan's promotion style names appear on pages that have no
+promotion. The first run with correct promotion data overturned a conclusion: a
+58% price gap on a Nescafé jar, which had looked like Pingo Doce charging more,
+was a temporary discount at Continente. All three chains' regular prices were
+within four cents of each other.
 
-Diagnosing it is also a reminder that a 404 has more than one cause. Pingo Doce
-URLs carry a zero-width space (`%E2%80%8B`) in some category segments, and the
-store had separately renamed the product's size band — either would produce an
-identical 404 on a product that still exists. Establishing that the SKU was
-genuinely gone took testing every combination of old slug, renamed slug, with and
-without the zero-width space, plus the store's own search.
+### A crawler that ran out of memory
 
-## Setup
+The first full Continente crawl crashed after 2,200 of its 17,292 products.
+The few useful characters taken from each page were still references into the
+whole page, so every page stayed in memory: about 1,953 KB per product. Copying
+the extracted values out of the page brought that to about 0.1 KB.
+
+## Current limitations
+
+- **Continente sizes.** A size is known for 57% of Continente's products,
+  against 91 to 92% at the other two chains, so Continente takes part in fewer
+  comparisons. For wine, no comparison is possible yet.
+- **Prices are from one crawl**, at the end of August 2026. The crawls have not
+  yet been put on a daily schedule.
+- **Pingo Doce shows no online price** for 1,918 of its 9,046 products.
+- **Some kinds of food are too broad to rank fairly.** *Queijo* (cheese) covers
+  everything from a children's fromage frais to a cured Serra da Estrela.
+- **Goods sold by weight are corrected only as their pages are re-read.** The
+  crawler now handles them (see *Pack price or price per kilo?*), but the
+  stored data predates the fix, so until the next full crawl of Continente and
+  Pingo Doce some of those products still show a price per kilo that is too
+  low.
+- **Not yet online.** The site runs locally; it is not hosted publicly.
+
+## Technical overview
+
+TypeScript throughout: **Next.js 16** for the site, **Prisma 7** with
+**SQLite** for storage. Pages are fetched with plain HTTP requests, with no
+headless browser; prices and product details are read from the structured data
+the stores already embed in their pages.
+
+| Where | What |
+|---|---|
+| `src/scrapers/crawl/` | the catalogue crawler for each chain |
+| `src/scrapers/http.ts` | the shared fetcher: pace, retries, `Retry-After` |
+| `src/lib/matching.ts` | reading sizes and normalising product names |
+| `data/food-types.ts` | the 177 kinds of food |
+| `src/lib/comparison.ts` | the comparison rules, including the three cell states |
+| `src/app/grupos/` | the comparison pages (in Portuguese) |
+| `src/scripts/verify-*.ts` | the automated checks |
+
+The site itself is in Portuguese, since it is meant for shoppers in Portugal.
+
+### Running it
 
 ```bash
 npm install
-npx prisma migrate dev   # creates dev.db with the schema
-npm run seed              # loads data/tracked-products.ts into the database
-npm run scrape             # scrapes current prices for all tracked products
-npm run dev                 # starts the web app at http://localhost:3000
+npx prisma migrate dev           # creates the database
+npm run verify:nightly           # the automated checks; no requests to the stores
+npm run dev                      # the site, at http://localhost:3000/grupos
 ```
 
-## How it works
+Filling the database means crawling the stores (`npm run crawl:auchan`,
+`npm run crawl:continente:products`, `npm run crawl:pingodoce:products`, then
+`npm run classify:food`). These make real requests to the chains' websites and
+take hours, so please do not run them casually.
 
-- **`src/scrapers/`** — one file per store. Each fetches a product page with
-  a plain HTTP request (no headless browser needed) and extracts price/name/
-  brand/EAN from structured data already embedded in the page
-  (`application/ld+json` or a GTM `dataLayer`, depending on the store).
-- **`data/tracked-products.ts`** — the curated list of products to track.
-  Each entry gives the canonical product name/category/subcategory/unit and,
-  per store, the exact product page URL/ID plus that store's package size
-  (`packageSize`, expressed in the product's `unit` - e.g. `0.75` for a
-  750ml bottle when `unit` is `"L"`). Prices are normalized to
-  `price / packageSize` for fair comparison when stores sell different pack
-  sizes. **Edit this file to add more products**, then run `npm run seed`
-  again. A single store can have more than one listing for the same
-  product (e.g. a promo SKU alongside a regular one, or different pack
-  sizes) - just add multiple entries with that `store` under the same
-  product; the comparison always shows whichever tracked SKU is currently
-  cheapest per unit at that store, so it automatically follows promotions
-  rotating between sibling SKUs instead of being locked onto one.
-- **`npm run scrape`** (`src/scripts/scrape-daily.ts`) — scrapes every
-  tracked listing and upserts one `PriceSnapshot` per listing for today's
-  date. Safe to re-run the same day (idempotent via a unique constraint).
-- The web app reads directly from the SQLite database:
-  - `/` — category menu (derived from the distinct `category` values on
-    tracked products).
-  - `/categoria/[category]` — subcategory filter chips (when a category has
-    more than one) plus the comparison table for that category/subcategory,
-    cheapest **unit price** (not raw price) highlighted per product.
-  - `/produtos/[id]` — price history chart per store, normalized to
-    price-per-unit.
-
-## Scheduling the daily scrape
-
-The scraper is just a script (`npm run scrape`) - nothing runs automatically
-on its own. To collect a price every day, set up a Windows Task Scheduler
-task yourself:
-
-1. Open **Task Scheduler** → **Create Basic Task…**
-2. Name it e.g. "Grocery Price Scrape", trigger **Daily** at a time of your
-   choosing.
-3. Action: **Start a program**
-   - Program/script: `npm.cmd`
-   - Add arguments: `run scrape`
-   - Start in: the full path to this project folder, e.g.
-     `C:\Users\andre\Claude projects\grocery-price-tracker`
-4. Finish. You can test it immediately via **Run** in Task Scheduler, and
-   check `npx prisma studio` afterwards to confirm a new row appeared in
-   `PriceSnapshot`.
-
-## Checking for scrape failures
-
-Sites occasionally change their HTML/structured data, which breaks a
-scraper for that one listing. `npm run scrape` never stops for this - it
-logs the failure and moves on to the rest. Failures are written to
-**`logs/scrape.log`** (created on first failure, gitignored - it's a local
-runtime file, not source), one timestamped line per failure plus a run
-summary line, e.g.:
-
-```
-[2026-08-06T09:00:03.412Z] FAIL CONTINENTE Peito de Frango (https://www.continente.pt/...): Continente: could not find product/price data at ...
-[2026-08-06T09:00:04.500Z] Run summary: 20 succeeded, 1 failed.
-```
-
-Nothing is written on a clean run, so an empty (or unchanged) file means
-nothing needs attention - check it after each scrape, or make checking it
-part of whatever schedules the scrape. The error message usually points at
-what changed on the store's site; the fix is normally re-finding the
-product's current URL and updating `data/tracked-products.ts`.
-
-## Notes
-
-- EAN (barcode) is captured when available, but coverage varies by store.
-  Continente publishes it on every product page (as an `?ean=` value in the
-  page HTML) and Auchan in its `ld+json` (`gtin`); Pingo Doce does not appear
-  to expose it at all. A caveat when comparing across stores: weighed and
-  counter goods carry GS1 restricted-circulation codes (prefix `2`) that each
-  retailer mints for itself, so they identify a scale ticket rather than a
-  product and must not be matched between stores. EAN is a sanity check and a
-  cross-store match signal, not required for price tracking to work.
+Notes on the original hand-picked product list and its daily scrape are in
+[`docs/operations.md`](docs/operations.md).

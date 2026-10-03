@@ -201,7 +201,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Charcutaria: these name an animal but ARE the food type - see CUT_WORDS.
   { id: "salsicha", label: "Salsicha", unit: "kg", heads: ["salsicha", "salsichao"] },
   { id: "fiambre", label: "Fiambre", unit: "kg", heads: ["fiambre"] },
-  { id: "chourico", label: "Chouriço", unit: "kg", heads: ["chourico", "chouricao"] },
+  { id: "chourico", label: "Chouriço", unit: "kg", heads: ["chourico", "chouricao", "chourica"] },
   { id: "presunto", label: "Presunto", unit: "kg", heads: ["presunto"] },
   { id: "hamburguer", label: "Hambúrguer", unit: "kg", heads: ["hamburguer", "hamburguere", "hamburger"] },
   { id: "bacon", label: "Bacon", unit: "kg", heads: ["bacon"] },
@@ -278,7 +278,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // both are genuinely egg. What is NOT egg is a chocolate Kinder egg or "ovos
   // moles", the Aveiro egg-yolk sweet - both were landing here on the word.
   { id: "ovo", label: "Ovos", unit: "either", heads: ["ovo"],
-    exclude: /chocolate|kinder|surpresa|moles|bombom/i },
+    exclude: /chocolate|kinder|surpresa|\bmoles\b|bombom/i },
   { id: "requeijao", label: "Requeijão", unit: "kg", heads: ["requeijao"] },
   { id: "mousse", label: "Mousse", unit: "kg", heads: ["mousse"] },
   { id: "bifidus", label: "Bífidus", unit: "kg", heads: ["bifidu"] },
@@ -290,7 +290,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Assado com Molho de Cerveja" is roast pork, and reached here because the
   // cut-word scan reads past `pernil` and finds `molho`.
   { id: "molho", label: "Molho", unit: "either", heads: ["molho"],
-    exclude: /com molho/i },
+    exclude: /\bcom molho\b/i },
   // massa the pasta, not massa the dough
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli"],
     exclude: /massa folhada|massa quebrada|massa de pizza|massa areada/i },
@@ -307,7 +307,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // a plain `caramelo` exclusion also threw out "Tablete de Chocolate com
   // Caramelo", which is chocolate with caramel in it. Measured, the blunt
   // version removed 285 products where the guarded one removes far fewer.
-  { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate"],
+  // "tablete": Auchan names most chocolate bars by the format alone, as in
+  // "TABLETE LINDT EXCELLENCE 70%". They used to reach chocolate only through
+  // their shelf, which no longer decides when it names several foods.
+  { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate", "tablete"],
     exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz)/i },
   { id: "arroz", label: "Arroz", unit: "kg", heads: ["arroz"], exclude: /arroz doce/i },
   { id: "gelatina", label: "Gelatina", unit: "kg", heads: ["gelatina"] },
@@ -403,7 +406,25 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "agua", label: "Água", unit: "l", heads: ["agua"] },
   { id: "cereais", label: "Cereais", unit: "kg", heads: ["cereal"] },
   { id: "cha", label: "Chá", unit: "kg", heads: ["cha"] },
-  { id: "cafe", label: "Café", unit: "kg", heads: ["cafe"] },
+  // Capsules and pods ("cápsulas", "pastilhas") are coffee only when the name
+  // shows it: a coffee word, or a coffee-machine system or brand. Not on the
+  // head word alone, because "pastilha" is also a lozenge - the shelf "Gomas,
+  // Pastilhas e Rebuçados" would otherwise file Halls as coffee - and
+  // "Cápsulas de Vitamina D" exist. And not when the name says they hold
+  // something else without also saying coffee: "CÁPSULAS TORRIÉ CAFÉ COM
+  // LEITE" is coffee, "CÁPSULAS TASSIMO MILKA" and "Cápsulas de Chá" are not.
+  // Names like "CÁPSULAS DOLCE GUSTO BUONDI" used to reach café only through a
+  // shelf that also names tea, which no longer decides.
+  { id: "cafe", label: "Café", unit: "kg", heads: ["cafe", "capsula", "pastilha"],
+    // "compativ": capsules sold as compatible with a machine are coffee
+    // capsules unless the exclude below says otherwise.
+    require: /(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|roast|blend|meia de leite|latte|macchiato|cap+uc|buondi|sical|delta|nicola|nespresso|\bnsp\b|dolce gusto|\bdg\b|tassimo|starbucks|torrie|l'or|intensidade|compativ/i,
+    // Sweets flavoured with coffee are sweets, wherever they are shelved. The
+    // plural only: "caramelos" are the sweets, "Cápsulas de Café Caramelo" is
+    // coffee with a flavour. Barley and chicory are coffee substitutes, not
+    // coffee: "CEVADA DELTA TORRADA MOÍDA" got in on the Delta brand and became
+    // the cheapest coffee in the country at EUR 6.09/kg.
+    exclude: /rebucado|\bcaramelos\b|\bdrops\b|\bgomas?\b|\bchupa|elastica|^(?!.*(?:(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|meia de leite|latte|macchiato|cap+uc)).*(?:choco|\bcha\b|tisana|infus|milka|nesquik|leite|cevada|chicoria|malte)/i },
   { id: "sumo", label: "Sumo", unit: "l", heads: ["sumo"] },
   { id: "infusao", label: "Infusão", unit: "kg", heads: ["infusao"] },
   { id: "espumante", label: "Espumante", unit: "l", heads: ["espumante"] },

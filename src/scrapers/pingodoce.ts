@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
+import { correctedSize, pricedPerUnit } from "./page-size";
 import { detached, type ScrapeResult } from "./types";
 
 /**
@@ -18,8 +19,11 @@ interface SchemaProduct {
 }
 
 export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
-  const html = await fetchHtml(url);
+  return parsePingoDocePage(await fetchHtml(url), url);
+}
 
+/** Reading a page, apart from fetching it, so it can be checked on a saved one. */
+export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   const product = extractLdJsonBlocks(html).find(
     (block): block is SchemaProduct =>
       typeof block === "object" &&
@@ -58,7 +62,14 @@ export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
   // overlap and the cut is unambiguous.
   const price = parsed <= PLACEHOLDER_PRICE ? null : parsed;
 
-  const size = parsePackageSize($("h1.product-unit-measure").first().text());
+  // "12,49 €/Kg" in the price itself means the price is already per kilo, and
+  // the size label is what one item weighs. Read from `priceText`, the very
+  // text the price came from, so the two cannot belong to different products.
+  const size = correctedSize(
+    product.name ?? "",
+    parsePackageSize($("h1.product-unit-measure").first().text()),
+    pricedPerUnit(priceText, price)
+  );
   // The barcode rides on a nutritional-info URL in the page, and that URL is
   // HTML-escaped: "...?pid=4696048&amp;ean=8435250297955". So the character
   // before "ean=" is a semicolon, not an "&", and a plain /[?&]ean=/ misses

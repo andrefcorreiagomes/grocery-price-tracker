@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { parseSize } from "../lib/matching";
 import { isFoodSection } from "../lib/food-types";
+import { implausiblePodSize } from "../scrapers/page-size";
 
 /**
  * Fill in package sizes we can prove from the product NAME. No network.
@@ -90,7 +91,17 @@ async function main() {
     //
     // `validate:comparisons` reports the disagreement instead, so it is a
     // prompt to look at the declaration rather than a licence to overwrite.
-    if (r.enrichedAt !== null) continue; // a product page said so; leave it alone
+    // A product page said so, and a page outranks any name - with one
+    // exception the page readers now apply themselves: a capsule pack whose
+    // page size is a count ("10 Kg" for ten capsules, "Int 10 L'Or" as 10 L).
+    // Repaired here too, because rows read before that rule existed keep their
+    // impossible size until their page is read again.
+    if (r.enrichedAt !== null) {
+      if (r.unit && implausiblePodSize(r.name, r.packageSize, r.unit as "kg" | "l")) {
+        repairs.push({ id: r.id, packageSize: null, unit: null, was: r.packageSize });
+      }
+      continue;
+    }
 
     const parsed = parseSize(r.name);
     if (parsed !== null && parsed.total === r.packageSize && parsed.unit === r.unit) continue;
