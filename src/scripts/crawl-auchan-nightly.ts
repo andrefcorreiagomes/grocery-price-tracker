@@ -33,7 +33,7 @@ import {
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import type { DailyReport, GridHealthExtras, ProductNote } from "../scrapers/crawl/daily-report";
-import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
+import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
 
 /**
  * The nightly Auchan run: the one command a scheduler calls.
@@ -62,6 +62,7 @@ const MODE: AuchanCrawlMode = "full";
 const SAMPLE = 12;
 
 async function main() {
+  requireCrawlerContact();
   const args = process.argv.slice(2);
   const maxPagesRaw = args.find((a) => a.startsWith("--max-pages="))?.split("=")[1];
   const maxPages = maxPagesRaw ? Number(maxPagesRaw) : undefined;

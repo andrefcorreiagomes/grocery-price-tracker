@@ -111,7 +111,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
 
   if (report.incomplete) {
     lines.push(
-      "_The crawl did not finish, so nothing was saved and the sections below describe nothing._",
+      "_The run did not finish, so this report is incomplete and the sections below describe nothing. " +
+        "Whatever the crawl saved before it stopped is kept: the nightly runs save every batch as they go, " +
+        "so check the catalogue before assuming the run's work was lost._",
       ""
     );
     return lines.join("\n");

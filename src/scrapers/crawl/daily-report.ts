@@ -443,18 +443,15 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     .slice(0, SAMPLE)
     .map((l) => ({ storeProductId: l.storeProductId, name: l.product.name }));
 
-  const missingProductIds = (
-    await prisma.catalogueProduct.findMany({
-      where: { store, lastSeenAt: { lt: seenAt } },
-      select: { id: true },
-    })
-  ).map((r) => r.id);
-  const candidatePairsAffected =
-    missingProductIds.length === 0
-      ? 0
-      : await prisma.matchCandidate.count({
-          where: { OR: [{ aId: { in: missingProductIds } }, { bId: { in: missingProductIds } }] },
-        });
+  // Asked through the pair's own links rather than with a list of ids. The list
+  // version passed every unseen product twice in one query, and on 4 October
+  // 2026 that was 591 products - 1,182 values, past the 999 the database driver
+  // accepts - so the run crashed at its very last step. The list only grows as
+  // the store delists products; a join has no such ceiling.
+  const unseen = { store, lastSeenAt: { lt: seenAt } };
+  const candidatePairsAffected = await prisma.matchCandidate.count({
+    where: { OR: [{ a: unseen }, { b: unseen }] },
+  });
 
   // --- the store's own published counts, run over run -----------------------
   const publishedCountChanges: { label: string; was: number; now: number }[] = [];

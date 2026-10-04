@@ -221,7 +221,7 @@ export const trackedProducts: TrackedProduct[] = [
   {
     // "Febras de Porco" doesn't exist as a literal product at any of the 3
     // stores (Continente's search maps it to Bifanas; Pingo Doce/Auchan have
-    // no results at all) - substituted with Bifanas de Porco per user request
+    // no results at all) - substituted with Bifanas de Porco
     name: "Bifanas de Porco",
     category: "Carne",
     subcategory: "Porco",
@@ -333,7 +333,7 @@ export const trackedProducts: TrackedProduct[] = [
       {
         // closest own-brand match at Pingo Doce is "Lombinhos" (smaller pork
         // loin pieces), not an exact "whole boneless loin" match like the
-        // other two stores - same cut family, kept per user's call
+        // other two stores - same cut family, kept deliberately
         store: "PINGO_DOCE",
         storeProductId: "981747",
         url: "https://www.pingodoce.pt/home/produtos/talho/porco/lombinhos-de-porco-embalados-nosso-talho-981747.html",
@@ -800,13 +800,13 @@ export const trackedProducts: TrackedProduct[] = [
         url: "https://www.continente.pt/produto/bife-da-vazia-de-novilho-fatiado-no-balcao-angus-angus-6870584.html",
         packageSize: 1, // priced per kg already (fresh meat counter)
       },
-      // Flagged for review and explicitly approved by the user: Continente's
+      // Flagged for review and kept after checking: Continente's
       // €19.99/kg vs Pingo Doce's €30.48/kg is a real ~53% spread, not a
       // scraping artifact (Pingo Doce's page was checked directly and shows
       // "30,48 €/Kg"). "Angus" denotes breed rather than grade, so
       // sourcing/ageing may differ - Continente's is counter-sliced (fatiado
-      // no balcão) vs Pingo Doce's pre-packaged (embalado). Kept per the
-      // user's call.
+      // no balcão) vs Pingo Doce's pre-packaged (embalado). Kept
+      // deliberately.
       {
         store: "PINGO_DOCE",
         storeProductId: "853104",
@@ -833,8 +833,8 @@ export const trackedProducts: TrackedProduct[] = [
         url: "https://www.pingodoce.pt/home/produtos/frutas-e-vegetais/frutas/fruta-da-epoca/laranja-nossa-fruta-e-legumes-46442.html",
         packageSize: 1,
       },
-      // Auchan's listing is named "Laranja do Algarve IGP Auchan" - per the
-      // user, "IGP Algarve" here is Auchan's own-brand naming, not a variety
+      // Auchan's listing is named "Laranja do Algarve IGP Auchan" -
+      // "IGP Algarve" here is Auchan's own-brand naming, not a variety
       // claim, so it stays in this generic loose tier alongside the other
       // two stores' plain own-brand oranges rather than being split off.
       {
@@ -910,13 +910,14 @@ export const trackedProducts: TrackedProduct[] = [
   {
     // Kept as a separate product from "Banana" above - it's a distinct
     // protected regional product (smaller fruit), not a labelling variant,
-    // confirmed by the user. The premium is real and holds at every store:
+    // checked by hand. The premium is real and holds at every store:
     // €2.89 vs €1.29 is ~2.2x. Merging them would repeat the mistake
     // documented for "Dourada" (wild vs farmed at ~3x price under
     // near-identical names). Continente's page shows an "emb. 1,05 kg"
     // label, but its secondary rate equals the displayed price, so it is
     // per-kg priced and packageSize is 1 - this is the "emb." trap
-    // described in SKILL.md step 4, not a 1.05 kg pack.
+    // described in step 4 of the product-discovery skill, not a 1.05 kg
+    // pack.
     name: "Banana da Madeira",
     category: "Fruta",
     subcategory: "Banana",

@@ -256,10 +256,17 @@ export async function reconcileByBarcode(
 
   // The new products, with the barcode phase 3 read from their pages. Only
   // those with a real barcode can be reconciled at all.
-  const fresh = await prisma.catalogueProduct.findMany({
-    where: { store, storeProductId: { in: newIds }, eanNormalized: { not: null } },
-    select: { id: true, storeProductId: true, name: true, eanNormalized: true },
-  });
+  // In batches: the database driver accepts at most 999 values per query, and a
+  // night of discovery can find more new products than that.
+  const fresh: { id: string; storeProductId: string; name: string; eanNormalized: string | null }[] = [];
+  for (let i = 0; i < newIds.length; i += 500) {
+    fresh.push(
+      ...(await prisma.catalogueProduct.findMany({
+        where: { store, storeProductId: { in: newIds.slice(i, i + 500) }, eanNormalized: { not: null } },
+        select: { id: true, storeProductId: true, name: true, eanNormalized: true },
+      }))
+    );
+  }
 
   for (const product of fresh) {
     const candidates = await prisma.catalogueProduct.findMany({

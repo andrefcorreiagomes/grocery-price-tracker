@@ -21,6 +21,9 @@ import styles from "./FoodTypeFilter.module.css";
 
 const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L" };
 
+/** How many kinds of food these rows cover. */
+const kinds = (rows: IndexEntry[]) => new Set(rows.map((r) => r.id)).size;
+
 export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
   const [query, setQuery] = useState("");
 
@@ -53,9 +56,12 @@ export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
           aria-label="Procurar um alimento"
         />
         <span className={styles.count} aria-live="polite">
+          {/* Kinds of food, not rows: a food sold both by weight and by volume
+              (eggs, sauces) has a row for each, and counting rows said 166
+              where there are 163. */}
           {shown.length === entries.length
-            ? `${entries.length} alimentos`
-            : `${shown.length} de ${entries.length}`}
+            ? `${kinds(entries)} alimentos`
+            : `${kinds(shown)} de ${kinds(entries)}`}
         </span>
       </div>
 
@@ -86,7 +92,13 @@ export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
                   )}
                 </span>
                 <span className={styles.winner}>
-                  {t.winner ? STORE_LABELS[t.winner as Store] : "—"}
+                  {/* A tie names every store in it: naming one would say it
+                      was cheaper. Three names do not fit a phone row. */}
+                  {t.winners.length === 0
+                    ? "—"
+                    : t.winners.length === 3
+                      ? "As três"
+                      : t.winners.map((w) => STORE_LABELS[w as Store]).join(" · ")}
                 </span>
               </Link>
             </li>

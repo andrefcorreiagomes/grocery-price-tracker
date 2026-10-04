@@ -468,8 +468,11 @@ export async function verifyReidentification(): Promise<number> {
   check("the swap brake trips", tripped);
 
   // The runner archives only when the brake is clear, so nothing should move.
+  // Scoped to this test's own rows: the real catalogue legitimately holds
+  // retired ids once a real crawl has archived a reused one - 68 after the
+  // 4 October 2026 Continente run - and counting those failed this check.
   const retiredCount = await prisma.catalogueProduct.count({
-    where: { store: STORE, storeProductId: { contains: "~retired-" } },
+    where: { store: STORE, storeProductId: { startsWith: PREFIX, contains: "~retired-" } },
   });
   check("nothing was archived - no retired ids exist", retiredCount === 0, `${retiredCount}`);
   const intact = await prisma.catalogueProduct.count({

@@ -2,22 +2,20 @@ import { fetchHtml } from "../http";
 import type { CrawlCategory } from "./types";
 
 /**
- * Continente's food-section category ids, for the catalogue crawl.
- *
- * Each of these is a TOP-LEVEL `cgid` whose grid endpoint paginates through the
- * whole section (verified: `laticinios` served 140 distinct products across 4
- * pages, every page fresh). So five ids cover the entire food catalogue -
- * roughly 19,000 products - without enumerating sub-categories.
+ * Continente's top-level food sections, by category id.
  *
  * These are the food branches, picked by hand once from the site navigation.
  * The non-food sections (Limpeza, Beleza e Higiene, Animais, Casa e Jardim,
- * Brinquedos, Livros, Papelaria, ...) are deliberately left out - that is how
- * the "no pencils or pans" requirement is met.
+ * Brinquedos, Livros, Papelaria, ...) are deliberately left out, so the
+ * catalogue holds groceries only.
+ *
+ * The catalogue itself is read one product page at a time, so these ids are no
+ * longer requested. They are what the category audit below checks Continente's
+ * published tree against: a section that disappears, or a new one nobody has
+ * looked at, is reported.
  *
  * "Bio e Saudável" (cgid `biologicos`) overlaps the other five - it is organic
- * versions of items already in them. It is included, but ordered LAST so the
- * crawler's cross-run dedup attributes a dual-listed product to its main
- * section and Bio contributes only the organic-only items.
+ * versions of items already in them.
  *
  * `label` is for humans reading crawl output only. Mapping a store category
  * onto the app's own taxonomy is a separate, later step - not done here.
@@ -65,10 +63,10 @@ export async function fetchPublishedCounts(): Promise<Map<string, number>> {
  * sub-categories.
  *
  * Reading it each run is what stops the configured list above going quietly
- * stale. A renamed or deleted id already fails loudly (the grid endpoint
- * answers 500 and the crawl throws), but a NEW food department is invisible:
- * we would simply never ask for it, and the run would report success while
- * missing an entire section.
+ * stale, in both directions: a section that is renamed or deleted, and a NEW
+ * food department, which would otherwise be invisible - we would simply never
+ * ask for it, and the run would report success while missing an entire
+ * section.
  */
 export interface DiscoveredCategory {
   cgid: string;
@@ -164,10 +162,10 @@ export interface CategoryAudit {
 }
 
 /**
- * Compare what Continente publishes against what we crawl. A renamed or deleted
- * category already fails loudly at fetch time (its grid answers HTTP 500); this
- * catches the opposite and quieter case, a category appearing that nobody told
- * us about.
+ * Compare what Continente publishes against the sections we hold: a configured
+ * id that is no longer published (renamed or deleted), and a published one that
+ * is neither ours nor a known non-food section - a category appearing that
+ * nobody told us about.
  */
 export function auditCategories(discovered: DiscoveredCategory[]): CategoryAudit {
   const configured = new Set(CONTINENTE_FOOD_CATEGORIES.map((c) => c.cgid));

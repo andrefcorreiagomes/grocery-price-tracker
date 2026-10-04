@@ -52,13 +52,13 @@ function Comparison({
   note,
   cells,
   unit,
-  winner,
+  winners,
 }: {
   title: string;
   note: string;
   cells: Map<string, Cell>;
   unit: string;
-  winner: string | null;
+  winners: string[];
 }) {
   return (
     <section className={styles.group}>
@@ -68,7 +68,7 @@ function Comparison({
         {STORE_ORDER.map((store) => (
           <div key={store} className={styles.store}>
             <span className={styles.storeName}>{STORE_LABELS[store]}</span>
-            <StoreCell cell={cells.get(store) as Cell} unit={unit} best={winner === store} />
+            <StoreCell cell={cells.get(store) as Cell} unit={unit} best={winners.includes(store)} />
           </div>
         ))}
       </div>
@@ -89,14 +89,14 @@ function UnitBlock({ ranking, showUnit }: { ranking: Ranking; showUnit: boolean 
         note="O produto mais barato deste alimento em cada cadeia, seja de que marca for. Responde a: onde compro isto barato?"
         cells={ranking.cheapest}
         unit={ranking.unit}
-        winner={ranking.winner}
+        winners={ranking.winners}
       />
       <Comparison
         title="Marca própria"
         note="A marca da própria cadeia. É a comparação mais parecida que existe entre lojas, e pode dar um vencedor diferente do de cima."
         cells={ranking.ownBrand}
         unit={ranking.unit}
-        winner={null}
+        winners={ranking.ownBrandWinners}
       />
 
       {ranking.named.found > 0 && (
@@ -118,7 +118,7 @@ function UnitBlock({ ranking, showUnit }: { ranking: Ranking; showUnit: boolean 
                     <StoreCell
                       cell={g.cells.get(store) as Cell}
                       unit={ranking.unit}
-                      best={g.winner === store}
+                      best={g.winners.includes(store)}
                     />
                   </div>
                 ))}

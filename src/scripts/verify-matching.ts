@@ -1,7 +1,8 @@
 import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
-import { parseSize, stripAccents } from "../lib/matching";
+import { auchanTileSize, matchesTerm, parseSize, reconcileTileSize, SOLD_PER_KG, stripAccents } from "../lib/matching";
+import { enrichment } from "../scrapers/crawl/persist";
 import {
   categoryPathFromUrl,
   labelFromSlug,
@@ -10,7 +11,6 @@ import {
 } from "../scrapers/crawl/pingodoce-sitemap";
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { coverageRows } from "../scrapers/crawl/pingodoce";
-import { crawlContinente } from "../scrapers/crawl/continente";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
@@ -19,13 +19,15 @@ import { detached } from "../scrapers/types";
 import { correctedSize, implausiblePodSize, pricedPerUnit } from "../scrapers/page-size";
 import {
   cheapestPerStore,
-  cheapestStore,
+  cheapestStores,
+  comparable,
   comparableStoreCount,
   namedGroup,
   ownBrandPerStore,
   unitsFor,
   type ComparableProduct,
 } from "../lib/comparison";
+import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -213,7 +215,6 @@ export async function verifyMatching(): Promise<number> {
 
   failures += verifyFoodTypes();
   failures += verifyPingoDoceSitemap();
-  failures += await verifyRobotsGuards();
   failures += await verifyRotationWarnings();
   failures += verifyNoPageRetention();
   failures += await verifySitemapLastmod();
@@ -315,7 +316,7 @@ function verifyComparison(): number {
   );
   check(
     "and can crown a different store than cheapest-overall did",
-    cheapestStore(own) === "AUCHAN"
+    cheapestStores(own).join() === "AUCHAN"
   );
   check(
     "a store with no own-brand product reads not-stocked for THIS question",
@@ -330,7 +331,7 @@ function verifyComparison(): number {
   );
   check(
     "one priced store has no cheapest",
-    cheapestStore(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")) === null,
+    cheapestStores(cheapestPerStore([p("AUCHAN", "X", 1, 1)], "batata")).length === 0,
     "naming it cheapest would imply it beat something"
   );
 
@@ -373,7 +374,7 @@ function verifyComparison(): number {
   );
 
   // Every group today spans two chains, because Pingo Doce publishes no barcode.
-  // The third must read "not stocked" - the Batata do Zé shape.
+  // The third must read "not stocked", not vanish from the row.
   const pair = namedGroup(
     [g("Batata do Zé", "AUCHAN", 1.15, 1), g("Batata do Zé", "PINGO_DOCE", 1.2, 1)],
     "batata",
@@ -384,7 +385,21 @@ function verifyComparison(): number {
     pair.get("CONTINENTE")!.kind === "not-stocked",
     "not a blank, and not a zero"
   );
-  check("and the two that have it are priced", cheapestStore(pair) === "AUCHAN");
+  check("and the two that have it are priced", cheapestStores(pair).join() === "AUCHAN");
+
+  // A tie names every store in it. Naming only the first highlighted
+  // Continente alone where all three sold cooking oil at EUR 1.55 a litre.
+  const tie = cheapestPerStore(
+    [p("CONTINENTE", "Oleo A", 1.55, 1, "l"), p("PINGO_DOCE", "Oleo B", 1.55, 1, "l"), p("AUCHAN", "OLEO C", 3.1, 2, "l")],
+    "oleo"
+  );
+  check("a three-way tie names all three", cheapestStores(tie).length === 3);
+  const nearTie = cheapestPerStore(
+    [p("CONTINENTE", "Oleo A", 1.551, 1, "l"), p("PINGO_DOCE", "Oleo B", 1.549, 1, "l"), p("AUCHAN", "OLEO C", 1.6, 1, "l")],
+    "oleo"
+  );
+  check("prices equal in cents are a tie", cheapestStores(nearTie).join() === "CONTINENTE,PINGO_DOCE",
+    "the page shows 1.55 for both, so neither may be called cheaper");
 
   // Two prices or it is not a comparison. This is what empties the wine page:
   // every wine group pairs a sized Auchan bottle with an unsized Continente row.
@@ -750,53 +765,6 @@ async function verifyRotationWarnings(): Promise<number> {
 }
 
 /**
- * Continente's grid crawler, which reaches its catalogue through a URL
- * Continente's robots.txt disallows on `?cgid` and `&sz`.
- *
- * It is refused at the line that would issue the request, so this test SENDS NO
- * REQUEST. That is also what makes the assertion strict: it is not "it threw",
- * it is "it threw THE REFUSAL". If the guard were ever removed the call would
- * reach `fetchHtml` and throw something else - or worse, succeed against the
- * live site - and either way this fails.
- *
- * There is no Pingo Doce equivalent here, and the asymmetry is deliberate
- * rather than an omission: its grid crawler was not guarded but removed, and
- * that module now walks department listing pages instead. Nothing is left to
- * refuse. The `no query string` check above is what stands in its place.
- *
- * Continente's is kept and guarded rather than removed because its violation
- * was already KNOWN and written down - the route was retained on purpose as a
- * fast option. What failed was not the knowledge but the default: `crawl:all`
- * called it with no flag, so the deliberate choice was never actually made. A
- * comment cannot enforce that. This can.
- */
-async function verifyRobotsGuards(): Promise<number> {
-  const before = failures;
-  console.log("\n  robots.txt: the disallowed grid route");
-
-  let message = "(it did not throw)";
-  try {
-    await crawlContinente({ maxPages: 1 });
-  } catch (error) {
-    message = (error as Error).message;
-  }
-
-  check(
-    "the Continente grid crawler refuses instead of fetching",
-    /robots\.txt disallows \?cgid and &sz/.test(message),
-    message.split("\n")[0].slice(0, 66)
-  );
-  // The refusal names the exact URL it declined, so whoever hits it can see for
-  // themselves which rule it falls under.
-  check(
-    "and names the URL it declined",
-    message.includes("Search-UpdateGrid?cgid=") && message.includes("&sz=")
-  );
-
-  return failures - before;
-}
-
-/**
  * Pingo Doce sitemap discovery: the URL is the only place its department is
  * written down, so everything downstream of a bad parse here is wrong quietly.
  * Pure - no network - because these are string rules.
@@ -1039,6 +1007,29 @@ function verifyFoodTypes(): number {
   is("Chouriça Tradicional Prisca", "CONTINENTE", "Frescos/Charcutaria/Chouriço e Morcela", "chourico");
   is("PÃES GARCIA CACETE SEM GLÚTEN 5X80G", "AUCHAN", "alimentação/padaria-e-pastelaria", "pao");
 
+  check("a name ending in a weight range is sold by the kilo",
+    SOLD_PER_KG.test("SALMÃO FRESCO INTEIRO 2KG A 3KG") && SOLD_PER_KG.test("ROBALO GRANDE 800G A 1KG"),
+    "a fish graded 2-3 kg, priced per kilo - not a 2 kg pack");
+  check("a size written into the end of a word is not", !SOLD_PER_KG.test("ARROZ AGULHA 1KG"));
+  check("a shelf saying 'and specialities' does not make hummus salmon",
+    classifyFoodType("Hummus", "PINGO_DOCE",
+      "Charcutaria e Queijos/Charcutaria/Salmao Fumado e Especialidades") !== "salmao");
+  is("Salmão Fumado Norueguês", "PINGO_DOCE",
+    "Charcutaria e Queijos/Charcutaria/Salmao Fumado e Especialidades", "salmao");
+  check("a salmon head is not salmon", classifyFoodType("CABEÇA SALMÃO KG", "AUCHAN",
+    "produtos-frescos/peixaria/peixe-fresco") !== "salmao");
+  check("nor 'other fish'", classifyFoodType("SALMÃO CABEÇA 2KG A 3KG", "AUCHAN",
+    "produtos-frescos/peixaria/peixe-fresco") !== "peixe");
+  is("Salmão Inteiro Fresco", "PINGO_DOCE", "Peixaria/Peixe/Atum e Salmao", "salmao");
+  check("quail is not duck, though Auchan shelves it with duck",
+    classifyFoodType("CODORNIZ EXTRA AUCHAN CULTIVAMOS O BOM KG", "AUCHAN",
+      "produtos-frescos/talho/pato-e-mais-aves") !== "pato");
+  is("Pato Inteiro com Miúdos Embalado", "PINGO_DOCE", "Talho/Aves", "pato");
+  check("línguas de gato are not cinnamon, even with Auchan's brand in the middle",
+    classifyFoodType("LÍNGUAS AUCHAN DE GATO CROCANTE CANELA LIMÃO 200G", "AUCHAN",
+      "alimentação/mercearia/bolachas-e-bolos") !== "canela");
+  is("CANELA MOÍDA MARGÃO 40G", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos", "canela");
+
   // These two rules held invisible control characters where `\b` belonged, and
   // matched nothing until that was noticed.
   console.log("\n  food types: rules that used to match nothing");
@@ -1127,6 +1118,126 @@ function verifyFoodTypes(): number {
   check("nor with a dot", size("BOLO CAKE DESIGN N.º 7 KG") === null);
   check("a real size beside a model number survives", near(size("VELA Nº5 BOLO 500G")?.total, 0.5));
   check("a 10 L garrafao still parses", near(size("AGUA GARRAFAO 10L")?.total, 10));
+  check("a fraction of a centilitre is litres written wrongly",
+    near(size("SUPER SMOOTHIE INNOCENT ANTIOX 0.75CL (SDR)")?.total, 0.75), "0.75 L, not 7.5 ml");
+  check("whole centilitres are still centilitres", near(size("REFRIGERANTE LATA 33CL")?.total, 0.33));
+  // An added amount is in the pack the shopper pays for; reading only the first
+  // made these 18-33% dearer per kilo than they are.
+  check("an added amount is part of the pack",
+    near(size("FIAMBRE DA PERNA EXTRA IZIDORO FATIAS FINAS 120G+30G")?.total, 0.15), "150 g, not 120 g");
+  check("with GRATIS after it too", near(size("MEL GRANJA SAN FRANCISCO 850G+150G GRÁTIS")?.total, 1));
+  check("and in litres", near(size("REFRIGERANTES COM GÁS FANTA LARANJA 1.5L+0.5L GRÁTIS (SDR)")?.total, 2));
+  check("an added amount in another dimension is ignored", near(size("GELADO 500ML+100G")?.total, 0.5));
+  check("a plus with no amount changes nothing", near(size("BOLACHAS 200G + OFERTA")?.total, 0.2));
+  check("a minimum weight is unknown, not a pack", size("POLVO GRANDE CONGELADO (+6 KG)") === null,
+    "an octopus over 6 kg, priced per kilo - not EUR 2.83/kg");
+  check("a zero-led two-digit litre is unknown", size("REFRIGERANTES COM GÁS PEPSI ZERO 1+05L OFERTA") === null,
+    "1 L + 0.5 L, not 5 L");
+  check("a kilo grade with one unit is unknown", size("POLVO CONGELADO (4 A 5 KG)") === null, "graded 4-5 kg, not a 5 kg pack");
+  check("and is sold by the kilo", SOLD_PER_KG.test("POLVO NACIONAL AUCHAN CONGELADO (3 A 4 KG)"));
+  check("a gram range is still a net weight", near(size("PÊSSEGO FERBAR METADES 810 A 860G")?.total, 0.86));
+  check("and an age is not an amount", near(size("BEBIDA LACTEA NESTLÉ BOLACHA MARIA CRESCIMENTO 3+ 1L")?.total, 1));
+
+  // Auchan's figure against the name: the figure decides only where it helps.
+  const rec = (total: number, unit: "kg" | "l", name: string) => reconcileTileSize({ total, unit }, name);
+  check("an impossible figure loses to the name", rec(399, "kg", "LASANHA IGLO BOLONHESA 300G") === undefined,
+    "the first version priced this lasagna at EUR 0.01/kg");
+  check("a believable figure fills a name with no size", rec(0.15, "kg", "QUEIJO FRESCO AUCHAN")?.packageSize === 0.15);
+  check("but an impossible one does not", rec(150, "kg", "QUEIJO FRESCO AUCHAN") === undefined);
+  check("a close figure confirms the name's exact size",
+    near(rec(0.274, "kg", "GELADO SNICKERS 6X48G")?.packageSize ?? undefined, 0.288));
+  check("a whole multiple is a pack count the name reader missed",
+    near(rec(0.15, "kg", "CHOCOLATE SNICKERS SNACK 3 PACK 50G")?.packageSize ?? undefined, 0.15));
+  check("ten times is Auchan's per-100 g error, not a pack of ten",
+    rec(0.601, "kg", "GEL MYPROTEIN HYROX LIMO/FRAMBOE 60G") === undefined, "60 g, not 601 g");
+  check("a whole multiple without a multipack sign is Auchan's error",
+    rec(1, "kg", "SALSICHA BEYOND MEAT VEGETAL 200G") === undefined, "200 g, not a kilo");
+  check("as is one the name reader had already counted",
+    rec(1, "kg", "QUINOA TIPIAK BRANCA EXPRESS 2X100G") === undefined, "2 x 100 g, not a kilo");
+  check("a missed '4*100G' is a pack count",
+    near(rec(0.4, "kg", "HAMBURGUERES DE SUINO ISENTO DE GLUTEN AUCHAN 4*100G")?.packageSize ?? undefined, 0.4));
+  check("and so is 'LEVE 4 PAGUE 3'",
+    near(rec(1, "l", "VINHO ROSE MATEUS LEVE 4 PAGUE 3 0.25L")?.packageSize ?? undefined, 1));
+  check("any other disagreement leaves the name in charge",
+    rec(0.1, "kg", "RÚCULA SELVAGEM VITACRESS 75 G") === undefined);
+  check("kilos against litres leaves the name in charge", rec(0.4, "l", "MOLHO BARILLA BASILICO 400G") === undefined);
+
+  // `npm run discover` searches our own catalogue by these rules.
+  console.log("\n  discovery: searching the catalogue by words");
+  check("accents and case are ignored", matchesTerm("Açúcar Mascavado Continente", "acucar mascavado"));
+  check("plurals meet singulars, both ways", matchesTerm("Ovo Cozido", "ovos") && matchesTerm("Ovos Classe M", "ovo"));
+  check("including Portuguese plurals", matchesTerm("Limões Bio", "limao") && matchesTerm("Pães de Leite", "pao"));
+  check("whole words only: sal does not find salmão", !matchesTerm("Salmão Fumado", "sal"));
+  check("every word must be present", !matchesTerm("Iogurte Grego", "iogurte natural"));
+
+  // Products whose store publishes impossible data (data/store-errors.ts).
+  console.log("\n  known store errors: kept out of comparisons, not deleted");
+  const crackers: ComparableProduct = {
+    storeProductId: "988950", store: "PINGO_DOCE", name: "Bolachas Crackers Sabor a Tomate",
+    brand: "Gran Pavesi", price: 3.99, packageSize: 3.36, unit: "kg",
+  };
+  check("a listed product is recognised", isStoreError("PINGO_DOCE", "988950"));
+  check("and only that one", !isStoreError("CONTINENTE", "988950") && !isStoreError("PINGO_DOCE", "988951"));
+  check("a listed product cannot compete, however complete its data looks",
+    !comparable(crackers, "bolacha"), "Pingo Doce's own label says 3.36 kg");
+  check("the same data under another id still can", comparable({ ...crackers, storeProductId: "1" }, "bolacha"));
+  check("a store whose only product is listed reads 'size unknown', not 'not sold'",
+    cheapestPerStore([crackers], "bolacha").get("PINGO_DOCE")?.kind === "no-size",
+    "it does sell biscuits");
+  const entry = STORE_ERRORS.find((e) => e.storeProductId === "988950")!;
+  check("the store's size unchanged: nothing to do yet",
+    storeErrorStatus(entry, { packageSize: 3.36, unit: "kg", delisted: false }).kind === "unchanged");
+  const fixed = storeErrorStatus(entry, { packageSize: 0.336, unit: "kg", delisted: false });
+  check("the store's size changed: look again now, not in 30 days",
+    fixed.kind === "changed" && fixed.was === "3.36 kg" && fixed.now === "0.336 kg");
+  check("the size removed altogether also counts as a change",
+    storeErrorStatus(entry, { packageSize: null, unit: null, delisted: false }).kind === "changed");
+  check("a delisted or missing product is reported as gone",
+    storeErrorStatus(entry, { packageSize: 3.36, unit: "kg", delisted: true }).kind === "gone" &&
+      storeErrorStatus(entry, null).kind === "gone");
+  check("every entry is dated, evidenced and unique",
+    STORE_ERRORS.every((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.checkedOn) && e.evidence.length > 0 && e.problem.length > 0) &&
+      new Set(STORE_ERRORS.map((e) => `${e.store}:${e.storeProductId}`)).size === STORE_ERRORS.length);
+
+  // Auchan's own per-unit figure on its listing tiles. Prices and figures as
+  // they appeared on three live listings, 4 October 2026.
+  console.log("\n  Auchan listing tiles: the store's own per-unit figure");
+  const tile = (price: number, figure: string, name: string) => auchanTileSize(price, figure, name);
+  check("a per-kilo figure gives the pack size, whatever the name says",
+    near(tile(1.29, "8.6 €/Kg", "LINGUIÇA CORRENTE POLEGAR PICANTE KG")?.packageSize ?? undefined, 0.15),
+    "EUR 1.29 at 8.60/kg is a 150 g pack, not a kilo");
+  check("and it is marked as the store's own figure",
+    tile(1.29, "8.6 €/Kg", "LINGUIÇA CORRENTE POLEGAR PICANTE KG")?.sizeSource === "listing");
+  check("a per-litre figure gives litres", tile(1.99, "1.33 €/L", "SUMO LARANJA 1.5L")?.unit === "l");
+  check("a name the figure confirms keeps its exact size",
+    near(tile(3.99, "19.23 €/Kg", "SNACK DE CHOCOLATE KIT KAT 5X41.5G")?.packageSize ?? undefined, 0.2075),
+    "207.5 g, not the 208 g a rounded figure gives");
+  check("a name the figure contradicts is overruled",
+    near(tile(3.29, "21.93 €/Kg", "CHOCOLATE SNICKERS SNACK 3 PACK 50G")?.packageSize ?? undefined, 0.15),
+    "three 50 g bars: the name reader saw only 50 g");
+  check("a tiny expensive pack keeps its precision",
+    near(tile(2.99, "9966.67 €/Kg", "ACAFRAO MOIDO 0.3 G")?.packageSize ?? undefined, 0.0003));
+  check("a per-item figure that differs from the price: the price is per kilo",
+    tile(4.49, "8.98 €/un", "PATO INTEIRO COM MIUDOS QUINTA DA MARINHA KG")?.packageSize === 1,
+    "a whole duck at EUR 4.49/kg, EUR 8.98 the bird");
+  const quail = tile(1.25, "1.25 €/un", "CODORNIZ EXTRA AUCHAN CULTIVAMOS O BOM KG");
+  check("a per-item figure equal to the price is unknown, deliberately",
+    quail !== undefined && quail.packageSize === null && quail.sizeSource === "listing",
+    "per bird or one-kilo bird: the tile cannot say, and the KG rule must not guess");
+  check("a per-item figure says nothing about a name that is not sold by the kilo",
+    tile(2.49, "0.21 €/un", "OVOS CLASSE M AUCHAN 12UN") === undefined,
+    "the price of one egg must not make a box of twelve 'per kilo'");
+  check("a figure without a unit settles nothing", tile(19.99, "2.00 €", "GUANCIALE MONTARAZ PORCO PRETO KG") === undefined);
+
+  // Saving: a size from a tile must not touch the barcode or the page-read mark.
+  const fromTile = enrichment({ packageSize: 0.15, unit: "kg", sizeSource: "listing" });
+  check("a tile's size does not erase a barcode", !("ean" in fromTile) && !("eanNormalized" in fromTile));
+  check("nor claim a product page was read", !("enrichedAt" in fromTile));
+  check("and records where the size came from", fromTile.sizeSource === "listing");
+  const fromPage = enrichment({ ean: null, packageSize: 0.5, unit: "kg" });
+  check("a product page still writes both, as before",
+    "ean" in fromPage && "enrichedAt" in fromPage && fromPage.sizeSource === "page");
+  check("a listing that knows nothing writes nothing", Object.keys(enrichment({})).length === 0);
 
   // Goods sold by weight: the headline price is already per kilo, and the size
   // label is what one item weighs. Strings as they appear on live pages

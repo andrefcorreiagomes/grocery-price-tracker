@@ -1,10 +1,14 @@
 import * as cheerio from "cheerio";
-import { fetchHtml } from "../http";
-import { collectHits, SEARCH_LIMIT } from "./paginate";
+import { auchanTileSize } from "../../lib/matching";
 import type { SearchHit } from "./types";
 
-/** Auchan honours `start`/`sz` directly on the public search URL. */
-const SEARCH_URL = "https://www.auchan.pt/pt/pesquisa";
+/**
+ * Reads product tiles out of a store's listing HTML. Shared with the catalogue
+ * crawlers. The functions that once requested the stores' SEARCH pages were
+ * removed on 3 October 2026: Continente's and Pingo Doce's robots.txt forbid
+ * those pages and Auchan's evidently means to. Product discovery now searches
+ * our own catalogue instead - see src/scripts/discover.ts.
+ */
 
 /**
  * What one HTML fragment yielded, beyond the products themselves.
@@ -87,13 +91,21 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     const category = gtm.category ?? "";
     if (category === "") withoutCategory++;
 
+    const price = Number(gtm.price);
+    // Auchan's own per-kilo or per-item figure, printed on every tile measured.
+    // When it settles the size, the size goes with the tile; when it does not,
+    // the field stays absent and the name decides later, as it always did.
+    const figure = $(el).find(".auc-measures--price-per-unit").first().text().replace(/\s+/g, " ").trim();
+    const size = figure ? auchanTileSize(price, figure, gtm.name) : undefined;
+
     hits.push({
       id: gtm.id,
       name: gtm.name,
-      price: Number(gtm.price),
+      price,
       brand: gtm.brand ?? "",
       category,
       url: urls.absoluteProductUrl,
+      ...(size ?? {}),
     });
   });
 
@@ -101,9 +113,8 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
 }
 
 /**
- * The bare form, for callers that only want the products - the search extractor
- * and the product-discovery skill. The crawler uses the detailed form so it can
- * fail on a collapsed yield.
+ * The bare form, for callers that only want the products. The crawler uses the
+ * detailed form so it can fail on a collapsed yield.
  */
 export function parseAuchanTiles(html: string): SearchHit[] {
   return parseAuchanTilesDetailed(html).hits;
@@ -125,24 +136,4 @@ export function parseAuchanTotal(html: string): number | null {
   const text = cheerio.load(html)(".auc-js-search-results-count").first().text();
   const numbers = text.replace(/[.,\s]/g, "").match(/\d+/g);
   return numbers ? Number(numbers[numbers.length - 1]) : null;
-}
-
-export async function searchAuchan(
-  term: string,
-  limit = SEARCH_LIMIT
-): Promise<SearchHit[]> {
-  // asking for `sz = limit` means one request covers the whole cap
-  return collectHits(
-    (start) => fetchPage(term, start, limit),
-    (hit) => hit.id,
-    limit,
-    limit
-  );
-}
-
-async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
-  const html = await fetchHtml(
-    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
-  );
-  return parseAuchanTiles(html);
 }

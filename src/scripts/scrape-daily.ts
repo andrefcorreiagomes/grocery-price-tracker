@@ -1,7 +1,7 @@
 import { scrapeAuchan } from "../scrapers/auchan";
 import { scrapeContinente } from "../scrapers/continente";
 import { scrapePingoDoce } from "../scrapers/pingodoce";
-import { sleep } from "../scrapers/http";
+import { sleep, requireCrawlerContact } from "../scrapers/http";
 import type { ScrapeResult } from "../scrapers/types";
 import { prisma } from "../lib/db";
 import { appendLog } from "../lib/log";
@@ -17,6 +17,7 @@ function todayTruncated(): Date {
 }
 
 async function main() {
+  requireCrawlerContact();
   const listings = await prisma.storeListing.findMany({ include: { product: true } });
   const date = todayTruncated();
 

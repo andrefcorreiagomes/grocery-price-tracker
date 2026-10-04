@@ -6,15 +6,14 @@ import type { CategoryResult, CrawlProgress } from "./types";
 /**
  * The COMPLIANT Continente crawler: one request per product page.
  *
- * Continente's robots.txt disallows the listing-grid parameters the fast
- * crawler uses (`/*?cgid`, `/*?start=`, `/*?sz`) and points crawlers at its
- * sitemap instead. This route obeys that: product URLs come from the sitemap it
- * advertises, and each product is read from its own page, which nothing in
- * robots.txt forbids.
+ * Continente's robots.txt disallows the listing-grid parameters (`/*?cgid`,
+ * `/*?start=`, `/*?sz`) and points crawlers at its sitemap instead. This route
+ * follows that: product URLs come from the sitemap it advertises, and each
+ * product is read from its own page, which nothing in robots.txt forbids.
  *
- * The trade is stark and worth stating plainly:
+ * The cost, compared with reading listing grids (the route this replaced):
  *
- *   fast crawler        562 requests, ~14 min, 35 products per request
+ *   listing grids       562 requests, ~14 min, 35 products per request
  *   this one         ~17,000 requests, ~5 hours, 1 product per request
  *
  * In exchange it returns MORE per product - the barcode and package size, which

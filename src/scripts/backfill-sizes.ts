@@ -1,5 +1,5 @@
 import { prisma } from "../lib/db";
-import { parseSize } from "../lib/matching";
+import { parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/matching";
 import { isFoodSection } from "../lib/food-types";
 import { implausiblePodSize } from "../scrapers/page-size";
 
@@ -28,20 +28,12 @@ import { implausiblePodSize } from "../scrapers/page-size";
  * re-run after the parser improves.
  */
 
-/**
- * Sold loose by weight, so the listed price IS the price per kilo. Matches a
- * name ending in KG ("BATATA VERMELHA LAVADA KG"), or saying granel/ao quilo.
- * Deliberately narrow - a name merely CONTAINING "kg" is usually a pack size,
- * which parseSize already handles better.
- */
-const SOLD_PER_KG = /(\bkg\b\s*$)|\bgranel\b|\bao\s+quilo\b|\bpor\s+kg\b/i;
-
 async function main() {
   const dry = process.argv.includes("--dry");
 
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null },
-    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, enrichedAt: true, foodType: true },
+    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, sizeSource: true, enrichedAt: true, foodType: true },
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
 
@@ -76,9 +68,29 @@ async function main() {
   // When the name now parses to nothing the size is CLEARED. Unknown is the
   // honest answer for a fish graded 400/600, and unknown is already handled
   // everywhere downstream.
-  const repairs: { id: string; packageSize: number | null; unit: string | null; was: number }[] = [];
+  const repairs: { id: string; packageSize: number | null; unit: string | null; was: number; sizeSource?: string | null }[] = [];
   for (const r of food) {
     if (r.packageSize === null) continue;
+    // Auchan's own per-unit figure, read off its listing tile: the store's word,
+    // like a product page, and never second-guessed from the name. The name rule
+    // is exactly what it corrected - "LINGUIÇA ... KG" is a 150 g pack.
+    if (r.sizeSource === "listing") {
+      // Re-decided with today's rule: the stored size IS the one the figure
+      // gave, so this applies the rule without fetching anything. The first
+      // version of the rule trusted the figure wherever it disagreed with the
+      // name, and priced LASANHA IGLO BOLONHESA 300G as 399 kg.
+      if (r.unit !== "kg" && r.unit !== "l") continue;
+      const decided = reconcileTileSize({ total: r.packageSize, unit: r.unit }, r.name);
+      if (decided?.packageSize === r.packageSize && decided?.unit === r.unit) continue;
+      if (decided) {
+        repairs.push({ id: r.id, packageSize: decided.packageSize, unit: decided.unit, was: r.packageSize, sizeSource: "listing" });
+      } else {
+        // The figure no longer decides: the name does, as before it was read.
+        const named = parseSize(r.name);
+        repairs.push({ id: r.id, packageSize: named?.total ?? null, unit: named?.unit ?? null, was: r.packageSize, sizeSource: null });
+      }
+      continue;
+    }
 
     // NOT repaired here: a stored unit that contradicts the food type's own.
     //
@@ -96,7 +108,12 @@ async function main() {
     // page size is a count ("10 Kg" for ten capsules, "Int 10 L'Or" as 10 L).
     // Repaired here too, because rows read before that rule existed keep their
     // impossible size until their page is read again.
-    if (r.enrichedAt !== null) {
+    //
+    // Not Auchan: its product pages state no size, and the Auchan page reader
+    // takes the size from the NAME - so a "page read" Auchan size is a name
+    // reading like any other, and is re-read with today's rules below. That
+    // kept "SALMÃO FRESCO INTEIRO 2KG A 3KG" at 2 kg, and EUR 4.00/kg.
+    if (r.enrichedAt !== null && r.store !== "AUCHAN") {
       if (r.unit && implausiblePodSize(r.name, r.packageSize, r.unit as "kg" | "l")) {
         repairs.push({ id: r.id, packageSize: null, unit: null, was: r.packageSize });
       }
@@ -126,6 +143,10 @@ async function main() {
   const updates: { id: string; packageSize: number; unit: string; via: string }[] = [];
   for (const r of food) {
     if (r.packageSize !== null) continue;
+    // Unknown ON PURPOSE: Auchan's figure showed the price is per item (a quail
+    // at EUR 1.25 the bird), so filling 1 kg from a name ending in KG would put
+    // back exactly the error the figure caught.
+    if (r.sizeSource === "listing") continue;
 
     const parsed = parseSize(r.name);
     if (parsed) {
@@ -198,7 +219,11 @@ async function main() {
     for (const r of repairs) {
       await prisma.catalogueProduct.update({
         where: { id: r.id },
-        data: { packageSize: r.packageSize, unit: r.unit },
+        data: {
+          packageSize: r.packageSize,
+          unit: r.unit,
+          ...(r.sizeSource === undefined ? {} : { sizeSource: r.sizeSource }),
+        },
       });
     }
     if (repairs.length > 0) {

@@ -9,28 +9,28 @@ import {
   fetchPublishedCounts,
 } from "../scrapers/crawl/continente-categories";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
-import { buildDailyReport, snapshotBefore } from "../scrapers/crawl/daily-report";
-import {
-  compareWithBaseline,
-  compareWithPrevious,
-  previousRunFor,
-  recordRun,
-  rollingBaseline,
-} from "../scrapers/crawl/history";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { persistCatalogue } from "../scrapers/crawl/persist";
-import { formatHttpStats, httpStats } from "../scrapers/http";
+import { formatHttpStats, httpStats, requireCrawlerContact } from "../scrapers/http";
+
+/** About 35 minutes of pages at one request per second. */
+const MAX_LIMIT = 2_000;
 
 /**
- * Crawl Continente ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
+ * Crawl a SLICE of Continente, one product page at a time - the route its
+ * robots.txt allows.
  *
- *   npm run crawl:continente:products -- --limit=500   # refresh the 500 stalest
- *   npm run crawl:continente:products                  # the whole food catalogue
- *   npm run crawl:continente:products -- --discover    # also look for products we have never seen
+ *   npm run crawl:continente:products -- --limit=500              # refresh the 500 stalest
+ *   npm run crawl:continente:products -- --limit=500 --discover   # then products never seen
  *
- * The counterpart to `crawl:continente`, which is ~30x faster and uses listing
- * parameters that robots.txt disallows. Both exist deliberately; pick one
- * knowingly.
+ * For the whole catalogue use `npm run crawl:continente:nightly`.
+ *
+ * LIMITED RUNS ONLY. This command keeps every page in memory and saves once, at
+ * the end. On 3 October 2026 it was started for the whole catalogue - about
+ * 5 hours, or about 30 with --discover - when a failure in the last hour would
+ * have lost everything before it. The nightly command saves every 500 products.
+ * So this one refuses to run without --limit, and refuses a limit above
+ * MAX_LIMIT, the most that is acceptable to lose.
  *
  * Targets are ordered STALEST FIRST, so running with a `--limit` is a rotation
  * rather than an arbitrary subset: whatever budget you give it, the least
@@ -38,17 +38,28 @@ import { formatHttpStats, httpStats } from "../scrapers/http";
  * predictable number of runs. 17,000 products at 2,400 a day is a complete pass
  * a week, with nothing left indefinitely stale.
  *
- * Unlike the fast crawler this also captures barcode and package size, so it
- * doubles as enrichment.
+ * Unlike a listing page, a product page also gives the barcode and package
+ * size, so this doubles as enrichment.
  */
 async function main() {
+  requireCrawlerContact();
   const args = process.argv.slice(2);
   const limitRaw = args.find((a) => a.startsWith("--limit="))?.split("=")[1];
   const limit = limitRaw ? Number(limitRaw) : undefined;
   const discover = args.includes("--discover");
 
-  if (limitRaw && (!Number.isInteger(limit) || (limit as number) < 1)) {
-    console.error(`--limit must be a positive integer, got "${limitRaw}"`);
+  if (limit === undefined || !Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    console.error(
+      [
+        limitRaw === undefined
+          ? "This command needs --limit, e.g. --limit=500."
+          : `--limit must be a whole number from 1 to ${MAX_LIMIT.toLocaleString()}, got "${limitRaw}".`,
+        "",
+        "It saves only once, at the end, so a long run that fails loses everything.",
+        "For the whole catalogue use:  npm run crawl:continente:nightly",
+        "which saves every 500 products.",
+      ].join("\n")
+    );
     process.exit(1);
   }
 
@@ -66,14 +77,6 @@ async function main() {
     url: k.url,
   }));
 
-  // A run with no --limit walks the whole catalogue, so it can answer what
-  // CHANGED - which needs the previous values, read before the crawl saves over
-  // them. A limited run cannot, and does not pay for these reads.
-  const complete = limit === undefined;
-  const previousRun = complete ? await previousRunFor("CONTINENTE") : null;
-  const baseline = complete ? await rollingBaseline("CONTINENTE") : null;
-  const before = complete ? await snapshotBefore("CONTINENTE") : null;
-
   if (discover) {
     // The sitemap is a superset: it carries products we have never seen, about
     // half of which are delisted. Appended AFTER the known ones so a limited
@@ -89,14 +92,11 @@ async function main() {
     console.log(`sitemap: ${published.size.toLocaleString()} products published, ${added.toLocaleString()} we have never seen`);
   }
 
-  const slice = limit ? targets.slice(0, limit) : targets;
+  const slice = targets.slice(0, limit);
   console.log(
     `Fetching ${slice.length.toLocaleString()} Continente product pages` +
-      `${limit ? ` (of ${targets.length.toLocaleString()} candidates, stalest first)` : ""}...`
+      ` (of ${targets.length.toLocaleString()} candidates, stalest first)...`
   );
-  if (!limit && slice.length > 2000) {
-    console.log(`  at one request per second this is about ${(slice.length / 3600).toFixed(1)} hours`);
-  }
 
   const started = Date.now();
   const crawl = await fetchProducts(slice, {
@@ -148,12 +148,11 @@ async function main() {
     console.error(`could not read the published section counts: ${(error as Error).message}`);
   }
 
-  // A complete pass gets the full report - change detection and all - with the
-  // rotation figures attached, because both are true of it. A limited pass gets
-  // only what it can honestly claim.
-  const rotationOnly = await buildRotationReport({
+  // A slice cannot say what changed across the catalogue, so it gets the
+  // rotation report only; the full report belongs to the nightly command.
+  const report = await buildRotationReport({
     store: "CONTINENTE",
-    complete,
+    complete: false,
     seenAt,
     refreshed: total,
     dead: crawl.dead.length,
@@ -168,32 +167,6 @@ async function main() {
     newProducts,
     newCount: newProducts.length,
   });
-
-  let report = rotationOnly;
-  if (complete && before && baseline) {
-    const drift = [
-      ...(await compareWithPrevious("CONTINENTE", total, [])),
-      ...compareWithBaseline(baseline, total, []),
-    ];
-    const full = await buildDailyReport({
-      store: "CONTINENTE",
-      seenAt,
-      before,
-      results: crawl.results,
-      audit: { unknown: [], missing: [] },
-      publishedCounts,
-      prices,
-      http: httpStats(),
-      drift,
-      shortSections: [],
-      sitemapSlugs: [],
-      sitemapUnknown: [],
-      baseline: { runs: baseline.runs, since: baseline.since },
-      previousRun,
-    });
-    report = { ...full, rotation: rotationOnly.rotation };
-    await recordRun("CONTINENTE", total, [], { seenAt });
-  }
 
   const explain = !args.includes("--brief");
   const written = await writeReport(report, { explain });

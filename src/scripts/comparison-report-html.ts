@@ -247,13 +247,13 @@ export function renderComparisonReport(reports: TypeReport[], when: Date): strin
   <section>
     <h2>What needs deciding</h2>
     <p class="section-note">
-      Grouped by where the fix lives. Two of these are mine to make; the third is
-      a judgement about Portuguese groceries, and it is yours.
+      Grouped by where the fix lives. Two of these are fixes in the code; the third
+      is a judgement about Portuguese groceries, made by a person.
     </p>
 
     ${remedySection(
       "Kilos and litres in one ranking",
-      "I fix this",
+      "fixed in code",
       "These declare no unit, so a bottle priced per litre is ranked against a packet priced per kilo. " +
         "Ch&aacute; puts a 1.5&nbsp;L bottle of iced tea at &euro;1.49 above a 50&nbsp;g box of tea bags at &euro;39.80 and calls it cheaper. " +
         "The fix is to declare the unit &mdash; but a few genuinely sell both ways, and those need splitting instead.",
@@ -263,7 +263,7 @@ export function renderComparisonReport(reports: TypeReport[], when: Date): strin
 
     ${remedySection(
       "A size or a price is still wrong",
-      "I fix this",
+      "fixed in code",
       "A price per kilo below &euro;0.10 or above &euro;200 is a parse error, not a bargain &mdash; except where it is not: " +
         "saffron really is about &euro;10,000 a kilo and caviar about &euro;2,000. Each of these needs looking at rather than clearing.",
       has("data"),
@@ -272,7 +272,7 @@ export function renderComparisonReport(reports: TypeReport[], when: Date): strin
 
     ${remedySection(
       "The kind of food may be too broad",
-      "your call",
+      "judgement call",
       "Here the arithmetic is right and the category is the problem: the cheapest member is nothing like a typical one. " +
         "Queijo answers &euro;2.63/kg with a children&rsquo;s fromage frais while real cheese starts at &euro;5.22, and massa answers with instant noodles rather than pasta. " +
         "Leaving one off the site costs a missing answer; shipping it costs a wrong one.",

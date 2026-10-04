@@ -1,13 +1,73 @@
+import { config } from "dotenv";
 import { rawGet, type RawResponse } from "./fetch-raw";
 
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 (personal price-tracker; contact: groceriestracker50@gmail.com)";
+// The crawl scripts run outside Next.js, which is what normally reads .env.
+config({ quiet: true });
 
 /**
- * Minimum gap between two requests to the same host. At 275 listings a night
- * the old unthrottled code was harmless; a catalogue crawl is thousands of
- * pages, and hammering three retailers flat out is how a project like this
- * gets IP-banned - which would end it.
+ * The crawler's own name, not a browser's. Imitating Chrome would hide what is
+ * asking, and robots.txt addresses programs by name; a crawler that claims to
+ * be a browser can never be addressed. Changed on 4 October 2026, after one
+ * product page and robots.txt from each store were fetched under this name.
+ */
+const CRAWLER_NAME = "grocery-price-tracker/1.0";
+
+/**
+ * Whoever runs the crawler names themselves in every request, so a store that
+ * notices the traffic can reach that person. The address comes from
+ * CRAWLER_CONTACT in their own .env and is never written in the code: a
+ * default here would make every copy of this repository send the author's
+ * address, or none at all.
+ */
+const CONTACT_HELP = [
+  "CRAWLER_CONTACT is not set, so no request was sent to any store.",
+  "",
+  "Every request names who is running the crawler, so a store can reach that",
+  "person. Add your own email address or web page to the .env file, e.g.",
+  "",
+  "  CRAWLER_CONTACT=you@your-domain.pt",
+  "",
+  "(.env.example shows the setting.)",
+].join("\n");
+
+function looksLikeContact(value: string): boolean {
+  const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const page = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(value);
+  // The placeholder in .env.example, copied without being changed.
+  const placeholder = /(^|[@.\/])example\.(com|org|net)\b/i.test(value);
+  return (email || page) && !placeholder;
+}
+
+let userAgent: string | undefined;
+
+/**
+ * Stop the process unless CRAWLER_CONTACT holds an email address or a web page.
+ *
+ * Every crawl script calls this before doing anything else, so a missing
+ * setting stops it before it touches the database. It exits rather than
+ * throws: the crawlers catch errors page by page, and a thrown error would be
+ * counted as thousands of failed pages instead of one missing setting.
+ */
+export function requireCrawlerContact(): string {
+  if (userAgent) return userAgent;
+  const contact = process.env.CRAWLER_CONTACT?.trim() ?? "";
+  if (!looksLikeContact(contact)) {
+    console.error(CONTACT_HELP);
+    process.exit(1);
+  }
+  userAgent = `${CRAWLER_NAME} (contact: ${contact})`;
+  return userAgent;
+}
+
+/** The test servers in src/scripts, which are not stores and need no contact. */
+function isLocal(host: string): boolean {
+  return /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host);
+}
+
+/**
+ * Minimum gap between two requests to the same host. A catalogue crawl is
+ * thousands of pages, and one request per second per store keeps the load on
+ * each store's servers small however long the crawl runs.
  */
 const MIN_DELAY_MS = 1_000;
 
@@ -196,6 +256,8 @@ function retryAfterMs(res: RawResponse, attempt: number): number {
 
 export async function fetchHtml(url: string): Promise<string> {
   const host = hostOf(url);
+  // Also checked here, for any script that reaches a store without calling it first.
+  const agent = isLocal(host) ? CRAWLER_NAME : requireCrawlerContact();
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -204,7 +266,7 @@ export async function fetchHtml(url: string): Promise<string> {
     let res: RawResponse;
     try {
       res = await rawGet(url, {
-        "User-Agent": USER_AGENT,
+        "User-Agent": agent,
         "Accept-Language": "pt-PT,pt;q=0.9",
       });
     } catch (error) {

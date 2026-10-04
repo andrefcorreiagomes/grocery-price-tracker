@@ -7,14 +7,15 @@ import type { PingoDoceProductUrl } from "./pingodoce-sitemap";
 /**
  * The COMPLIANT Pingo Doce crawler: one request per product page.
  *
- * The grid crawler in `pingodoce.ts` is four separate robots.txt violations
- * (`/on/demandware.store/`, `?cgid=`, `?start=`, `?sz=`); see the note there and
- * in `pingodoce-sitemap.ts`. This route uses the sitemap Pingo Doce advertises
- * and then each product's own page, neither of which is disallowed.
+ * Pingo Doce's listing grids fall under four robots.txt rules
+ * (`/on/demandware.store/`, `?cgid=`, `?start=`, `?sz=`), so the grid crawler
+ * that `pingodoce.ts` once was has been replaced; see the notes there and in
+ * `pingodoce-sitemap.ts`. This route uses the sitemap Pingo Doce advertises and
+ * then each product's own page, neither of which is disallowed.
  *
- * The trade, measured:
+ * The cost, measured:
  *
- *   grid crawler       ~30 requests, ~2 min, 500 products per request, DISALLOWED
+ *   listing grids      ~30 requests, ~2 min, 500 products per request, disallowed
  *   this one          9,059 requests, ~2.5 h, 1 product per request
  *
  * What it buys, beyond compliance:

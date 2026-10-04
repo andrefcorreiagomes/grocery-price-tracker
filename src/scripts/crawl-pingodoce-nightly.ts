@@ -3,21 +3,24 @@ import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import type { PingoDoceProductUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { formatHttpStats } from "../scrapers/http";
+import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
 
 /**
  * Crawl Pingo Doce ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
  *
- *   npm run crawl:pingodoce:products -- --dry              # sitemap only, no product fetches
- *   npm run crawl:pingodoce:products -- --limit=200        # a slice, stalest first
- *   npm run crawl:pingodoce:products -- --new              # only ids we have never seen
- *   npm run crawl:pingodoce:products                       # the whole food catalogue, ~2.5 h
+ *   npm run crawl:pingodoce:nightly -- --dry               # sitemap only, no product fetches
+ *   npm run crawl:pingodoce:nightly -- --limit=200         # a slice, stalest first
+ *   npm run crawl:pingodoce:nightly -- --new               # only ids we have never seen
+ *   npm run crawl:pingodoce:nightly                        # the whole food catalogue, ~2.5 h
  *
- * There is a second, faster Pingo Doce crawler (`npm run crawl:pingodoce`) that
- * walks the listing grids. It is DISALLOWED by robots.txt - four separate rules
- * - and now refuses to run. This is the replacement, and it returns more per
- * product: the pack size, which is the one thing standing between Pingo Doce
- * and a per-kilo comparison.
+ * Pingo Doce used to be crawled through its listing grids (`npm run
+ * crawl:pingodoce`), which robots.txt DISALLOWS on four separate rules; that
+ * command is now only a short coverage check. This is the replacement, and it
+ * returns more per product: the pack size, which is the one thing standing
+ * between Pingo Doce and a per-kilo comparison.
+ *
+ * Named "nightly" to match the other two stores' full-catalogue commands
+ * (renamed from crawl:pingodoce:products on 4 October 2026).
  *
  * Resumable by construction. `--limit` takes the stalest slice by
  * `lastCheckedAt`, so repeated partial runs march deterministically through the
@@ -34,6 +37,7 @@ function flag(name: string): boolean {
 const pct = (n: number, of: number) => (of === 0 ? "0%" : `${((n / of) * 100).toFixed(1)}%`);
 
 async function main() {
+  requireCrawlerContact();
   const limitRaw = arg("limit");
   const limit = limitRaw ? Number(limitRaw) : undefined;
   if (limitRaw && (!Number.isInteger(limit) || (limit as number) < 1)) {

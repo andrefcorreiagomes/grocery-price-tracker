@@ -24,4 +24,10 @@ export interface SearchHit {
   ean?: string | null;
   packageSize?: number | null;
   unit?: string | null;
+  /**
+   * Where `packageSize` came from, when it is set: a product page (the default)
+   * or the per-unit figure on an Auchan listing tile, which carries a size but
+   * never a barcode. See `auchanTileSize` in src/lib/matching.ts.
+   */
+  sizeSource?: "page" | "listing";
 }

@@ -15,7 +15,7 @@ export default async function GruposPage() {
       <header className={styles.header}>
         <h1>Onde é mais barato?</h1>
         <p className={styles.lede}>
-          O preço por quilo ou por litro de {types.length} tipos de alimento, nas três
+          O preço por quilo ou por litro de {new Set(types.map((t) => t.id)).size} tipos de alimento, nas três
           cadeias. Cada um mostra o produto mais barato de cada loja, e não apenas o
           número.
         </p>

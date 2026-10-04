@@ -48,19 +48,26 @@ export interface PersistResult {
  * from the write - so a fast crawl cannot erase a barcode that a product-page
  * crawl established. A product-page crawl sets them, including to null, because
  * there it means "this page has no barcode" rather than "I did not look".
+ *
+ * Barcode and size are written independently. They used to travel together,
+ * which was harmless while only a product page could know a size - but an
+ * Auchan listing tile now carries a size (from the store's per-unit figure) and
+ * never a barcode. Written together, that would have erased every Auchan
+ * barcode and stamped `enrichedAt`, which means "a product page was read".
  */
-function enrichment(p: {
+export function enrichment(p: {
   ean?: string | null;
   packageSize?: number | null;
   unit?: string | null;
+  sizeSource?: "page" | "listing";
 }) {
-  if (p.ean === undefined && p.packageSize === undefined) return {};
   return {
-    ean: p.ean ?? null,
-    eanNormalized: matchableEan(p.ean),
-    packageSize: p.packageSize ?? null,
-    unit: p.unit ?? null,
-    enrichedAt: new Date(),
+    ...(p.ean === undefined
+      ? {}
+      : { ean: p.ean ?? null, eanNormalized: matchableEan(p.ean), enrichedAt: new Date() }),
+    ...(p.packageSize === undefined
+      ? {}
+      : { packageSize: p.packageSize ?? null, unit: p.unit ?? null, sizeSource: p.sizeSource ?? "page" }),
   };
 }
 

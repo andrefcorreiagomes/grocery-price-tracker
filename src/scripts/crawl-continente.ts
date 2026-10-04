@@ -8,7 +8,7 @@ import {
   fetchPublishedCounts,
   type CategoryAudit,
 } from "../scrapers/crawl/continente-categories";
-import { formatHttpStats } from "../scrapers/http";
+import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
 
 /**
  * Continente coverage check: does the shop think it sells more than we know
@@ -20,15 +20,14 @@ import { formatHttpStats } from "../scrapers/http";
  * section landing pages, the published category tree, the category sitemap.
  *
  * THIS IS NOT A CATALOGUE CRAWL, and this command used to be one. The old
- * version walked listing grids whose URL Continente disallows on `?cgid` and
- * `&sz`. That route was kept on purpose as a fast option, but being the thing
- * `crawl:all` and this script both called by default is what made "choose
- * deliberately" stop meaning anything.
+ * version walked listing grids whose URL Continente's robots.txt disallows on
+ * `?cgid` and `&sz`. It was replaced by the product-page crawler below, and
+ * deleted on 4 October 2026.
  *
  * The catalogue now comes from one product page at a time:
  *
  *   npm run crawl:continente:nightly     orchestrated, with reports and history
- *   npm run crawl:continente:products    the bare crawl
+ *   npm run crawl:continente:products    a slice of at most 2,000, for tests
  *
  * What is left here is the part of the old script that was always compliant and
  * is the most useful per request: the store's own numbers, and the audit that
@@ -41,6 +40,7 @@ function topSection(path: string | null): string {
 }
 
 async function main() {
+  requireCrawlerContact();
   console.log("Reading Continente's published counts and category tree...\n");
 
   // The store's own product count per section, off each landing page.
@@ -51,9 +51,9 @@ async function main() {
     console.error(`could not read the section landing pages: ${(error as Error).message}`);
   }
 
-  // A category that vanished or was renamed fails loudly elsewhere; this catches
-  // the opposite and quieter case - a food department appearing that nobody told
-  // us about, which we would simply never ask for.
+  // A section that vanished or was renamed, and the quieter case - a food
+  // department appearing that nobody told us about, which we would simply never
+  // ask for.
   let audit: CategoryAudit | null = null;
   try {
     audit = auditCategories(await discoverCategories());

@@ -109,6 +109,9 @@ function resolve(head: string, name: string): FoodType | null {
   return null;
 }
 
+/** Shelf words meaning "and others": the shelf holds more than the food it names. */
+const OPEN_SHELF = /\b(especialidades|outros|outras|mais|diversos|diversas|variados)\b/;
+
 /** Words of a category path, accent-free and split on punctuation and hyphens. */
 function categoryTokens(segment: string): string[] {
   return stripAccents(segment)
@@ -208,6 +211,11 @@ export function classifyFoodType(
       if (claimants) foods.set(claimants.map((t) => t.id).join(","), token);
     }
     if (foods.size > 1) return null;
+    // A shelf that says "and others" names an open set, which is several foods
+    // too: Pingo Doce's "Salmão Fumado e Especialidades" filed hummus, tzatziki
+    // and a pork platter as salmão, and Auchan's "pato-e-mais-aves" filed quail
+    // as duck.
+    if (foods.size === 1 && OPEN_SHELF.test(stripAccents(segment).toLowerCase())) return null;
     if (foods.size === 1) return resolve([...foods.values()][0], plain)?.id ?? null;
   }
 

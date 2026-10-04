@@ -42,8 +42,9 @@
 .row {
   display: grid;
   /* name takes the slack; the two figures stay in their own columns so the
-     eye can run down the prices without them jittering */
-  grid-template-columns: 1fr auto 8.5rem;
+     eye can run down the prices without them jittering. The store column fits
+     a two-way tie, "Continente · Pingo Doce", the longest it ever shows. */
+  grid-template-columns: 1fr auto 13rem;
   gap: 1rem;
   align-items: baseline;
   padding: 0.7rem 0.4rem;

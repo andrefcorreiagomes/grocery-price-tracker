@@ -8,6 +8,7 @@ the front page, which now describes the project as a whole.
 
 ```bash
 npm install
+cp .env.example .env     # then set CRAWLER_CONTACT to your own email address
 npx prisma migrate dev   # creates dev.db with the schema
 npm run seed              # loads data/tracked-products.ts into the database
 npm run scrape             # scrapes current prices for all tracked products
@@ -58,7 +59,7 @@ task yourself:
    - Program/script: `npm.cmd`
    - Add arguments: `run scrape`
    - Start in: the full path to this project folder, e.g.
-     `C:\Users\andre\Claude projects\grocery-price-tracker`
+     `C:\path\to\grocery-price-tracker`
 4. Finish. You can test it immediately via **Run** in Task Scheduler, and
    check `npx prisma studio` afterwards to confirm a new row appeared in
    `PriceSnapshot`.

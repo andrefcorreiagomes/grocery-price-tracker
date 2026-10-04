@@ -2,7 +2,7 @@ import { prisma } from "../lib/db";
 import { coverageRows, readPingoDoceDepartments } from "../scrapers/crawl/pingodoce";
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
-import { formatHttpStats } from "../scrapers/http";
+import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
 
 /**
  * Pingo Doce coverage check: does the shop think it sells more than we know
@@ -19,7 +19,7 @@ import { formatHttpStats } from "../scrapers/http";
  * separate rules. The compliant route reads one product page at a time and
  * takes about two and a half hours:
  *
- *   npm run crawl:pingodoce:products
+ *   npm run crawl:pingodoce:nightly
  *
  * What is left here is the part of the old crawler that was always the most
  * valuable and is still allowed: the published counts. A department page caps
@@ -34,6 +34,7 @@ function topSection(path: string | null): string {
 }
 
 async function main() {
+  requireCrawlerContact();
   console.log(`Reading ${PINGO_DOCE_FOOD_CATEGORIES.length} Pingo Doce department pages...\n`);
 
   const counts = await readPingoDoceDepartments();

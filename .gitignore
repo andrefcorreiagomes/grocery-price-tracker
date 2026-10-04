@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files: private settings stay local; the example, with no real values, is shared
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -41,6 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local backups: database copies and the old history, never uploaded
+/backups/
 
 # sqlite database
 *.db

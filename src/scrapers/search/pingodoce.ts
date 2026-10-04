@@ -1,8 +1,14 @@
 import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "../brand-normalize";
-import { fetchHtml } from "../http";
-import { collectHits, SEARCH_LIMIT } from "./paginate";
 import type { SearchHit } from "./types";
+
+/**
+ * Reads product tiles out of a store's listing HTML. Shared with the catalogue
+ * crawlers. The functions that once requested the stores' SEARCH pages were
+ * removed on 3 October 2026: Continente's and Pingo Doce's robots.txt forbid
+ * those pages and Auchan's evidently means to. Product discovery now searches
+ * our own catalogue instead - see src/scripts/discover.ts.
+ */
 
 interface GtmItem {
   item_id?: string;
@@ -12,10 +18,6 @@ interface GtmItem {
   item_category2?: string;
   price?: number;
 }
-
-/** Unlike Continente, Pingo Doce honours `start`/`sz` directly on Search-Show. */
-const SEARCH_URL =
-  "https://www.pingodoce.pt/on/demandware.store/Sites-pingo-doce-Site/pt_PT/Search-Show";
 
 const GTM_ATTR = "data-gtm-info=";
 /** JSON string delimiters arrive HTML-encoded inside the attribute. */
@@ -117,8 +119,8 @@ function productUrlsById(html: string): Map<string, string> {
 }
 
 /**
- * Parse Pingo Doce product tiles out of a Search-Show HTML fragment. Shared by
- * the search extractor here and the catalogue crawler. Each tile carries its
+ * Parse Pingo Doce product tiles out of a listing HTML fragment, as the catalogue
+ * crawler reads them. Each tile carries its
  * data in a `data-gtm-info` JSON attribute holding exactly one item; the page
  * also carries a few list-level payloads holding many items, which are skipped.
  * In-house department labels ("Nossa Peixaria" etc.) are folded to "Pingo Doce"
@@ -169,24 +171,4 @@ export function parsePingoDoceTotal(html: string): number | null {
   const text = cheerio.load(html)(".result-count").first().text();
   const digits = text.replace(/[.,\s]/g, "").match(/\d+/);
   return digits ? Number(digits[0]) : null;
-}
-
-export async function searchPingoDoce(
-  term: string,
-  limit = SEARCH_LIMIT
-): Promise<SearchHit[]> {
-  // asking for `sz = limit` means one request covers the whole cap
-  return collectHits(
-    (start) => fetchPage(term, start, limit),
-    (hit) => hit.id,
-    limit,
-    limit
-  );
-}
-
-async function fetchPage(term: string, start: number, size: number): Promise<SearchHit[]> {
-  const html = await fetchHtml(
-    `${SEARCH_URL}?q=${encodeURIComponent(term)}&start=${start}&sz=${size}`
-  );
-  return parsePingoDoceTiles(html);
 }

@@ -1,6 +1,6 @@
 ---
 name: product-discovery
-description: Discovers and groups comparable products across Continente, Pingo Doce and Auchan for a given search term (a fish species, a meat cut, a grocery staple, etc.), so new products can be added to this app's price tracker in batches instead of one at a time by hand. Use this whenever the user gives a search term and asks to find, group, match, discover, or compare what's available across the three stores - including phrasings like "let's do carapau next", "find bacalhau across the stores", "do the same grouping for X", "what does Y look like at all three sites", or "add some more fish/meat/products to the tracker". Produces a reviewable HTML artifact of proposed groups, plus everything that didn't make it into a group and why - it never writes to tracked-products.ts without explicit sign-off on that artifact first.
+description: Discovers and groups comparable products across Continente, Pingo Doce and Auchan for a given search term (a fish species, a meat cut, a grocery staple, etc.), so new products can be added to this app's price tracker in batches instead of one at a time by hand. Use this whenever the user gives a search term and asks to find, group, match, discover, or compare what's available across the three stores - including phrasings like "let's do carapau next", "find bacalhau across the stores", "do the same grouping for X", "what does Y look like at all three sites", or "add some more fish/meat/products to the tracker". Searches the project's own catalogue database (npm run discover), never the stores' websites. Produces a reviewable HTML artifact of proposed groups, plus everything that didn't make it into a group and why - it never writes to tracked-products.ts without explicit sign-off on that artifact first.
 ---
 
 # Product discovery across Continente, Pingo Doce and Auchan
@@ -14,7 +14,7 @@ pass. The fix isn't to automate the judgment away; it's to batch the
 mechanical part. One search term (e.g. "carapau") reliably turns into
 several comparable products at once (small/medium/large/etc.), because
 that's how grocery stores actually organize a category. This skill runs
-that batch - fetch, filter, cluster, sanity-check - and stops at a review
+that batch - search, filter, cluster, sanity-check - and stops at a review
 artifact rather than guessing its way to a final answer. The clustering
 step is still a judgment call, not a lookup; the skill's job is to make
 good judgment calls consistently and show its reasoning, not to remove the
@@ -22,67 +22,47 @@ human from the loop.
 
 ## The workflow
 
-### 1. Pull structured results from all three stores
+### 1. Search the catalogue, not the stores
 
-Use the search extractors already built for this project - they read
-structured data straight out of each store's server-rendered search page
-(no headless browser needed, same approach as the production scrapers):
+```bash
+npm run discover -- carapau
+npm run discover -- "iogurte natural"
+```
 
-- `src/scrapers/search/continente.ts` - `searchContinente(term)`
-- `src/scrapers/search/pingodoce.ts` - `searchPingoDoce(term)`
-- `src/scrapers/search/auchan.ts` - `searchAuchan(term)`
+`src/scripts/discover.ts` searches the `CatalogueProduct` table - every product
+the three catalogue crawlers have read - and makes **no request to any store**.
+It prints one table per store (name, brand, price, size, price per kg or litre,
+barcode) and writes every hit, with its URL and the store's own category, to
+`logs/discover-<term>.json`. That file is the record proposed groups are
+checked against: a URL that is not in it was not reached by a crawler, however
+plausible it reads.
 
-Each returns `SearchHit[]` (`src/scrapers/search/types.ts`):
-`{ id, name, price, brand, category, url }`. Write a small throwaway
-script under `src/scripts/` that imports all three, runs them for the
-term, and dumps the results (`console.table` is enough) - delete it once
-you've got what you need, same as any other one-off investigation script
-in this repo.
+**Why not the stores' search pages.** The first version of this skill searched
+them directly. Continente's and Pingo Doce's robots.txt forbid those pages, and
+Auchan's rule (`/pesquisa?q=*`) misses its own `/pt/pesquisa` path only by a
+technicality. The search code was removed on 3 October 2026. Do not rebuild it,
+and do not fetch a search page by hand "just to check": the project respects
+each store's robots.txt, including where that is slower.
 
-If a store's markup has changed and an extractor comes back empty or
-throws, don't guess - fetch the search page yourself and look for the
-per-tile data attribute again (Continente: `data-product-tile-impression`,
-Pingo Doce: `data-gtm-info`, Auchan: `data-gtm` + `data-urls`), the same
-way these extractors were originally built. Fix the extractor, not just
-this one run.
+**Matching is by whole words** (`matchesTerm` in `src/lib/matching.ts`): every
+word of the term must appear in the name, ignoring accents, case and Portuguese
+plurals. "limao" finds "Limões"; "sal" does not find "Salmão".
 
-**Each search reads the top 60 relevance-ranked hits per store - roughly four
-requests and a few seconds per term.** That cap (`SEARCH_LIMIT` in
-`paginate.ts`) is deliberate: this tracker wants a few dozen good comparison
-groups, not exhaustive coverage, and walking a broad term's full result set
-cost ~40 requests and 90 seconds before any judgment could start. The number
-is the same for all three stores on purpose - they serve different page sizes
-(Continente's grid clamps to 35 per request even when asked for more, Pingo
-Doce and Auchan cover 60 in one), and an under-sampled store is exactly what
-makes a group look 2/3 when it is really 3/3.
+**The catalogue is only as current as the last crawl.** Each store's table
+header gives its date. A product launched since then will be missing, and a
+price may have moved. Say so in the artifact when a store's crawl is old.
 
-**What a capped search can no longer tell you: that a store doesn't carry
-something.** Write the ledger reason as *"not in the top 60 at Auchan"*, never
-*"Auchan doesn't stock it"*. When a group lands at 2/3 and the missing store
-plausibly carries the item, re-run that one term deeper - every `searchX`
-takes an optional second argument, e.g. `searchAuchan("manteiga", 200)`. That
-is the exception, not the default.
+**What "not found" means.** The catalogue covers the food sections each
+crawler reads, so a missing product is *"not in Auchan's catalogue as of
+<date>"*, never *"Auchan doesn't stock it"*.
 
-**Prefer a narrower term over a deeper page.** The top 60 of a broad term is
-mostly promoted national brands, so `queijo feta` at four requests beats page
-twelve of `queijo`. Narrowing the term is the intended way to reach the long
-tail, not a workaround.
+**Prefer a narrower term.** A broad term returns hundreds of rows; `queijo
+feta` is a better unit of work than `queijo`.
 
-A count below 60 is a real ceiling, not a truncation - but confirm it the way
-Auchan's 24 results for "manteiga" were confirmed (identical at limits of 24,
-60, 100 and 200) rather than assuming, because that number happens to equal an
-old first-page artifact. Which is the durable lesson: the extractors once read
-only page one, silently capping every search at 35 hits from Continente, ~18
-from Pingo Doce and 24 from Auchan, and the tell was those three numbers
-recurring across five unrelated terms. **When per-store counts come out
-suspiciously round, identical across unrelated terms, or unmoved by a term
-change that ought to move them, suspect the harness before concluding anything
-about the stores.**
-
-`paginate.ts` holds the shared walk and dedupes by product id. Note that
-Continente ignores `start`/`sz` on its public search URL and only honours
-`start` on the `Search-UpdateGrid` endpoint its own "load more" button calls,
-with `cgid` and `pmin` attached.
+**When per-store counts look wrong** - zero at one store, identical across
+unrelated terms, unmoved by a term change that ought to move them - suspect the
+catalogue or the matching before concluding anything about the stores. A
+store's crawl may have failed, or its names may spell the word differently.
 
 ### 2. Normalize brand before judging anything
 
@@ -101,7 +81,7 @@ representative SKU when a store has duplicates.
   general "Nosso/Nossa ___" = "Our ___" pattern to `"Pingo Doce"`, so
   future in-house labels following that convention are caught
   automatically.
-- Auchan's search tiles put a size word ("GRANDE", "MÉDIO") in the brand
+- Auchan's listing tiles put a size word ("GRANDE", "MÉDIO") in the brand
   field for some unbranded items - don't treat that as a real brand either.
 
 The underlying lesson, worth applying to any store this project adds
@@ -114,8 +94,8 @@ a new pattern - don't special-case it inline.
 
 Search is fuzzy. A search for a fish name can return unrelated products
 that merely share a word (a seasoning blend "for" that fish, a medicine
-whose name partially matches, a book title). The `category` field each
-extractor returns is your first filter - drop anything outside the
+whose name partially matches, a book title). The `categoryPath` of each hit
+is your first filter - drop anything outside the
 relevant department (e.g. "conservas"/canned goods when you're looking for
 fresh fish). Anything left that's still obviously wrong, drop by hand and
 note it in the artifact's ledger rather than silently deleting it.
@@ -163,41 +143,35 @@ listing and a "Nacional" (farmed) listing used near-identical names but
 differed in price by roughly 3x - grouping by name alone would have
 silently compared a luxury wild fish to a supermarket farmed one. If two
 candidates for the same group differ wildly in price, that's a signal to
-open both product pages and check what's actually different (species,
-sourcing, cut) before deciding whether they belong together.
+check what's actually different (species, sourcing, cut) before deciding
+whether they belong together. Opening a product page is a request to the
+store, so ask the user first (product pages are allowed by robots.txt; the
+project rule is still to ask before any live request).
 
-**Read the pack size off the page, don't infer it from the name.** Product
-names are inconsistent about size - some spell it out ("8×125 g"), some say
-nothing at all. `scrapeContinente(url)` returns a `packageSize` (in kg or L)
-parsed from the `emb. X` label Continente puts on every product page, so
-when two candidates might be different formats, fetch it rather than
-guessing. This came out of grouping plain yogurt: Continente's "Iogurte
-Grego Mythos Natural" gave no size in its name and was flagged as an
-ambiguous 2/3 group on the theory that it might be a 4-pack rather than a
-tub - the page said `emb. 1 kg`, which made it a clean 3/3. Pingo Doce and
-Auchan return `null` for now (no equivalent element found on their pages),
-so those still need the name, the €/kg rate, or the product page read by
-hand.
+**Use the catalogue's size, not the name.** Product names are inconsistent
+about size - some spell it out ("8×125 g"), some say nothing at all. The
+catalogue's `packageSize` comes from the product page for Continente and Pingo
+Doce, and from the name for Auchan (which writes sizes into its names). This
+came out of grouping plain yogurt: Continente's "Iogurte Grego Mythos Natural"
+gave no size in its name and looked like an ambiguous 2/3 group on the theory
+that it might be a 4-pack - the page said `emb. 1 kg`, a clean 3/3. Where the
+size is missing, say so in the ledger; reading the page needs the user's
+go-ahead.
 
-**But `emb.` is not always the `packageSize` you want.** Continente shows
-that label on variable-weight fresh counter goods too, where it's the
-approximate weight of *that particular piece* while the displayed price is
-already the €/kg rate. "Perna de Peru" reads `price: 4.99, packageSize: 2.2`
-- the €4.99 is per kilo, and 2.2 kg is just how much that leg happened to
-weigh. Writing `packageSize: 2.2` would compute €2.27/kg and quietly
-understate the product by half. The test is the secondary €/kg figure on the
-page:
+**But a page's size is not always the size you want.** On goods sold by weight
+- a turkey leg, a whole fish, counter meat - the label is the approximate weight
+of *that particular piece*, while the displayed price is already per kilo.
+Since 3 October 2026 the page readers handle this themselves
+(`src/scrapers/page-size.ts`): a headline price ending in `€/kg` stores a size
+of 1. Rows read before then can still hold the piece's weight, and the error
+runs both ways: a piece heavier than a kilo makes the price per kilo too LOW (a
+whole chicken at €2.49/kg shown as €0.84/kg), a piece lighter than a kilo makes
+it too HIGH (Pingo Doce's fresh carapau, €3.99 with a 0.21 kg label, shows as
+€19/kg beside others at €3 - almost certainly €3.99 per kilo).
+Treat either as a data error, not a bargain or a rip-off.
 
-- secondary rate **equals** the main price → price is already per unit →
-  `packageSize: 1` (all fresh counter meat and fish falls here)
-- secondary rate **differs** from the main price → the price buys the whole
-  pack → use the `emb.` weight (fixed-weight pre-packed goods: a 500 g tray
-  of picada, an 800 g bag of frozen fillets, a 1 kg tub of yogurt)
-
-**The sharper test: look at the suffix on the headline price.** Deli-counter
-goods often carry no secondary €/kg at all, so the comparison above has nothing
-to compare and comes out inconclusive. Continente's price block settles it
-directly, and the two shapes are unmistakable once seen side by side:
+**How the page tells the two apart** - the rule `page-size.ts` applies, kept
+here so a result can be checked by eye. Continente's price block:
 
 | Page shows | Meaning | `packageSize` |
 |---|---|---|
@@ -208,11 +182,6 @@ Counter goods also replace the `emb.` label with a minimum-order one -
 `Quant. Mínima = 150 gr (aprox. 4 fatias)` - which is not a pack size and must
 never be used as one. Cross-check by multiplying: €19,99/kg × 0,15 kg = €3,00,
 exactly the /un figure shown.
-
-When in doubt, run a control: fetch a listing whose mode you already know from
-`tracked-products.ts` (Perna de Peru is per-kg, Sal Grosso is a pack) and
-compare the page signatures. That is how the fiambre counter listings were
-settled rather than argued about.
 
 **On canned and jarred goods, use the drained weight - with two exceptions.**
 A conserve has two weights: *peso líquido* (net, everything in the tin) and
@@ -260,10 +229,9 @@ tier and price - one under their own name, one more genericly labeled
 representative and note the other as a duplicate in the ledger, don't
 create a second group for it.
 
-**Verify outliers against the actual product page before excluding them.**
-A suspiciously round or low price on a search tile might be a genuine
-site quirk, not a scraping error - check the individual product page's
-structured data before deciding it's bad data. (We once found a fresh
+**Verify outliers before excluding them.** A suspiciously round or low
+price might be a genuine site quirk, not a scraping error. If it matters to
+a group, ask the user before reading the product page to check. (We once found a fresh
 fish priced at exactly €1.00 on both the tile and the product page - real,
 just unusual - so it was excluded as unreliable rather than silently used
 as the group's price.)
@@ -318,11 +286,9 @@ matching the app's existing category menu (add a new one only if it
 genuinely doesn't fit), `unit` as the comparison base ("kg", "L", etc.),
 and each store's `packageSize` expressed in that unit (see
 `src/lib/pricing.ts` for how that's used - `1` when the store already
-prices per unit, otherwise the pack size). For Continente listings
-`scrapeContinente(url).packageSize` gives you that number directly - but
-only for fixed-weight packs; on per-kg counter goods it returns the piece's
-weight and the correct value is `1` (see the `emb.` caveat in step 4). The
-other two stores return `null` and stay manual. Then:
+prices per unit, otherwise the pack size). The catalogue row's `packageSize`
+is that number, with the per-kilo caveat in step 4. Then, **after asking the
+user** - `npm run scrape` requests every tracked product page:
 
 ```bash
 npm run seed
@@ -330,7 +296,8 @@ npm run scrape
 ```
 
 Spot-check the result - `npx tsc --noEmit` / `npx eslint .`, and either a
-quick DB query or the running dev server - the same verification pass used
+quick database query (never while a crawl is running) or the running dev
+server - the same verification pass used
 for every other change in this project. If a listing fails to scrape,
 that's usually a URL that doesn't resolve the way you expect; open it and
 check before assuming the group was wrong.
@@ -339,11 +306,10 @@ check before assuming the group was wrong.
 
 | File | Role |
 |---|---|
-| `src/scrapers/search/{continente,pingodoce,auchan}.ts` | Structured search-result extraction per store |
-| `src/scrapers/search/paginate.ts` | `SEARCH_LIMIT` (60/store) and the offset walk |
-| `src/scrapers/search/types.ts` | `SearchHit` shape |
+| `src/scripts/discover.ts` | `npm run discover -- <term>`: searches the catalogue, writes `logs/discover-<term>.json` |
+| `src/lib/matching.ts` | `matchesTerm()` - the whole-word, accent- and plural-blind match |
 | `src/scrapers/brand-normalize.ts` | Pingo Doce in-house label detection |
-| `src/scrapers/continente.ts` | `scrapeContinente()` - returns `packageSize` parsed from the `emb. X` label |
+| `src/scrapers/page-size.ts` | how a page's size is corrected for goods sold by weight and capsule counts |
 | `src/lib/pricing.ts` | `unitPrice()` - how packageSize normalization works |
 | `data/tracked-products.ts` | Where approved groups get added |
 | `src/scripts/seed.ts`, `src/scripts/scrape-daily.ts` | Finalization pipeline after approval |

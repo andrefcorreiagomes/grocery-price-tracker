@@ -4,7 +4,7 @@ import { fetchHtml } from "../http";
  * Discovery for the COMPLIANT Pingo Doce crawler: product URLs from the sitemap
  * its robots.txt advertises.
  *
- * WHY THIS EXISTS. The grid crawler in `pingodoce.ts` walks
+ * WHY THIS EXISTS. The first Pingo Doce crawler walked
  * `/on/demandware.store/.../Search-Show?cgid=&start=&sz=`, and Pingo Doce's
  * robots.txt disallows every part of that - four separate rules:
  *

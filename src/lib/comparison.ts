@@ -1,6 +1,7 @@
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { isOwnBrand } from "./candidates";
 import { unitPrice } from "./pricing";
+import { isStoreError } from "../../data/store-errors";
 
 /**
  * Deciding what each store has to say about one kind of food.
@@ -71,6 +72,9 @@ export function comparable(
 ): boolean {
   if (p.price === null || p.packageSize === null || p.packageSize <= 0) return false;
   if (p.unit !== "kg" && p.unit !== "l") return false;
+  // The store's own data is wrong (data/store-errors.ts): its price per kilo
+  // would be impossible, so it sits out, as if its size were unknown.
+  if (isStoreError(p.store, p.storeProductId)) return false;
 
   if (measuredIn) return p.unit === measuredIn;
 
@@ -204,16 +208,24 @@ export function comparableStoreCount(cells: Map<string, Cell>): number {
   return n;
 }
 
-/** The store with the lowest price per unit, or null when fewer than two can be compared. */
-export function cheapestStore(cells: Map<string, Cell>): string | null {
-  let best: { store: string; unitPrice: number } | null = null;
-  let priced = 0;
+/**
+ * Every store with the lowest price per unit, or none when fewer than two can
+ * be compared.
+ *
+ * ALL of them on a tie. Naming only the first used to highlight Continente
+ * alone where all three sold cooking oil at EUR 1.55 a litre, which told the
+ * reader Continente was cheaper when it was not. Ties are judged in whole
+ * cents, because cents are what the page shows: two prices the reader sees as
+ * equal must not be ranked by a fraction they cannot see.
+ */
+export function cheapestStores(cells: Map<string, Cell>): string[] {
+  const cents = new Map<string, number>();
   for (const [store, cell] of cells) {
-    if (cell.kind !== "price") continue;
-    priced++;
-    if (best === null || cell.unitPrice < best.unitPrice) best = { store, unitPrice: cell.unitPrice };
+    if (cell.kind === "price") cents.set(store, Math.round(cell.unitPrice * 100));
   }
   // One priced store is not a comparison, and naming it "cheapest" would imply
   // it beat something.
-  return priced >= 2 && best ? best.store : null;
+  if (cents.size < 2) return [];
+  const lowest = Math.min(...cents.values());
+  return [...cents].filter(([, c]) => c === lowest).map(([store]) => store);
 }

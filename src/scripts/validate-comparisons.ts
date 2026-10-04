@@ -1,3 +1,4 @@
+import { RECHECK_AFTER_DAYS, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { prisma } from "../lib/db";
 import {
   cheapestPerStore,
@@ -20,8 +21,8 @@ import { dirname } from "node:path";
  *   npm run validate:comparisons
  *   npm run validate:comparisons -- --html=reports/comparisons.html
  *
- * Phase 0 fixed the errors we had already found. This finds the ones we had
- * not, and it exists because of a specific property of the page: it ranks by
+ * The earlier fixes dealt with the errors already found. This finds the ones
+ * not yet found, and it exists because of a specific property of the page: it ranks by
  * CHEAPEST, and cheapest is where every error lands. A size recorded too large
  * makes a price per kilo too small, so the worst row in a food type is the
  * first one a visitor sees. A page built on this query would show its own bugs
@@ -63,14 +64,15 @@ export interface TypeReport {
 
 /**
  * Grouped by REMEDY, not by severity. Each kind is fixed somewhere different,
- * and three of the four are not decisions I can make.
+ * and two of the three are fixed in the code; the third needs a person's
+ * judgement.
  */
 export type ProblemKind =
-  /** declare the unit in data/food-types.ts - mechanical, and mine to fix */
+  /** declare the unit in data/food-types.ts - a mechanical fix */
   | "unit"
   /** a size or price is wrong - a parser or a store placeholder */
   | "data"
-  /** the food type holds more than one kind of thing - your judgement */
+  /** the food type holds more than one kind of thing - a judgement call */
   | "breadth";
 
 export interface Problem {
@@ -243,7 +245,12 @@ async function main() {
   console.log("worst by breadth (cheapest far below typical):\n");
   console.log("  " + "food".padEnd(20) + "n".padStart(6) + "cheapest".padStart(10) + "median".padStart(9) + "  x    cheapest product");
   for (const r of reports.slice(0, 25)) {
-    const first = r.cheapestNames[0];
+    // The product the `cheapest` figure belongs to: the lowest of the per-store
+    // cheapest. This printed `cheapestNames[0]` - Continente's cheapest, whatever
+    // the overall one was - so "Salmão Pequeno Fresco" sat beside EUR 1.89 that
+    // was really an Auchan salmon head.
+    const lowest = [...r.cheapestNames].sort((a, b) => a.unitPrice - b.unitPrice)[0];
+    const first = lowest ? { ...lowest, name: `${lowest.store.slice(0, 2)} ${lowest.name}` } : undefined;
     console.log(
       "  " + r.label.slice(0, 19).padEnd(20) +
         String(r.n).padStart(6) +
@@ -266,6 +273,33 @@ async function main() {
     for (const p of r.problems.filter((x) => x.kind !== "breadth")) {
       console.log(`  ${r.label.padEnd(20)} ${p.text}`);
     }
+  }
+
+  // Products kept out of comparisons because the store's own data is wrong.
+  // Listed every run so none is forgotten, and flagged once its check is old:
+  // stores correct their data, and an entry must not outlive its error.
+  console.log(`\nknown store errors, kept out of comparisons (data/store-errors.ts): ${STORE_ERRORS.length}\n`);
+  for (const e of STORE_ERRORS) {
+    const row = await prisma.catalogueProduct.findUnique({
+      where: { store_storeProductId: { store: e.store, storeProductId: e.storeProductId } },
+      select: { packageSize: true, unit: true, delistedAt: true },
+    });
+    const status = storeErrorStatus(
+      e,
+      row ? { packageSize: row.packageSize, unit: row.unit, delisted: row.delistedAt !== null } : null
+    );
+    const age = Math.floor((Date.now() - new Date(`${e.checkedOn}T00:00:00Z`).getTime()) / 86_400_000);
+    const verdict =
+      status.kind === "changed"
+        ? `STORE DATA CHANGED: ${status.was} then, ${status.now} now - look at the page again`
+        : status.kind === "gone"
+          ? "NO LONGER IN THE CATALOGUE - the entry can probably be removed"
+          : age > RECHECK_AFTER_DAYS
+            ? `RE-CHECK DUE: unchanged, but last looked at ${age} days ago`
+            : `unchanged since ${e.checkedOn}`;
+    console.log(`  ${e.store.padEnd(11)} ${e.storeProductId.padEnd(9)} ${e.name}`);
+    console.log(`    ${e.problem}`);
+    console.log(`    ${verdict}`);
   }
 }
 

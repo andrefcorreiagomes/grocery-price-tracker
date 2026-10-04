@@ -4,7 +4,7 @@ import { isOwnBrand } from "../lib/candidates";
 import { scrapeAuchan } from "../scrapers/auchan";
 import { scrapeContinente } from "../scrapers/continente";
 import { scrapePingoDoce } from "../scrapers/pingodoce";
-import { formatHttpStats } from "../scrapers/http";
+import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
 import type { ScrapeResult } from "../scrapers/types";
 
 /**
@@ -111,6 +111,7 @@ async function enrichStore(
 }
 
 async function main() {
+  requireCrawlerContact();
   const cutoff = Number(arg("cutoff") ?? 0.7);
   const pairLimit = Number(arg("pairs") ?? 300);
 

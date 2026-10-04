@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import {
   cheapestPerStore,
-  cheapestStore,
+  cheapestStores,
   comparableStoreCount,
   namedGroup,
   ownBrandPerStore,
@@ -39,8 +39,10 @@ export interface Ranking {
   ownBrand: Map<string, Cell>;
   /** the confirmed same-product groups, largest price gap first */
   named: NamedGroups;
-  /** the store with the lowest price, or null when fewer than two can be compared */
-  winner: string | null;
+  /** the stores with the lowest price (all of them on a tie), none when fewer than two can be compared */
+  winners: string[];
+  /** the same for the own-brand row, which can name a different store */
+  ownBrandWinners: string[];
   storesCompared: number;
 }
 
@@ -66,12 +68,14 @@ export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage 
   const rankings: Ranking[] = [];
   for (const unit of unitsFor(foodTypeId, rows)) {
     const cheapest = cheapestPerStore(rows, foodTypeId, unit);
+    const ownBrand = ownBrandPerStore(rows, foodTypeId, unit);
     rankings.push({
       unit,
       cheapest,
-      ownBrand: ownBrandPerStore(rows, foodTypeId, unit),
+      ownBrand,
       named: await getNamedGroups(foodTypeId, unit),
-      winner: cheapestStore(cheapest),
+      winners: cheapestStores(cheapest),
+      ownBrandWinners: cheapestStores(ownBrand),
       storesCompared: comparableStoreCount(cheapest),
     });
   }
@@ -84,7 +88,7 @@ export interface IndexEntry {
   label: string;
   unit: "kg" | "l";
   storesCompared: number;
-  winner: string | null;
+  winners: string[];
   cheapestPrice: number | null;
 }
 
@@ -135,7 +139,7 @@ export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
         label: type.label,
         unit,
         storesCompared: 3,
-        winner: cheapestStore(cheapest),
+        winners: cheapestStores(cheapest),
         cheapestPrice: lowest,
       });
     }
@@ -164,8 +168,8 @@ export interface NamedGroup {
   cells: Map<string, Cell>;
   /** the spread between the dearest and cheapest chain, in euros per unit */
   gap: number;
-  /** the cheaper chain - the answer the row exists to give */
-  winner: string | null;
+  /** the cheaper chain, or both on a tie - the answer the row exists to give */
+  winners: string[];
 }
 
 export interface NamedGroups {
@@ -191,8 +195,7 @@ export interface NamedGroups {
  *
  * Every group today spans exactly TWO chains, because Pingo Doce publishes no
  * barcode and so cannot be matched with certainty. That is not hidden: the
- * third chain renders "not stocked", which is the shape of the original
- * "Batata do Zé" example.
+ * third chain renders "not stocked" rather than disappearing from the row.
  */
 export async function getNamedGroups(
   foodTypeId: string,
@@ -227,14 +230,18 @@ export async function getNamedGroups(
   // food type at all, and still belongs in the comparison.
   const allMembers = allMemberships.filter((m) => groupIds.has(m.groupId));
   const otherIds = allMembers.map((m) => m.productId).filter((id) => !byId.has(id));
-  const others = await prisma.catalogueProduct.findMany({
-    where: { id: { in: otherIds } },
-    select: {
-      id: true, storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true,
-    },
-  });
-  for (const o of others) byId.set(o.id, o);
+  // In batches: the database driver accepts at most 999 values per query. Wine
+  // alone reaches about 340 today, and groups only grow.
+  for (let i = 0; i < otherIds.length; i += 500) {
+    const others = await prisma.catalogueProduct.findMany({
+      where: { id: { in: otherIds.slice(i, i + 500) } },
+      select: {
+        id: true, storeProductId: true, store: true, name: true, brand: true,
+        price: true, packageSize: true, unit: true,
+      },
+    });
+    for (const o of others) byId.set(o.id, o);
+  }
 
   const byGroup = new Map<string, ComparableProduct[]>();
   for (const m of allMembers) {
@@ -261,7 +268,7 @@ export async function getNamedGroups(
       name: members.reduce((a, b) => (b.name.length < a.name.length ? b : a)).name,
       cells,
       gap: Math.max(...prices) - Math.min(...prices),
-      winner: cheapestStore(cells),
+      winners: cheapestStores(cells),
     });
   }
 

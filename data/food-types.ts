@@ -8,10 +8,9 @@
  * file potatoes on a shelf that also holds sweet potatoes, onions and garlic)
  * and products are too fine.
  *
- * Seeded from `data/food-types-candidates.md`, which was derived by taking the
- * head noun of 38,688 food-section product names. Every type below appeared in
- * at least two stores with 20+ products; "Snacks e doces" was dropped whole at
- * the user's request.
+ * Seeded by taking the head noun of 38,688 food-section product names: every
+ * type below appeared in at least two stores with 20+ products. Sweets and
+ * snacks were left out on purpose.
  *
  * Curated data, like HOUSE_LABELS in src/lib/candidates.ts - the judgement is
  * meant to live in one readable place rather than be spread through code.
@@ -192,7 +191,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // The animals: a CUT_WORD resolves to one of these, so they must exist.
   { id: "frango", label: "Frango", unit: "kg", heads: ["frango", "galinha"] },
   { id: "peru", label: "Peru", unit: "kg", heads: ["peru"] },
-  { id: "pato", label: "Pato", unit: "kg", heads: ["pato"] },
+  // Auchan shelves quail under "pato-e-mais-aves" (duck and other birds), and
+  // a shelf naming one food decides - so five quail products became duck,
+  // one of them the cheapest "duck" in the country at EUR 1.25, a price per bird.
+  { id: "pato", label: "Pato", unit: "kg", heads: ["pato"], exclude: /codorni|perdiz|faisao/i },
   { id: "porco", label: "Porco", unit: "kg", heads: ["porco", "suino", "leitao"] },
   { id: "vaca", label: "Vaca e novilho", unit: "kg", heads: ["vaca", "bovino", "novilho", "vitela"] },
   { id: "borrego", label: "Borrego e cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"] },
@@ -223,7 +225,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"] },
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
   { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha"] },
-  { id: "salmao", label: "Salmão", unit: "kg", heads: ["salmao"] },
+  // Heads are sold for stock and soup, not as salmon to eat: three Auchan
+  // salmon heads at EUR 1.89-1.99/kg were the cheapest "salmon" in the country.
+  // Decided by hand, 4 October 2026.
+  { id: "salmao", label: "Salmão", unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b/i },
   { id: "pescada", label: "Pescada", unit: "kg", heads: ["pescada", "pescadinha"] },
   { id: "lula", label: "Lula", unit: "kg", heads: ["lula"] },
   { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"] },
@@ -241,7 +246,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "truta", label: "Truta", unit: "kg", heads: ["truta"] },
   { id: "linguado", label: "Linguado", unit: "kg", heads: ["linguado"] },
   { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"] },
-  { id: "peixe", label: "Peixe (outro)", unit: "kg", heads: ["peixe"] },
+  // Salmon heads, kept out of salmão, would otherwise fall to this type through
+  // Auchan's "peixe-fresco" shelf. Only SALMON heads: Auchan writes CABEÇA into
+  // many fish names, and at EUR 21.99/kg "DOURADA MAR CABEÇA" is not a head.
+  { id: "peixe", label: "Peixe (outro)", unit: "kg", heads: ["peixe"], exclude: /salmao.*\bcabeca\b|\bcabeca\b.*salmao/i },
   { id: "marisco", label: "Marisco (outro)", unit: "kg", heads: ["marisco"] },
 
   // --- Laticínios e ovos ---------------------------------------------------
@@ -372,7 +380,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // so. Nothing replaces them: unclassified is honest.
   { id: "fermento", label: "Fermento", unit: "kg", heads: ["fermento"],
     require: /fermento|levedura/i },
-  { id: "canela", label: "Canela", unit: "kg", heads: ["canela"] },
+  // "Línguas de gato" are biscuits. Auchan writes them "LÍNGUAS AUCHAN DE GATO
+  // ... CANELA", which hides the name, and the read past `lingua` (a cut word,
+  // as in ox tongue) landed on the flavour.
+  { id: "canela", label: "Canela", unit: "kg", heads: ["canela"], exclude: /\bde gato\b/i },
 
   // --- Padaria e pastelaria ------------------------------------------------
   { id: "pao", label: "Pão", unit: "kg", heads: ["pao", "baguete", "broa"],

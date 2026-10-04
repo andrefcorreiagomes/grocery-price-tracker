@@ -44,7 +44,7 @@ import {
 } from "../scrapers/crawl/reidentification";
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
-import { formatHttpStats, httpStats, wireBytesOf } from "../scrapers/http";
+import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -97,6 +97,7 @@ async function saveGrouped(
 }
 
 async function main() {
+  requireCrawlerContact();
   const args = process.argv.slice(2);
   const numeric = (flag: string) => {
     const raw = args.find((a) => a.startsWith(`--${flag}=`))?.split("=")[1];

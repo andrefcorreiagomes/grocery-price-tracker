@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -73,7 +71,7 @@ enum Store {
 /// store lists, before any cross-store matching. Deliberately separate from
 /// Product / StoreListing, which are the *curated, tracked* comparisons the site
 /// shows - this table is the wide, messy input the matcher reads from, not
-/// output anyone sees. A crawler (not built yet) upserts into it.
+/// output anyone sees. The crawlers upsert into it.
 model CatalogueProduct {
   id             String  @id @default(cuid())
   store          Store
@@ -87,10 +85,17 @@ model CatalogueProduct {
   // NOT authoritative price history (that stays in PriceSnapshot for tracked products)
   price Float?
 
-  // Size and barcode come from candidate ENRICHMENT (a product-page fetch), not
-  // the listing crawl - tiles carry neither reliably. Null until enriched.
+  // Size and barcode come from a product page, or - for Auchan - the size from
+  // the store's own per-kilo figure on its listing tile. Otherwise the size is
+  // read from the name by backfill:sizes.
   packageSize   Float? // total base quantity in `unit`, e.g. 0.4 for 400 g when unit is "kg"
   unit          String? // "kg" or "l"
+  /// Where `packageSize` came from: "page" (a product page), "listing" (the
+  /// store's own per-unit figure on a listing tile), or null (read from the
+  /// name, or not known). "page" and "listing" are the store's own word and are
+  /// never overwritten by a name - including a deliberate null from "listing",
+  /// which means the store's figure showed the size cannot be known.
+  sizeSource    String?
   ean           String? // raw barcode as scraped; may be a GS1 prefix-2 scale ticket
   eanNormalized String? // GTIN-14, and null whenever `ean` is restricted-circulation or invalid - the ONLY field safe to match on
 
@@ -275,7 +280,7 @@ model CrawlRun {
   catalogueSizes String?
 
   /// Grid-walk bookkeeping, for stores crawled by listing grid rather than by
-  /// sitemap (Auchan today, Pingo Doce later). Named store-neutrally; a store
+  /// sitemap (Auchan). Named store-neutrally; a store
   /// crawled another way simply leaves them null, exactly as Auchan leaves the
   /// sitemap columns above null. The grid crawl's answer to the sitemap figures:
   /// they are what the next run compares against to catch a whole food
