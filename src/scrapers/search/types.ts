@@ -30,4 +30,15 @@ export interface SearchHit {
    * never a barcode. See `auchanTileSize` in src/lib/matching.ts.
    */
   sizeSource?: "page" | "listing";
+
+  /**
+   * Promotion state, from a product page only - undefined from a listing tile,
+   * so a listing crawl cannot erase what a page crawl recorded.
+   */
+  onPromotion?: boolean;
+  regularPrice?: number | null;
+  promoEndsAt?: Date | null;
+  /** The price per kilo, litre or unit as the store displays it; see parseShownUnitPrice. */
+  shownUnitPrice?: number | null;
+  shownUnitPriceUnit?: "kg" | "l" | "un" | null;
 }

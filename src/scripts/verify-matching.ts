@@ -16,7 +16,7 @@ import { sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
 import { MAX_NAMED_GROUPS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
-import { correctedSize, implausiblePodSize, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
+import { correctedSize, implausiblePodSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
 import {
   cheapestPerStore,
   cheapestStores,
@@ -1321,6 +1321,13 @@ function verifyFoodTypes(): number {
   check("a price per capsule is not a size", fromUnit("0,31€/un", 19.99) === null);
   check("nor is a per-litre figure labelled per unit", fromUnit("61,32€/un", 45.99) === null);
   check("and no figure means no size", fromUnit("", 18.68) === null);
+  // The store's displayed unit price, saved as shown, in each store's format.
+  const shown = (t: string) => JSON.stringify(parseShownUnitPrice(t));
+  check("Continente's per-litre line is read", shown("6,65€/lt") === '{"value":6.65,"unit":"l"}');
+  check("and its per-capsule line too", shown("0,31€/un") === '{"value":0.31,"unit":"un"}');
+  check("Pingo Doce's figure after the size", shown("0.1 Kg | 13,9 €/Kg") === '{"value":13.9,"unit":"kg"}');
+  check("Auchan's tile figure, with a decimal point", shown("8.6 €/Kg") === '{"value":8.6,"unit":"kg"}');
+  check("a plain price is not a unit price", parseShownUnitPrice("4,99€") === null);
 
   // Goods sold by weight: the headline price is already per kilo, and the size
   // label is what one item weighs. Strings as they appear on live pages

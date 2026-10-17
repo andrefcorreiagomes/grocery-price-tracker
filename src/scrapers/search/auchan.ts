@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { auchanTileSize } from "../../lib/matching";
+import { parseShownUnitPrice } from "../page-size";
 import type { SearchHit } from "./types";
 
 /**
@@ -106,6 +107,13 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
       category,
       url: urls.absoluteProductUrl,
       ...(size ?? {}),
+      // Auchan's own figure as printed ("8.6 €/Kg", "1.25 €/un"); null when the
+      // tile has none. Promotion is not read: the tiles have not been checked
+      // for it, so it stays undefined and nothing is overwritten.
+      ...(() => {
+        const shown = figure ? parseShownUnitPrice(figure) : null;
+        return { shownUnitPrice: shown?.value ?? null, shownUnitPriceUnit: shown?.unit ?? null };
+      })(),
     });
   });
 

@@ -13,6 +13,7 @@ import {
   compareCheckTotals,
   previousCheckTotals,
   checkedIds,
+  clearChecks,
   recordChecks,
   recordDead,
   recordRecategorised,
@@ -415,6 +416,10 @@ async function main() {
     }
 
     await recordChecks(STORE, checks, seenAt);
+    // A re-checked verdict whose product is now food: it has just entered the
+    // catalogue, so its old verdict goes.
+    const leftChecks = await clearChecks(STORE, newFood.map((f) => f.storeProductId));
+    if (leftChecks > 0) console.log(`  ${leftChecks} earlier verdict(s) cleared: those products are food now`);
     await recordDead(STORE, deadCatalogue, seenAt);
     await recordRecategorised(STORE, nonFoodCatalogue, seenAt);
     await touchChecked(

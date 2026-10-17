@@ -51,7 +51,21 @@ export function implausiblePodSize(name: string, total: number, unit: "kg" | "l"
   return unit === "l" || total >= 1;
 }
 
-/** The size a page's label gives, after both corrections. */
+/**
+ * The price per kilo, litre or unit a store DISPLAYS, as it displays it:
+ * "6,65€/lt" (Continente), "0.1 Kg | 13,9 €/Kg" (Pingo Doce's size label),
+ * "8.6 €/Kg" (Auchan's listing tile). Saved as the store's own figure, so it
+ * can be compared with the price per kilo this project works out.
+ */
+export function parseShownUnitPrice(text: string): { value: number; unit: "kg" | "l" | "un" } | null {
+  const m = text.match(/(\d[\d.]*,\d{1,2}|\d+(?:\.\d+)?)\s*€\s*\/\s*(kg|lt?|un)\b/i);
+  if (!m) return null;
+  const value = Number(m[1].includes(",") ? m[1].replace(/\./g, "").replace(",", ".") : m[1]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const raw = m[2].toLowerCase();
+  return { value, unit: raw === "kg" ? "kg" : raw === "un" ? "un" : "l" };
+}
+
 /**
  * The pack size worked out from the price per kilo or litre a page shows under
  * the price, for a page that states no size of its own.
@@ -73,11 +87,10 @@ export function sizeFromUnitPrice(
   price: number | null
 ): { total: number; unit: "kg" | "l" } | null {
   if (price === null || price <= 0) return null;
-  const m = secondaryText.match(/(\d[\d.]*,\d{1,2}|\d+(?:\.\d+)?)\s*€\s*\/\s*(kg|lt?)\b/i);
-  if (!m) return null;
-  const perUnit = Number(m[1].includes(",") ? m[1].replace(/\./g, "").replace(",", ".") : m[1]);
-  if (!Number.isFinite(perUnit) || perUnit <= 0) return null;
-  const unit = m[2].toLowerCase() === "kg" ? "kg" : "l";
+  const shown = parseShownUnitPrice(secondaryText);
+  if (!shown || shown.unit === "un") return null;
+  const perUnit = shown.value;
+  const unit = shown.unit;
   // The figure shown is rounded to the cent, so the true size lies between
   // these two. Take the roundest number inside that range: 0.75 rather than
   // 0.749 for a EUR 3.29 wine at "4,39€/lt", while a half bottle at "15,71€/lt"
@@ -94,6 +107,7 @@ export function sizeFromUnitPrice(
   return plausible ? { total, unit } : null;
 }
 
+/** The size a page's label gives, after both corrections. */
 export function correctedSize(
   name: string,
   label: { total: number; unit: "kg" | "l" } | null,

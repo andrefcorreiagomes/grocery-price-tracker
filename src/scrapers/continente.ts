@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
-import { correctedSize, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
+import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
 import { detached, finiteOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
@@ -39,6 +39,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   // carousels of other products elsewhere carry their own per-kilo prices.
   const priceBox = $(".ct-pdp--prices").first();
   const headline = priceBox.find(".pwc-tile--price-primary").first().text();
+  const secondary = priceBox.find(".pwc-tile--price-secondary").first().text();
   // No size label: work it out from the per-litre or per-kilo price shown
   // under the price, which wine and spirit pages carry instead.
   const size =
@@ -46,7 +47,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
       product.name ?? "",
       parsePackageSize($(".ct-pdp--unit").first().text().trim()),
       pricedPerUnit(headline, price)
-    ) ?? sizeFromUnitPrice(priceBox.find(".pwc-tile--price-secondary").first().text(), price);
+    ) ?? sizeFromUnitPrice(secondary, price);
 
   return {
     name: product.name ?? "",
@@ -61,6 +62,9 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
     ...parsePromotion(html, price),
+    // Usually the line under the price; for goods sold by weight, the price
+    // itself is per kilo ("2,49€/kg") and the line under it is per item.
+    shownUnitPrice: pricedPerUnit(headline, price) ? parseShownUnitPrice(headline) : parseShownUnitPrice(secondary),
   };
 }
 

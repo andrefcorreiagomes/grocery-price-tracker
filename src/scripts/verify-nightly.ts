@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { openCatalogueWriter, persistCatalogue } from "../scrapers/crawl/persist";
 import {
+  clearChecks,
   recordDead,
   recordRecategorised,
   staleDelisted,
@@ -105,6 +106,34 @@ async function main() {
       oneShot.summaries[0].updated === streamed.summaries[0].updated,
     `one-shot created=${oneShot.summaries[0].created} updated=${oneShot.summaries[0].updated}`
   );
+
+  // A product page saves the promotion and the store's own unit price; a later
+  // listing save, which cannot see them, must leave them alone.
+  await cleanup();
+  const pageWriter = await openCatalogueWriter(STORE);
+  await pageWriter.save([{
+    ...hit(20, 18.68), onPromotion: true, regularPrice: 23.29, promoEndsAt: null,
+    shownUnitPrice: 26.69, shownUnitPriceUnit: "l",
+  }], "Mercearia");
+  pageWriter.finish();
+  const listingWriter = await openCatalogueWriter(STORE);
+  await listingWriter.save([hit(20, 18.68)], "Mercearia");
+  listingWriter.finish();
+  const promoRow = await prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}20` } },
+    select: { onPromotion: true, regularPrice: true, shownUnitPrice: true, shownUnitPriceUnit: true },
+  });
+  check("a page saves the promotion and the shown unit price",
+    promoRow?.onPromotion === true && promoRow?.regularPrice === 23.29 && promoRow?.shownUnitPrice === 26.69);
+  check("and a listing save that cannot see them leaves them alone", promoRow?.shownUnitPriceUnit === "l");
+
+  // A non-food verdict whose product turned out to be food is removed.
+  await prisma.productCheck.create({
+    data: { store: STORE, storeProductId: `${PREFIX}21`, url: "https://example.invalid/x", verdict: "NOT_FOOD", checkedAt: new Date(0) },
+  });
+  const cleared = await clearChecks(STORE, [`${PREFIX}21`, `${PREFIX}22`]);
+  const stillThere = await prisma.productCheck.count({ where: { storeProductId: `${PREFIX}21` } });
+  check("a verdict for a product that is food now is cleared", cleared === 1 && stillThere === 0, `cleared=${cleared}`);
 
   // --- 8. queue order and delisting ----------------------------------------
   console.log("\n8. queue order and delisting");

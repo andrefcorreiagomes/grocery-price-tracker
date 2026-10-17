@@ -42,6 +42,8 @@ export interface ScrapeResult {
   regularPrice: number | null;
   /** When the promotion ends. Pingo Doce and Auchan publish it; Continente doesn't. */
   promoEndsAt: Date | null;
+  /** The price per kilo, litre or unit as the page displays it; null when it shows none. */
+  shownUnitPrice: { value: number; unit: "kg" | "l" | "un" } | null;
 }
 
 /**

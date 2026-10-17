@@ -98,6 +98,10 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
     packageSize: parseSize(name)?.total ?? null,
     packageUnit: parseSize(name)?.unit ?? null,
     ...parsePromotion(product.offers.priceValidUntil),
+    // Not read here: Auchan's nightly takes the store's per-kilo figure from its
+    // listing tiles, and which figure on this page is the product's own (not a
+    // carousel's) has not been checked.
+    shownUnitPrice: null,
   };
 }
 

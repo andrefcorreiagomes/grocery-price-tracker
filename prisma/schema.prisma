@@ -96,6 +96,23 @@ model CatalogueProduct {
   /// never overwritten by a name - including a deliberate null from "listing",
   /// which means the store's figure showed the size cannot be known.
   sizeSource    String?
+
+  /// Promotion state as the store showed it at the last crawl that could see it.
+  /// Null means "not known", never "not on promotion": only a product page shows
+  /// it (Continente, Pingo Doce), and Auchan's listing tiles have not been
+  /// checked for it. Continente's "PVPR" is the same number as `regularPrice`.
+  onPromotion  Boolean?
+  /// the price before the discount; Continente only
+  regularPrice Float?
+  /// when the promotion ends; Pingo Doce only (Auchan shows it on product pages)
+  promoEndsAt  DateTime?
+  /// The price per kilo, litre or unit exactly as the store displays it ("6,65€/lt"
+  /// gives 6.65 and "l"). The store's own figure, kept apart from the price per
+  /// kilo this project computes, so the two can be compared.
+  shownUnitPrice     Float?
+  /// "kg", "l" or "un"
+  shownUnitPriceUnit String?
+
   ean           String? // raw barcode as scraped; may be a GS1 prefix-2 scale ticket
   eanNormalized String? // GTIN-14, and null whenever `ean` is restricted-circulation or invalid - the ONLY field safe to match on
 

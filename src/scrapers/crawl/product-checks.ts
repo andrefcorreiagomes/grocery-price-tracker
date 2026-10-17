@@ -140,6 +140,27 @@ export function compareCheckTotals(
 }
 
 /**
+ * Remove the verdicts of ids that turned out to be food after all, now that they
+ * live in CatalogueProduct.
+ *
+ * An id belongs in exactly one of the two tables. Without this, a non-food id
+ * re-checked after 90 days and found to be food went into the catalogue but
+ * kept its old verdict - and its old date, so it counted as stale again and was
+ * re-fetched every single night.
+ */
+export async function clearChecks(store: Store, storeProductIds: string[]): Promise<number> {
+  let removed = 0;
+  // In batches: the database driver accepts at most 999 values per query.
+  for (let i = 0; i < storeProductIds.length; i += 500) {
+    const { count } = await prisma.productCheck.deleteMany({
+      where: { store, storeProductId: { in: storeProductIds.slice(i, i + 500) } },
+    });
+    removed += count;
+  }
+  return removed;
+}
+
+/**
  * Verdicts old enough to be worth asking again. A delisted product can come
  * back and a non-food item can be recategorised; without this the table would
  * slowly become a way of being permanently wrong.

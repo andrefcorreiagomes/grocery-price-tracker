@@ -155,6 +155,11 @@ export async function fetchPingoDoceProducts(
       ean: product.ean,
       packageSize: product.packageSize,
       unit: product.packageUnit,
+      onPromotion: product.onPromotion,
+      regularPrice: product.regularPrice,
+      promoEndsAt: product.promoEndsAt,
+      shownUnitPrice: product.shownUnitPrice?.value ?? null,
+      shownUnitPriceUnit: product.shownUnitPrice?.unit ?? null,
     };
 
     const section = topSection(target.categoryPath);

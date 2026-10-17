@@ -60,6 +60,11 @@ export function enrichment(p: {
   packageSize?: number | null;
   unit?: string | null;
   sizeSource?: "page" | "listing";
+  onPromotion?: boolean;
+  regularPrice?: number | null;
+  promoEndsAt?: Date | null;
+  shownUnitPrice?: number | null;
+  shownUnitPriceUnit?: string | null;
 }) {
   return {
     ...(p.ean === undefined
@@ -68,6 +73,15 @@ export function enrichment(p: {
     ...(p.packageSize === undefined
       ? {}
       : { packageSize: p.packageSize ?? null, unit: p.unit ?? null, sizeSource: p.sizeSource ?? "page" }),
+    // Same rule for the promotion and the store's displayed unit price: written
+    // only by a source that could see them, so a source that cannot (a listing
+    // tile has no promotion) never erases what a page recorded.
+    ...(p.onPromotion === undefined
+      ? {}
+      : { onPromotion: p.onPromotion, regularPrice: p.regularPrice ?? null, promoEndsAt: p.promoEndsAt ?? null }),
+    ...(p.shownUnitPrice === undefined
+      ? {}
+      : { shownUnitPrice: p.shownUnitPrice ?? null, shownUnitPriceUnit: p.shownUnitPriceUnit ?? null }),
   };
 }
 
