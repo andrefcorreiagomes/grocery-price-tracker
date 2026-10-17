@@ -498,6 +498,40 @@ function brandsEqual(a: string, b: string): boolean {
  * clash, or euro/unit divergence) overrides a positive rung however good the
  * name looks.
  */
+/**
+ * Words that make a different product of the same brand and size. Without a
+ * barcode, "exact" rested on brand, size and a similar name - and Continente's
+ * regular "Leite UHT Meio Gordo Mimosa" was confirmed as Auchan's "LEITE MIMOSA
+ * UHT ESPECIAL 0% LACTOSE MEIO GORDO 6X1L". Measured on 17 October 2026, 31 of
+ * the 150 such pairs differed on one of these words: organic against regular,
+ * zero against regular, light against full-fat, vegan against regular.
+ *
+ * Some of them may really be one product whose other listing leaves the word
+ * out. The names cannot say which, so they go to a person rather than being
+ * confirmed or rejected.
+ */
+const QUALIFIERS: [string, RegExp][] = [
+  ["lactose", /lactose/],
+  ["light", /\blight\b|\bmagr[oa]s?\b/],
+  ["meio gordo", /meio[ -]gord/],
+  ["gordo", /(?<!meio[ -])\bgord[oa]s?\b|\binteir[oa]\b/],
+  ["zero", /\bzero\b|\b0%/],
+  ["bio", /\bbio(logic[oa])?\b/],
+  ["sem açúcar", /sem acucar|s\/ ?acucar/],
+  ["descafeinado", /descafeinad/],
+  ["proteína", /protein/],
+  ["sem glúten", /sem gluten/],
+  ["vegan", /\bvegan|\bvegetal\b/],
+];
+
+/** The first qualifier one name has and the other lacks, or null. */
+export function qualifierMismatch(a: string, b: string): string | null {
+  const na = stripAccents(a).toLowerCase();
+  const nb = stripAccents(b).toLowerCase();
+  for (const [word, re] of QUALIFIERS) if (re.test(na) !== re.test(nb)) return word;
+  return null;
+}
+
 export function classifyCandidate(
   a: Candidate,
   b: Candidate,
@@ -573,6 +607,13 @@ export function classifyCandidate(
   }
 
   const sameBrand = brandsEqual(a.brand, b.brand);
+
+  // Same brand and size, but one name says lactose-free, organic, zero, light...
+  // and the other does not: probably a different product, so a person looks.
+  const differs = sameBrand && sizeMatches && nameSimilarity >= EXACT_NAME ? qualifierMismatch(a.name, b.name) : null;
+  if (differs) {
+    return { ...base, rung: "fuzzy", vetoed: priceVeto, reason: `names differ on "${differs}"` };
+  }
 
   // Clean same-size match: safe to auto-track.
   if (sameBrand && sizeMatches && nameSimilarity >= EXACT_NAME) {

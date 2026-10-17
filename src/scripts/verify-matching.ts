@@ -1,7 +1,7 @@
 import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
-import { auchanTileSize, matchesTerm, parseSize, reconcileTileSize, SOLD_PER_KG, stripAccents } from "../lib/matching";
+import { auchanTileSize, matchesTerm, parseSize, qualifierMismatch, reconcileTileSize, SOLD_PER_KG, stripAccents } from "../lib/matching";
 import { enrichment } from "../scrapers/crawl/persist";
 import {
   categoryPathFromUrl,
@@ -1047,6 +1047,33 @@ function verifyFoodTypes(): number {
   check("chocolate hazelnuts are not hazelnuts",
     classifyFoodType("Avelãs Cobertas com Chocolate de Leite", "PINGO_DOCE", easter) !== "avela");
   is("Miolo de Avelã Torrada Continente", "CONTINENTE", "Frescos/Frutas/Frutos Secos, Desidratados e Sementes", "avela");
+
+  // Powders are not chocolate bars, and a two-food shelf must not appear by accident.
+  const chocShelf = "alimentação/mercearia/chocolates-e-achocolatados/achocolatados";
+  is("ACHOCOLATADO NESQUIK SACO 1KG", "AUCHAN", chocShelf, "achocolatado");
+  is("Bebida de Chocolate Solúvel Cola Cao", "CONTINENTE", "Mercearia/Café, Chá e Solúveis/Chocolate Solúvel", "achocolatado");
+  is("Cacau Magro em Pó Continente Equilíbrio", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Cacau e Chocolates de Culinária", "cacau");
+  is("PREPARADO LACASA CHOCOLATE QUENTE 350G", "AUCHAN", "alimentação/mercearia/chocolates-e-achocolatados/achocolatados", "achocolatado");
+  check("a bakery pastry is not chocolate",
+    classifyFoodType("Supremas de Chocolate Da Nossa Pastelaria", "CONTINENTE", "Mercearia/Chocolate, Gomas e Rebuçados/Chocolates") !== "chocolate");
+  is("Barrinhas de Chocolate Kinder", "PINGO_DOCE", "Bolachas, Cereais e Guloseimas/Chocolates e Guloseimas/Tabletes de Chocolate", "chocolate");
+  is("CHOCOLATE NEGRO AUCHAN 70% CACAU E COM BAIXO TEOR DE AÇÚCAR 100G", "AUCHAN",
+    "alimentação/mercearia/chocolates-e-achocolatados/tablete-de-chocolate", "chocolate");
+  // Ready meals are dishes, not the ingredients on the same shelf.
+  const quick = "alimentação/sabores-do-mundo/cozinha-brasileira/preparados-e-refeições-rápidas";
+  check("cornmeal is not a ready meal", classifyFoodType("FUBÁ MIMOSO DA TERRINHA 1KG", "AUCHAN", quick) !== "refeicao");
+  check("nor is plain tofu",
+    classifyFoodType("Tofu Natural Joya", "CONTINENTE", "Frescos/Refeições Práticas/Vegetariano") !== "refeicao");
+  is("BOLONHESA SEITAN NOBRE VEGALIA 420G", "AUCHAN",
+    "alimentação/mercearia/refeições,-sopas-e-puré/refeições-pré-preparadas", "refeicao");
+
+  // Same brand and size, different product: the matcher must not confirm these.
+  check("lactose-free milk is not regular milk",
+    qualifierMismatch("Leite UHT Meio Gordo Mimosa", "LEITE MIMOSA UHT ESPECIAL 0% LACTOSE MEIO GORDO 6X1L") === "lactose");
+  check("nor organic against regular",
+    qualifierMismatch("Massa Fusilli Rummo", "MASSA RUMMO FUSILLI BIO 500G") === "bio");
+  check("but the same words in another order are the same product",
+    qualifierMismatch("Leite UHT Meio Gordo Mimosa", "LEITE MIMOSA UHT MEIO GORDO 1L") === null);
   is("PÃES GARCIA CACETE SEM GLÚTEN 5X80G", "AUCHAN", "alimentação/padaria-e-pastelaria", "pao");
 
   check("a name ending in a weight range is sold by the kilo",

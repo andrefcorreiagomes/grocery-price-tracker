@@ -329,10 +329,28 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // "tablete": Auchan names most chocolate bars by the format alone, as in
   // "TABLETE LINDT EXCELLENCE 70%". They used to reach chocolate only through
   // their shelf, which no longer decides when it names several foods.
+  // Powders are not chocolate bars, and listed BEFORE chocolate so they claim
+  // first: the first type in array order whose rules accept a name wins. About
+  // 120 powders were filed as chocolate, and drink powder at EUR 5.36/kg was
+  // the cheapest "chocolate". Pure cocoa and the sweetened drink powder are
+  // different products again, so each gets its own ranking. 17 October 2026.
+  //
+  // Reached ONLY through the word "chocolate" (in the name or on the shelf).
+  // Claiming "achocolatado" or "cacau" as words of their own made shelves
+  // like "chocolates-e-achocolatados" name two foods, and a two-food shelf
+  // decides nothing - 135 chocolate bars lost their food in the preview.
+  // They claim "tablete" too, for the same reason: "Tabletes de Chocolate"
+  // must name ONE set of foods, so both words need the same claimants.
+  { id: "cacau", label: "Cacau em pó", unit: "kg", heads: ["chocolate", "tablete"],
+    require: /(?=.*\bcacau\b)(?=.*\bpo\b)/i, exclude: /chocolate|achocolatad|soluvel|cobert|amendo/i },
+  { id: "achocolatado", label: "Achocolatado em pó", unit: "kg", heads: ["chocolate", "tablete"],
+    require: /achocolatad|soluvel|\bem po\b|\bpo\b|ovomaltine|fortificante|milk-mix|magic milk|granulos|nesquik|cola cao|toddy|chocolate quente/i,
+    exclude: /\btab(e)?lete\b|bombo|snack|cobert|amendo|pepita|\bbarras?\b/i },
   { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate", "tablete"],
     // Sugared almonds ("tipo francês", "lisas cores") sit on the chocolate
     // shelf but are sugar-coated, not chocolate.
-    exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz|tipo frances|\blisas? cores\b)/i },
+    // And a pastry from the bakery counter is not chocolate either.
+    exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz|tipo frances|\blisas? cores\b)|\bsupremas?\b|nossa pastelaria/i },
   { id: "arroz", label: "Arroz", unit: "kg", heads: ["arroz"], exclude: /arroz doce/i },
   { id: "gelatina", label: "Gelatina", unit: "kg", heads: ["gelatina"] },
   { id: "farinha", label: "Farinha", unit: "kg", heads: ["farinha"] },
@@ -422,7 +440,15 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "gelado", label: "Gelado", unit: "l", heads: ["gelado"] },
   { id: "pizza", label: "Pizza", unit: "kg", heads: ["pizza"] },
   { id: "lasanha", label: "Lasanha", unit: "kg", heads: ["lasanha"] },
-  { id: "refeicao", label: "Refeição pronta", unit: "kg", heads: ["refeicao"] },
+  // A dish, not an ingredient that shares its shelf. Auchan's "preparados e
+  // refeições rápidas" ("mixes and quick meals") also holds cornmeal, maize,
+  // cassava, bulgur, palm hearts, cake mixes, sauerkraut and kimchi, and fubá
+  // (cornmeal) at EUR 2.01/kg was the cheapest "ready meal". Plain tofu,
+  // seitan, tempeh and riced vegetables are ingredients too - but a name that
+  // only CONTAINS one of them ("LUNCH BOWL BULGUR", "BOLONHESA SEITAN",
+  // "TOPOKKI ... KIMCHI") can still be a meal. 17 October 2026.
+  { id: "refeicao", label: "Refeição pronta", unit: "kg", heads: ["refeicao"],
+    exclude: /\b(fuba|flocao|canjic\w*|canjiquinha|xerem|sagu|farofa|mandioca|palmito|chucrute|jalapeno|tofu|tempeh|riced|veggie rice)\b|^(bulgur|seitan|kimchi)\b|trigo para kibe|preparados? (koala|duncan|mississippi)|mistura preparada|base (de pinsa|sopa)/i },
   { id: "wrap", label: "Wrap", unit: "kg", heads: ["wrap"] },
   { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"] },
   { id: "rissol", label: "Rissol", unit: "kg", heads: ["rissoi", "rissol"] },
