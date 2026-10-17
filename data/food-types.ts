@@ -112,6 +112,9 @@ export const CUT_WORDS: readonly string[] = [
   // "Flocos de Aveia", "FLOCOS SALUTEM AVEIA": the flakes are the format, the
   // grain is the food. 17 October 2026.
   "floco",
+  // "Filetes de Pescada": the fillet is the cut, the fish is the food. Breaded
+  // fillets are claimed first, as a kind of their own. 17 October 2026.
+  "filete",
   // "Mix Cogumelos Exóticos", "Mistura de Sementes": the mix names its food.
   "mix", "mistura",
   // preparations that name their meat
@@ -174,7 +177,14 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pepino", label: "Pepino", unit: "kg", heads: ["pepino"] },
   { id: "ananas", label: "Ananás", unit: "kg", heads: ["anana", "abacaxi"] },
   { id: "beterraba", label: "Beterraba", unit: "kg", heads: ["beterraba"] },
-  { id: "salada", label: "Salada preparada", nameOnly: true, unit: "kg", heads: ["salada"] },
+  // Two different things used to share "Salada preparada": a bag of leaves and a
+  // ready-made dish. A salad naming a protein, grain or pasta is the dish; the
+  // rest are leaves. Fruit salad is a dessert. 17 October 2026.
+  { id: "salada-pronta", label: "Salada pronta", nameOnly: true, unit: "kg", heads: ["salada"],
+    require: /\b(atum|massa|russa|frango|camarao|marisco|polvo|bacalhau|salmao|grao|feijao|quinoa|cuscuz|bulgur|arroz|batata|ovos?|proteina|caesar|cesar|queijo|presunto|lentilhas?|delicias|sapateira|gambas?)\b/i,
+    exclude: /\bfruta|ananas|abacaxi|melao|melancia|morango/i },
+  { id: "salada-folhas", label: "Salada em saco", nameOnly: true, unit: "kg", heads: ["salada"],
+    exclude: /\bfruta|ananas|abacaxi|melao|melancia|morango|\bsandes\b|\bwrap\b|semente/i },
   // Everyday fruit, vegetables and herbs that had no kind of their own, so
   // they were left out or - worse - taken by a shelf naming a neighbour:
   // avocados as grapes, lemons as oranges, courgettes as beans. Counted on
@@ -223,7 +233,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // one of them the cheapest "duck" in the country at EUR 1.25, a price per bird.
   { id: "pato", label: "Pato", unit: "kg", heads: ["pato"], exclude: /codorni|perdiz|faisao/i },
   { id: "porco", label: "Porco", unit: "kg", heads: ["porco", "suino", "leitao"] },
-  { id: "vaca", label: "Vaca e novilho", unit: "kg", heads: ["vaca", "bovino", "novilho", "vitela"] },
+  // Meat, not offal: a beef kidney was the cheapest "beef". 17 October 2026.
+  { id: "vaca", label: "Vaca e novilho", unit: "kg", heads: ["vaca", "bovino", "novilho", "vitela"],
+    exclude: /\b(rim|rins|figado|lingua|dobrada|bucho|tripas?|mioleira|rabo|maos?)\b|coracao de (bovino|vaca|vitela|novilho)/i },
   { id: "borrego", label: "Borrego e cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"] },
   { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"] },
   { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"] },
@@ -253,42 +265,72 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "morcela", label: "Morcela", unit: "kg", heads: ["morcela"] },
 
   // --- Peixaria ------------------------------------------------------------
-  { id: "filete", label: "Filete", unit: "kg", heads: ["filete"] },
-  { id: "atum", label: "Atum", unit: "kg", heads: ["atum"] },
+  // "Filete" used to be a kind, holding tinned tuna next to frozen hake. A
+  // fillet is now read past (CUT_WORDS) to its fish, except breaded fillets,
+  // which are a product of their own. 17 October 2026.
+  { id: "filete-panado", label: "Filetes panados", unit: "kg", heads: ["filete"],
+    require: /panad|primavera|crocante/i },
+  // Tinned and fresh are different products at very different prices per
+  // kilo: tinned is most of tuna, sardines and mackerel (221 of 250, 89 of 105,
+  // 43 of 50), and each fresh side is sold at all three chains too. A name
+  // saying how it is packed - "em azeite", "ao natural", a drained weight
+  // "120 (84) G" - is tinned. 17 October 2026.
+  { id: "atum-lata", label: "Atum em lata", unit: "kg", heads: ["atum"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "atum", label: "Atum fresco ou congelado", unit: "kg", heads: ["atum"], exclude: /fumad/i },
   // Not cod: Alaska pollock ("paloco") and coley ("escamudo"), sold on the
   // cod shelf as cheaper substitutes. And not cod as people mean it: heads
   // ("caras"), tongues, cheeks and swim bladders ("samos"), sold for specific
   // dishes - heads at EUR 5.99/kg were the cheapest "cod". The same reasoning
   // as salmon heads. Decided by hand, 17 October 2026.
-  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b/i },
+  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b|\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
-  { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha"] },
+  { id: "sardinha-lata", label: "Sardinha em lata", unit: "kg", heads: ["sardinha"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "sardinha", label: "Sardinha fresca ou congelada", unit: "kg", heads: ["sardinha"], exclude: /fumad/i },
   // Heads are sold for stock and soup, not as salmon to eat: three Auchan
   // salmon heads at EUR 1.89-1.99/kg were the cheapest "salmon" in the country.
   // Decided by hand, 4 October 2026.
-  { id: "salmao", label: "Salmão", nameOnly: true, unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b/i },
-  { id: "pescada", label: "Pescada", nameOnly: true, unit: "kg", heads: ["pescada", "pescadinha"] },
-  { id: "lula", label: "Lula", unit: "kg", heads: ["lula"] },
-  { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"] },
+  { id: "salmao", label: "Salmão", nameOnly: true, unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b|\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "pescada", label: "Pescada", nameOnly: true, unit: "kg", heads: ["pescada", "pescadinha"], exclude: /panad/i },
+  { id: "lula", label: "Lula", unit: "kg", heads: ["lula"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
   { id: "douradinho", label: "Douradinho", unit: "kg", heads: ["douradinho"] },
-  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"] },
+  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
   { id: "choco", label: "Choco", unit: "kg", heads: ["choco"], exclude: /chocolate/i },
   { id: "ameijoa", label: "Amêijoa", unit: "kg", heads: ["ameijoa"] },
   { id: "dourada", label: "Dourada", unit: "kg", heads: ["dourada"] },
   { id: "robalo", label: "Robalo", unit: "kg", heads: ["robalo"] },
   { id: "carapau", label: "Carapau", unit: "kg", heads: ["carapau"] },
-  { id: "cavala", label: "Cavala", unit: "kg", heads: ["cavala"] },
+  { id: "cavala-lata", label: "Cavala em lata", unit: "kg", heads: ["cavala"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "cavala", label: "Cavala fresca ou congelada", unit: "kg", heads: ["cavala"], exclude: /fumad/i },
   { id: "corvina", label: "Corvina", unit: "kg", heads: ["corvina"] },
   { id: "tamboril", label: "Tamboril", unit: "kg", heads: ["tamboril"] },
   { id: "perca", label: "Perca", unit: "kg", heads: ["perca"] },
   { id: "truta", label: "Truta", unit: "kg", heads: ["truta"] },
   { id: "linguado", label: "Linguado", unit: "kg", heads: ["linguado"] },
-  { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"] },
+  { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
   // Salmon heads, kept out of salmão, would otherwise fall to this type through
   // Auchan's "peixe-fresco" shelf. Only SALMON heads: Auchan writes CABEÇA into
   // many fish names, and at EUR 21.99/kg "DOURADA MAR CABEÇA" is not a head.
-  { id: "peixe", label: "Peixe (outro)", unit: "kg", heads: ["peixe"], exclude: /(salmao|bacalhau).*\bcabeca\b|\bcabeca\b.*(salmao|bacalhau)|\bcaril\b/i },
-  { id: "marisco", label: "Marisco (outro)", unit: "kg", heads: ["marisco"] },
+  // "Peixe (outro)" and "Marisco (outro)" used to be kinds, and "cheapest
+  // other fish" compared a grouper head with a scabbardfish. Replaced by the
+  // fish and shellfish sold at all three chains; the rest have no kind.
+  // Heads are for stock, not fish to eat (as for salmon). 17 October 2026.
+  { id: "peixe-espada", label: "Peixe-espada", unit: "kg", heads: ["peixe"], require: /peixe.?espada/i, exclude: /\bcabecas?\b/i },
+  { id: "pargo", label: "Pargo", unit: "kg", heads: ["pargo"], exclude: /\bcabecas?\b/i },
+  { id: "garoupa", label: "Garoupa", unit: "kg", heads: ["garoupa"], exclude: /\bcabecas?\b/i },
+  { id: "raia", label: "Raia", unit: "kg", heads: ["raia"], exclude: /\bcabecas?\b/i },
+  { id: "red-fish", label: "Red fish (cantarilho)", unit: "kg", heads: ["red", "cantarilho"], require: /red ?fish|cantarilho/i, exclude: /\bcabecas?\b/i },
+  { id: "safio", label: "Safio (congro)", unit: "kg", heads: ["safio", "congro"], exclude: /\bcabecas?\b/i },
+  { id: "maruca", label: "Maruca", unit: "kg", heads: ["maruca"], exclude: /\bcabecas?\b/i },
+  { id: "pregado", label: "Pregado", unit: "kg", heads: ["pregado"], exclude: /\bcabecas?\b/i },
+  { id: "besugo", label: "Besugo", unit: "kg", heads: ["besugo"], exclude: /\bcabecas?\b/i },
+  { id: "faneca", label: "Faneca", unit: "kg", heads: ["faneca"], exclude: /\bcabecas?\b/i },
+  { id: "sargo", label: "Sargo", unit: "kg", heads: ["sargo"], exclude: /\bcabecas?\b/i },
+  // Cooked crab, whole. Not the filling or the claws, sold for other uses.
+  { id: "sapateira", label: "Sapateira", unit: "kg", heads: ["sapateira"], exclude: /recheio|\bbocas?\b|\bpatas?\b/i },
+  { id: "berbigao", label: "Berbigão", unit: "kg", heads: ["berbigao"] },
+  { id: "delicias-do-mar", label: "Delícias do mar", unit: "kg", heads: ["delicia"], require: /delicias? do mar/i },
+  { id: "caracol", label: "Caracóis", unit: "kg", heads: ["caracol", "caracoi", "caracoleta"], exclude: /canela|frutas|chocolate|folhad|massa|creme/i },
 
   // --- Laticínios e ovos ---------------------------------------------------
   { id: "queijo", label: "Queijo", unit: "kg", heads: ["queijo", "queijinho"] },
@@ -347,12 +389,30 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // by volume. `com molho` excludes a DISH that comes with a sauce - "Pernil
   // Assado com Molho de Cerveja" is roast pork, and reached here because the
   // cut-word scan reads past `pernil` and finds `molho`.
-  { id: "molho", label: "Molho", unit: "either", heads: ["molho"],
-    exclude: /\bcom molho\b/i },
+  // "Molho" used to be one kind of 611 sauces, where the cheapest was always
+  // whichever sauce is cheapest to make. Split into the everyday sauces sold at
+  // all three chains; the rest have no kind. Sold by weight or by volume, as
+  // the stores record them. `com molho` is a dish that comes with a sauce.
+  // 17 October 2026.
+  { id: "molho-soja", label: "Molho de soja", unit: "either", heads: ["molho", "shoyu"], require: /\bsoja\b|shoyu/i, exclude: /\bcom molho\b/i },
+  // The sauce and the dried chilli are different products (EUR 2.26 against
+  // about EUR 31 a kilo), and the unit cannot tell them apart: Pingo Doce
+  // records its sauce by weight. So each must say what it is - "molho", or
+  // ground, whole, dried. A bottle saying neither ("PIRI-PIRI GALLO 50ML") has
+  // no kind rather than a guess. 17 October 2026.
+  { id: "piri-piri", label: "Molho piri-piri", unit: "either", heads: ["molho", "piri", "piripiri"], require: /(?=.*\bmolho\b)(?=.*piri)/i,
+    exclude: /\bcom molho\b|azeite|oleo/i },
+  { id: "piri-piri-seco", label: "Piri-piri seco", unit: "kg", heads: ["piri", "piripiri"],
+    require: /(?=.*piri)(?=.*(moid|\bgrao\b|\bsecos?\b|\bem po\b|flocos|esmagad|saqueta|vagem))/i, exclude: /\bmolho\b/i },
+  { id: "pesto", label: "Pesto", unit: "either", heads: ["molho", "pesto"], require: /pesto/i, exclude: /\bcom molho\b/i },
+  { id: "bechamel", label: "Béchamel", unit: "either", heads: ["molho", "bechamel"], require: /bechamel/i, exclude: /\bcom molho\b/i },
+  { id: "molho-alho", label: "Molho de alho", unit: "either", heads: ["molho"], require: /molho de alho|\balho\b/i, exclude: /\bcom molho\b|piri|pesto|soja/i },
+  { id: "barbecue", label: "Molho barbecue", unit: "either", heads: ["molho"], require: /barbecue|\bbbq\b/i, exclude: /\bcom molho\b/i },
+  { id: "molho-tomate", label: "Molho de tomate", unit: "either", heads: ["molho"], require: /\btomate\b/i, exclude: /\bcom molho\b|ketchup/i },
   // massa the pasta, not massa the dough
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli"],
     // Tofu, seitan and potato starch share Auchan's fresh-pasta shelves.
-    exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|\btofu\b|\bseitan\b|fecula/i },
+    exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
   // Sweets that are not chocolate, which reach here through the shelf rather
   // than the name: "Chocolates e Guloseimas" holds both, and a name like
   // "Rebuçados de Mentol" has no head of its own, so the category answered.
@@ -402,14 +462,23 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "vinagre", label: "Vinagre", unit: "l", heads: ["vinagre"] },
   { id: "pate", label: "Paté", nameOnly: true, unit: "kg", heads: ["pate"] },
   { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa"] },
-  { id: "caldo", label: "Caldo", unit: "kg", heads: ["caldo"] },
-  { id: "tempero", label: "Tempero", unit: "kg", heads: ["tempero"] },
+  // Stock, not "Caldo Verde", which is a soup. 17 October 2026.
+  { id: "caldo", label: "Caldo", nameOnly: true, unit: "kg", heads: ["caldo"], exclude: /caldo verde/i },
+  // "Tempero" (seasoning mixes) and "Pasta" (pastes: curry next to olive next
+  // to instant pasta pots) were kinds with no single food in them, and were
+  // removed on 17 October 2026.
   // Split, though for the other reason: every one of these is a jar of
   // mayonnaise and the stores simply record it differently - 46 by weight, 57
   // by volume, and inconsistently WITHIN each chain. Picking one unit would
   // throw away about half the jars, so both rankings are shown.
   { id: "maionese", label: "Maionese", unit: "either", heads: ["maionese"] },
-  { id: "polpa", label: "Polpa", unit: "kg", heads: ["polpa"] },
+  // Tomato pulp, passata and concentrate: an everyday ingredient. It used to
+  // share "Polpa" with fruit pouches for children. 17 October 2026.
+  { id: "polpa-tomate", label: "Polpa de tomate", unit: "kg", heads: ["polpa", "passata", "concentrado"], require: /tomate/i },
+  // Fruit pouches and purées, set aside with the sweets. Pingo Doce's
+  // "Bolsas de Fruta" used to reach cereals through the shelf above them.
+  { id: "fruta-saqueta", label: "Fruta em saqueta e puré", hidden: "sweets", unit: "kg", heads: ["polpa", "pure", "saqueta", "boiao"],
+    require: /fruta|frutos|maca|banana|manga|pera|morango|multifruto|maracuja|acai|goiaba|pessego/i, exclude: /tomate|batata/i },
   { id: "azeitona", label: "Azeitona", unit: "kg", heads: ["azeitona"] },
   { id: "acucar", label: "Açúcar", nameOnly: true, unit: "kg", heads: ["acucar"] },
   // Toothpaste is a `pasta` by head noun and is not food. It never showed up
@@ -417,15 +486,22 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // home is `higiene-pessoal-e-beleza`, which the URL excludes; crawling that
   // aisle brings 7 of them in through a path that says nothing about what they
   // are. The only systematic contaminant of the 494 food products there.
-  { id: "pasta", label: "Pasta (barrar)", unit: "kg", heads: ["pasta"],
-    exclude: /\bde dentes\b/i },
   { id: "oleo", label: "Óleo", unit: "l", heads: ["oleo"] },
   { id: "mel", label: "Mel", hidden: "sweets", unit: "kg", heads: ["mel"], exclude: /\bflocos?\b/i },
-  { id: "sal", label: "Sal", unit: "kg", heads: ["sal"], exclude: /bicarbonato/i },
+  // "Flor de Sal" (salt flakes) heads on "flor". 17 October 2026.
+  { id: "sal", label: "Sal", nameOnly: true, unit: "kg", heads: ["sal", "flor", "moinho", "escama"], require: /\bsal\b/i, exclude: /bicarbonato/i },
   { id: "pimenta", label: "Pimenta", nameOnly: true, unit: "kg", heads: ["pimenta"] },
   { id: "ketchup", label: "Ketchup", unit: "kg", heads: ["ketchup"] },
   { id: "pipoca", label: "Pipoca", hidden: "sweets", unit: "kg", heads: ["pipoca"] },
-  { id: "semente", label: "Semente", nameOnly: true, unit: "kg", heads: ["semente"] },
+  // "Semente" used to be one kind, where chia and sunflower were compared as
+  // the same thing. One kind per seed sold at all three chains; seed mixes
+  // have none. 17 October 2026.
+  { id: "chia", label: "Sementes de chia", unit: "kg", heads: ["semente", "chia"], require: /chia/i, exclude: /pudim|iogurte|bebida|barra|bolacha|\bpao\b/i },
+  { id: "girassol", label: "Sementes de girassol", unit: "kg", heads: ["semente", "pipa", "girassol"], require: /girassol/i, exclude: /\boleo\b|\bpao\b|barra|bolacha/i },
+  { id: "sesamo", label: "Sementes de sésamo", unit: "kg", heads: ["semente", "sesamo"], require: /sesamo/i, exclude: /\boleo\b|\bpao\b|barra|bolacha|tahini|pasta/i },
+  { id: "semente-abobora", label: "Sementes de abóbora", unit: "kg", heads: ["semente", "pevide"], require: /sementes? de abobora|sementes abobora|pevides?/i },
+  { id: "linhaca", label: "Linhaça", unit: "kg", heads: ["semente", "linhaca"], require: /linhaca/i, exclude: /\bpao\b|barra|bolacha|\boleo\b/i },
+  { id: "canhamo", label: "Sementes de cânhamo", unit: "kg", heads: ["semente", "canhamo"], require: /canhamo/i, exclude: /\boleo\b|proteina|bebida/i },
   { id: "amendoim", label: "Amendoim", unit: "kg", heads: ["amendoim"] },
   { id: "mostarda", label: "Mostarda", unit: "kg", heads: ["mostarda"] },
   // Sweetcorn, not cornflakes, which the read past "flocos" would otherwise reach.
@@ -446,7 +522,6 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pinhao", label: "Pinhão", unit: "kg", heads: ["pinhao"] },
   { id: "castanha", label: "Castanha", unit: "kg", heads: ["castanha"] },
   { id: "pistacio", label: "Pistácio", unit: "kg", heads: ["pistacio", "pistachio"] },
-  { id: "pevide", label: "Pevide", unit: "kg", heads: ["pevide"] },
   { id: "adocante", label: "Adoçante", hidden: "sweets", unit: "kg", heads: ["adocante"] },
   { id: "quinoa", label: "Quinoa", unit: "kg", heads: ["quinoa"] },
   // Plain oats - flakes, bran, whole - not oat biscuits, drinks, granola or a
@@ -484,7 +559,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "croissant", label: "Croissant", hidden: "sweets", unit: "kg", heads: ["croissant"] },
   // Split: a baked apple tart is sold by weight and a frozen ice-cream tart by
   // volume, and they are not the same food.
-  { id: "tarte", label: "Tarte", unit: "either", heads: ["tarte"] },
+  { id: "tarte", label: "Tarte", hidden: "sweets", unit: "either", heads: ["tarte"] },
 
   // --- Congelados e refeições ----------------------------------------------
   { id: "gelado", label: "Gelado", hidden: "sweets", unit: "l", heads: ["gelado"] },
@@ -500,12 +575,18 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "refeicao", label: "Refeição pronta", unit: "kg", heads: ["refeicao"],
     exclude: /\b(fuba|flocao|canjic\w*|canjiquinha|xerem|sagu|farofa|mandioca|palmito|chucrute|jalapeno|tofu|tempeh|riced|veggie rice)\b|^(bulgur|seitan|kimchi)\b|trigo para kibe|preparados? (koala|duncan|mississippi)|mistura preparada|base (de pinsa|sopa)/i },
   { id: "wrap", label: "Wrap", unit: "kg", heads: ["wrap"] },
-  { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"] },
+  // Savoury: the sweet ones (apple, chocolate, guava) are set aside with the
+  // sweets. 17 October 2026.
+  { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"],
+    exclude: /maca|chocolate|goiabada|\bcreme\b|\bdoce\b|\bnata\b|frutos|canela|twists?|feuilletine|manteiga/i },
   { id: "rissol", label: "Rissol", unit: "kg", heads: ["rissoi", "rissol"] },
   { id: "panqueca", label: "Panqueca", hidden: "sweets", unit: "kg", heads: ["panqueca"] },
   { id: "empada", label: "Empada", unit: "kg", heads: ["empada", "empadao"] },
-  { id: "croquete", label: "Croquete", unit: "kg", heads: ["croquete"] },
-  { id: "pastel", label: "Pastel", unit: "kg", heads: ["pastel", "pastei"] },
+  { id: "croquete", label: "Croquete", unit: "kg", heads: ["croquete", "croqueta"] },
+  // "Pastel" used to be one kind: pastel de nata next to codfish cakes.
+  // 17 October 2026.
+  { id: "pastel-bacalhau", label: "Pastéis de bacalhau", unit: "kg", heads: ["pastel", "pastei"], require: /bacalhau/i },
+  { id: "pastel-nata", label: "Pastel de nata", hidden: "sweets", unit: "kg", heads: ["pastel", "pastei"], require: /\bnata\b|belem/i },
   { id: "quiche", label: "Quiche", unit: "kg", heads: ["quiche"] },
   { id: "ravioli", label: "Ravioli", unit: "kg", heads: ["ravioli"] },
   { id: "sande", label: "Sande", unit: "kg", heads: ["sande"] },
@@ -518,7 +599,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Breakfast cereals, not cereal BARS (a snack, set aside with the sweets) or
   // protein powders sold on the sports-nutrition cereal shelf. 17 October 2026.
   { id: "cereais", label: "Cereais", unit: "kg", heads: ["cereal"],
-    exclude: /\bbarr(a|as|inha|inhas|ita|itas)\b|whey|\bproteina\b.*\bpo\b|clara de ovo/i },
+    exclude: /\bbarr(a|as|inha|inhas|ita|itas)\b|whey|\bproteina\b.*\bpo\b|clara de ovo|\bbolsas?\b/i },
   { id: "cha", label: "Chá", unit: "kg", heads: ["cha"] },
   // Capsules and pods ("cápsulas", "pastilhas") are coffee only when the name
   // shows it: a coffee word, or a coffee-machine system or brand. Not on the

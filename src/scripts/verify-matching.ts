@@ -287,6 +287,7 @@ export async function verifyMatching(): Promise<number> {
   failures += verifySectionComparison();
   failures += verifyStoreSections();
   failures += verifyRealFoodList();
+  failures += verifySplitKinds();
 
   await cleanup();
   return failures;
@@ -927,8 +928,8 @@ function verifyPingoDoceSitemap(): number {
     "the one systematic contaminant the measurement found"
   );
   check(
-    "but a spreading pasta still is",
-    classifyFoodType("Pasta de Atum", "PINGO_DOCE", "Mercearia/Pates e Pastas") === "pasta"
+    "and spreading pastes have no kind since 17 October 2026 (curry paste next to olive paste)",
+    classifyFoodType("Pasta de Atum", "PINGO_DOCE", "Mercearia/Pates e Pastas") === null
   );
 
   check(
@@ -1676,5 +1677,68 @@ function verifyRealFoodList(): number {
       ["leite", "agua", "cafe", "acucar", "pao", "ovo"].every((id) => !hidden.has(id))
   );
 
+  return failures - before;
+}
+
+/** The kinds that used to hold several foods, split on 17 October 2026. */
+function verifySplitKinds(): number {
+  const before = failures;
+  console.log("\n  kinds that held several foods, split");
+  const c = (name: string, store = "PINGO_DOCE", path = "Mercearia") => classifyFoodType(name, store, path);
+
+  check("a scabbardfish steak is scabbardfish", c("Posta de Peixe Espada Preto Fresco", "PINGO_DOCE", "Peixaria/Peixe") === "peixe-espada");
+  check("a grouper head is not grouper", c("Cabeça de Garoupa Fresca", "PINGO_DOCE", "Peixaria/Peixe") === null);
+  check("an unnamed fish has no kind now", c("Cachucho Fresco", "PINGO_DOCE", "Peixaria/Peixe") === null);
+  check("a fillet goes to its fish", c("Filetes de Pescada do Cabo Congelados") === "pescada" && c("Filetes de Atum em Azeite") === "atum-lata");
+  check(
+    "tinned and fresh fish are different kinds",
+    c("Atum ao Natural Bom Petisco 120 (84) G") === "atum-lata" && c("Bife de Atum Fresco") === "atum" &&
+      c("CAVALA KG", "AUCHAN", "produtos-frescos/peixaria") === "cavala" && c("Filetes de Cavala em Azeite") === "cavala-lata"
+  );
+  check(
+    "a tinned squid is not fresh squid",
+    c("Lulas em Molho Americano") === null && c("LULA COSTA FRESCA INTEIRA KG", "AUCHAN", "produtos-frescos/peixaria") === "lula"
+  );
+  check(
+    "piri-piri sauce and dried piri-piri are different kinds, and a bottle saying neither has none",
+    c("Molho Piri-Piri Extra Forte") === "piri-piri" && c("Piri-piri Moído") === "piri-piri-seco" &&
+      c("PIRI-PIRI GALLO 50ML") === null
+  );
+  check(
+    "tinned fish written without \"em\", or with a drained weight, is tinned",
+    c("Filetes Cavala Óleo Vegetal") === "cavala-lata" && c("FILETE CAVALA PITEU EM MOSTARDA 120G") === "cavala-lata" &&
+      c("SARDINHA AUCHAN COLLECTION SEM PELE E SEM ESPINHA (85)120G") === "sardinha-lata"
+  );
+  check("smoked fish is neither tinned nor fresh", c("SARDINHA FUMADA FILETE REAL 100 GR") === null);
+  check("a cow's foot is not beef", c("MÃO DE BOVINO CONGELADO KG", "AUCHAN", "produtos-frescos/talho") === null);
+  check("breaded fillets are a kind of their own", c("Filetes de Pescada Panados com Limão Congelados") === "filete-panado");
+  check("but breaded CHICKEN is not a fish fillet", c("Panado de Frango", "PINGO_DOCE", "Talho/Aves") !== "filete-panado");
+  check(
+    "the packing is not the food",
+    c("Filetes de Anchova em Óleo") === null && c("Filetes Recheados com Tomate e Mozzarella") === null
+  );
+  check(
+    "everyday sauces have kinds of their own",
+    c("Molho de Soja") === "molho-soja" && c("Molho Pesto Alla Genovese") === "pesto" &&
+      c("Molho Béchamel") === "bechamel" && c("Molho Piri-Piri Extra Forte") === "piri-piri"
+  );
+  check("other sauces have no kind", c("Molho Caesar") === null);
+  check("seeds are compared seed by seed", c("Sementes de Chia") === "chia" && c("Sementes de Girassol") === "girassol");
+  check("a seed mix has no kind", c("Mistura de Sementes") === null);
+  check(
+    "a bag of leaves and a ready-made salad are different kinds",
+    c("Salada Camponesa Embalada", "PINGO_DOCE", "Frutas e Vegetais/Vegetais") === "salada-folhas" &&
+      c("Salada de Massa e Atum", "PINGO_DOCE", "Take Away") === "salada-pronta"
+  );
+  check("codfish cakes are not pastel de nata", c("Pastéis de Bacalhau Congelados") === "pastel-bacalhau" && c("Pastel de Nata") === "pastel-nata");
+  check("tomato pulp is its own kind", c("Polpa de Tomate") === "polpa-tomate" && c("Passata de Tomate Mutti") === "polpa-tomate");
+  check("beef offal is not beef, but coração de alcatra is", c("Rim de Bovino Embalado", "PINGO_DOCE", "Talho") === null &&
+    c("Bife do Coração de Alcatra de Vitela", "CONTINENTE", "Frescos/Talho") === "vaca");
+  check("Caldo Verde is a soup, not a stock", c("Caldo Verde Continente") !== "caldo");
+  check("salt flakes are salt", c("Flor de Sal Marnoto", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Sal") === "sal");
+  check(
+    "dried herbs on the salt-and-herbs shelf are not salt",
+    c("TOMILHO PICADO AUCHAN DESIDRATADO", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos/ervas-aromáticas") === null
+  );
   return failures - before;
 }

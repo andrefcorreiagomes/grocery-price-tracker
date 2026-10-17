@@ -26,6 +26,9 @@ const STOPWORDS = new Set([
 
 const CUT_SET = new Set(CUT_WORDS);
 
+/** Words after which the read past a cut word stops: packing and fillings. */
+const SCAN_STOPS = new Set(["azeite", "oleo", "recheado", "escabeche"]);
+
 /** Head word to the type that claims it. Several types can share a head. */
 const BY_HEAD = new Map<string, FoodType[]>();
 for (const type of FOOD_TYPES) {
@@ -156,6 +159,10 @@ export function classifyFoodType(
   // `maca`. A cut word is a promise that what follows is the actual food.
   if (CUT_SET.has(tokens[0])) {
     for (const token of tokens.slice(1)) {
+      // What follows these is the packing or the filling, not the food:
+      // "Filetes de Anchova em Óleo" is not cooking oil, "Filetes Recheados
+      // com Tomate" is not tomato. 17 October 2026.
+      if (SCAN_STOPS.has(token)) break;
       const later = resolve(token, plain);
       if (later) return later.id;
       // Past "molho" come the sauce's ingredients, not the product: "Pernil
