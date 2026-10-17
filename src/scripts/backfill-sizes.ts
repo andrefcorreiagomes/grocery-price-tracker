@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/matching";
-import { isFoodSection } from "../lib/food-types";
+import { classifyFoodType, isFoodSection } from "../lib/food-types";
+import { eggCountFromName, eggCountFromUnitPrice } from "../lib/egg-count";
 import { implausiblePodSize } from "../scrapers/page-size";
 
 /**
@@ -33,9 +34,26 @@ async function main() {
 
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null },
-    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, sizeSource: true, enrichedAt: true, foodType: true },
+    select: {
+      id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, sizeSource: true,
+      enrichedAt: true, foodType: true, price: true, shownUnitPrice: true, shownUnitPriceUnit: true,
+    },
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
+
+  // Eggs are COUNTED, not weighed (src/lib/egg-count.ts): the count from the
+  // name, or from the store's own price per egg. Worked out first, and kept
+  // out of both passes below, which deal in kilos and litres and would read a
+  // box of eggs as unknown. A box whose count cannot be found keeps whatever it
+  // has, which leaves it out of the egg comparison rather than guessed.
+  const eggs: { id: string; count: number }[] = [];
+  const eggIds = new Set<string>();
+  for (const r of food) {
+    if (classifyFoodType(r.name, r.store, r.categoryPath) !== "ovo") continue;
+    eggIds.add(r.id);
+    const count = eggCountFromName(r.name) ?? eggCountFromUnitPrice(r.price, r.shownUnitPrice, r.shownUnitPriceUnit);
+    if (count !== null && !(r.packageSize === count && r.unit === "un")) eggs.push({ id: r.id, count });
+  }
 
   const before = food.filter((r) => r.packageSize !== null).length;
   console.log(
@@ -70,7 +88,7 @@ async function main() {
   // everywhere downstream.
   const repairs: { id: string; packageSize: number | null; unit: string | null; was: number; sizeSource?: string | null }[] = [];
   for (const r of food) {
-    if (r.packageSize === null) continue;
+    if (r.packageSize === null || eggIds.has(r.id)) continue;
     // Auchan's own per-unit figure, read off its listing tile: the store's word,
     // like a product page, and never second-guessed from the name. The name rule
     // is exactly what it corrected - "LINGUIÇA ... KG" is a 150 g pack.
@@ -142,7 +160,7 @@ async function main() {
 
   const updates: { id: string; packageSize: number; unit: string; via: string }[] = [];
   for (const r of food) {
-    if (r.packageSize !== null) continue;
+    if (r.packageSize !== null || eggIds.has(r.id)) continue;
     // Unknown ON PURPOSE: Auchan's figure showed the price is per item (a quail
     // at EUR 1.25 the bird), so filling 1 kg from a name ending in KG would put
     // back exactly the error the figure caught.
@@ -190,6 +208,8 @@ async function main() {
     }
   }
 
+  console.log(`\negg boxes: ${eggIds.size}, ${eggs.length} count(s) to write`);
+
   if (dry) {
     console.log("\n--dry: nothing written.");
   } else {
@@ -225,6 +245,9 @@ async function main() {
           ...(r.sizeSource === undefined ? {} : { sizeSource: r.sizeSource }),
         },
       });
+    }
+    for (const e of eggs) {
+      await prisma.catalogueProduct.update({ where: { id: e.id }, data: { packageSize: e.count, unit: "un" } });
     }
     if (repairs.length > 0) {
       const cleared = repairs.filter((r) => r.packageSize === null).length;

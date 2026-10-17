@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
-const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L" };
+const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L", un: "un" };
 
 /**
  * One store's answer.
@@ -81,7 +81,7 @@ function UnitBlock({ ranking, showUnit }: { ranking: Ranking; showUnit: boolean 
     <div className={styles.unitBlock}>
       {showUnit && (
         <h2 className={styles.unitHeading}>
-          {ranking.unit === "kg" ? "Vendido ao peso" : "Vendido ao volume"}
+          {ranking.unit === "kg" ? "Vendido ao peso" : ranking.unit === "l" ? "Vendido ao volume" : "Vendido à unidade"}
         </h2>
       )}
       <Comparison

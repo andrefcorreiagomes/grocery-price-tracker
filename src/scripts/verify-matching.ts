@@ -2,6 +2,8 @@ import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { sectionKey, sectionOf, topSectionKind } from "../lib/store-sections";
 import { keepInCatalogue } from "../lib/catalogue-filter";
+import { eggCountFromName, eggCountFromUnitPrice } from "../lib/egg-count";
+import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
 import { buildGroups, reconcileGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
@@ -284,6 +286,7 @@ export async function verifyMatching(): Promise<number> {
   failures += verifyComparison();
   failures += verifySectionComparison();
   failures += verifyStoreSections();
+  failures += verifyRealFoodList();
 
   await cleanup();
   return failures;
@@ -1038,7 +1041,8 @@ function verifyFoodTypes(): number {
   // is. Taking the first food named filed 2,271 products wrongly.
   console.log("\n  food types: shelves that name several foods");
   is("Puré de Batata Knorr", "CONTINENTE", "Mercearia/Arroz, Massa e Farinha/Puré", null);
-  is("Nectarina Continente", "CONTINENTE", "Frescos/Frutas/Pêssego, Ameixa e Kiwi", null);
+  // (Nectarines have their own kind since 17 October 2026; flat peaches do not.)
+  is("Paraguaio Continente", "CONTINENTE", "Frescos/Frutas/Pêssego, Ameixa e Kiwi", null);
   is("LAÇOS (FARFALLE) AUCHAN 500G", "AUCHAN", "alimentação/mercearia/arroz-e-massa", null);
   // ...and an undecided shelf does not hand over to its broader parent.
   is("Coco Ralado Continente", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Preparados para Mousses e Bolos", null);
@@ -1458,7 +1462,7 @@ function verifyFoodTypes(): number {
     classifyFoodType("Bebida Vegetal de Aveia", "CONTINENTE", "Laticínios e Ovos") === "bebida-vegetal"
   );
   check(
-    "a dairy drink is NOT swept in",
+    "a dairy drink is NOT swept in - nor, since 17 October 2026, counted as plain milk",
     // A full path, not the bare section: "Laticínios e Ovos" alone tokenises to
     // `ovos` and the fallback answers `ovo`. That is the category fallback
     // being coarse, not the plant-drink rule, and it is why the shelf is only
@@ -1467,7 +1471,7 @@ function verifyFoodTypes(): number {
       "Bebida Láctea Infantil 1 a 3 anos",
       "CONTINENTE",
       "Laticínios e Ovos/Leite/Leite Infantil"
-    ) === "leite",
+    ) === null,
     "widening the rule must not start eating milk"
   );
 
@@ -1583,6 +1587,93 @@ function verifyStoreSections(): number {
   check(
     "a Pingo Doce address gives a readable example name",
     nameFromUrl("https://www.pingodoce.pt/home/produtos/mercearia/conservas/atum-em-azeite-893466.html") === "atum em azeite"
+  );
+
+  return failures - before;
+}
+
+/** The real-food list of 17 October 2026: misfilings fixed, new kinds, eggs per egg. */
+function verifyRealFoodList(): number {
+  const before = failures;
+  console.log("\n  the real-food list");
+  const c = (name: string, store: string, path: string) => classifyFoodType(name, store, path);
+
+  check(
+    "a shelf two levels up does not decide: Pingo Doce's fuet is not cheese",
+    c("Fuet Extra", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Outros Enchidos e Fumeiro") === null
+  );
+  check(
+    "an avocado on the grapes shelf is an avocado",
+    c("Abacate Hass Continente", "CONTINENTE", "Frescos/Frutas/Uvas e Tropicais") === "abacate"
+  );
+  check(
+    "a name-only kind is never decided by its shelf: a lime is not an orange",
+    c("Lima Continente", "CONTINENTE", "Frescos/Frutas/Laranja, Clementina e Limão") === null
+  );
+  check(
+    "courgettes are not beans",
+    c("Curgete Verde Continente", "CONTINENTE", "Frescos/Legumes/Curgete, Beringela e Feijão Verde") === "curgete"
+  );
+  check(
+    "green beans have their own kind",
+    c("Feijão Verde", "PINGO_DOCE", "Frutas e Vegetais/Vegetais") === "feijao-verde" &&
+      c("Feijão Encarnado Cozido", "PINGO_DOCE", "Mercearia/Arroz Massa e Leguminosas") === "feijao"
+  );
+  check(
+    "Pingo Doce's lactose-free \"Bebida de Leite\" is milk",
+    c("Bebida de Leite UHT Livre Meio Gordo", "PINGO_DOCE", "Leite e Bebidas Vegetais/Leite") === "leite"
+  );
+  check(
+    "chocolate milk and coconut milk are not milk",
+    c("Leite Achocolatado", "PINGO_DOCE", "Leite e Bebidas Vegetais/Leite") === null &&
+      c("Leite de Coco Ayam", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Leite Condensado e Leite de Coco") === null
+  );
+  check(
+    "walnut kernels reach walnuts through the plural",
+    c("Miolo de Nozes Metades Continente", "CONTINENTE", "Frescos/Frutas/Frutos Secos, Desidratados e Sementes") === "noz"
+  );
+  check(
+    "oat flakes are oats, and cornflakes are not sweetcorn",
+    c("Flocos de Aveia Finos", "PINGO_DOCE", "Mercearia") === "aveia" &&
+      c("Flocos de Milho Cobertos com Chocolate", "PINGO_DOCE", "Mercearia") !== "milho"
+  );
+  check(
+    "a cereal bar is not a breakfast cereal",
+    c("Barras de Cereais com Chocolate", "PINGO_DOCE", "Bolachas, Cereais e Guloseimas/Cereais Barras e Bolsas de Fruta/Barras de Cereais") === null
+  );
+  check(
+    "egg white and quail eggs are not eggs",
+    c("Clara de Ovo Pasteurizada Continente", "CONTINENTE", "Laticínios e Ovos/Ovos") === null &&
+      c("Ovos de Codorniz", "PINGO_DOCE", "Ovos") === null &&
+      c("Ovos de Solo Classe M", "PINGO_DOCE", "Ovos") === "ovo"
+  );
+
+  check(
+    "an egg count is read from the name",
+    eggCountFromName("OVOS GALINHAS SOLO AUCHAN CLASSE M 12UN") === 12 &&
+      eggCountFromName("OVOS POLEGAR CLASSE M MEIA DÚZIA") === 6 &&
+      eggCountFromName("OVOS SABOROSOS CLASSE M 2 DUZIAS") === 24 &&
+      eggCountFromName("OVOS SABOROSOS CLASSE L UMA DÚZIA") === 12 &&
+      eggCountFromName("Ovos de Solo Classe M") === null
+  );
+  check(
+    "or from the store's price per egg, though rounded to the cent",
+    eggCountFromUnitPrice(2.99, 0.25, "un") === 12 && eggCountFromUnitPrice(1.79, 0.3, "un") === 6
+  );
+  check(
+    "a per-kilo figure gives no count",
+    eggCountFromUnitPrice(2.99, 0.25, "kg") === null && eggCountFromUnitPrice(null, 0.25, "un") === null
+  );
+  const egg = (store: string, price: number, count: number) =>
+    ({ storeProductId: `e-${store}`, store, name: "Ovos", brand: null, price, packageSize: count, unit: "un" });
+  check("eggs are compared per egg", comparable(egg("CONTINENTE", 2.99, 12), "ovo") && unitsFor("ovo", []).join() === "un");
+  check("a box counted in eggs never enters a per-kilo ranking", !comparable(egg("CONTINENTE", 2.99, 12), "batata"));
+
+  const hidden = new Set(FOOD_TYPES.filter((t) => t.hidden).map((t) => t.id));
+  check(
+    "sweets and drinks are set aside, everyday food is not",
+    ["chocolate", "bolacha", "gelado", "vinho", "cerveja", "refrigerante"].every((id) => hidden.has(id)) &&
+      ["leite", "agua", "cafe", "acucar", "pao", "ovo"].every((id) => !hidden.has(id))
   );
 
   return failures - before;

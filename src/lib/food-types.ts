@@ -78,10 +78,12 @@ export function nameTokensForType(name: string, store: string): string[] {
  * then satisfied fermento's own require, and filed every vanilla essence and
  * food colouring on that shelf as baking powder.
  */
-function resolve(head: string, name: string): FoodType | null {
+function resolve(head: string, name: string, fromShelf = false): FoodType | null {
   const candidates = BY_HEAD.get(head);
   if (!candidates) return null;
   for (const type of candidates) {
+    // A shelf may not decide a kind that must say so in its own name.
+    if (fromShelf && type.nameOnly) continue;
     if (type.require && !type.require.test(name)) continue;
     if (type.exclude && type.exclude.test(name)) continue;
     return type;
@@ -183,8 +185,16 @@ export function classifyFoodType(
   // shelf to any product café's rules had turned away, and filed galão
   // capsules as chá. Words claimed by the same food types count once: "Café em
   // Cápsulas" names one food in two words.
+  //
+  // Only the product's OWN shelf and the one directly above it are read. A
+  // shelf further up is broad enough to name a neighbour rather than the
+  // product: Pingo Doce files fuet and cured loin under "Charcutaria e
+  // Queijos/Charcutaria/Outros Enchidos", and the top segment named cheese;
+  // dried apricots sit under "Batatas Fritas, Snacks e Frutos Secos/Frutos
+  // Secos e Desidratados", and the segment above named potatoes. Measured
+  // 17 October 2026.
   const segments = (categoryPath ?? "").split(/[/>]/).map((s) => s.trim()).filter(Boolean);
-  for (const segment of segments.reverse()) {
+  for (const segment of segments.slice(-2).reverse()) {
     const foods = new Map<string, string>(); // claimants -> the word that names them
     for (const token of categoryTokens(segment)) {
       const claimants = BY_HEAD.get(token);
@@ -196,7 +206,7 @@ export function classifyFoodType(
     // and a pork platter as salmão, and Auchan's "pato-e-mais-aves" filed quail
     // as duck.
     if (foods.size === 1 && OPEN_SHELF.test(stripAccents(segment).toLowerCase())) return null;
-    if (foods.size === 1) return resolve([...foods.values()][0], plain)?.id ?? null;
+    if (foods.size === 1) return resolve([...foods.values()][0], plain, true)?.id ?? null;
   }
 
   return null;

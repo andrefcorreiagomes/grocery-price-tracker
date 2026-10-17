@@ -17,6 +17,12 @@ import { STORE_ORDER } from "./stores";
  * judgements be tested without a crawl.
  */
 
+/**
+ * How a food is compared: per kilo, per litre, or per item (eggs, sold by the
+ * dozen or half-dozen rather than by weight).
+ */
+export type MeasureUnit = "kg" | "l" | "un";
+
 /** A catalogue row, reduced to what a comparison needs. */
 export interface ComparableProduct {
   storeProductId: string;
@@ -25,7 +31,7 @@ export interface ComparableProduct {
   brand: string | null;
   price: number | null;
   packageSize: number | null;
-  /** "kg" or "l" as stored; anything else is treated as unknown */
+  /** "kg", "l" or "un" as stored; anything else is treated as unknown */
   unit: string | null;
 }
 
@@ -69,10 +75,10 @@ export function comparable(
   p: ComparableProduct,
   foodTypeId: string,
   /** narrows to one ranking; required for a food measured both ways */
-  measuredIn?: "kg" | "l"
+  measuredIn?: MeasureUnit
 ): boolean {
   if (p.price === null || p.packageSize === null || p.packageSize <= 0) return false;
-  if (p.unit !== "kg" && p.unit !== "l") return false;
+  if (p.unit !== "kg" && p.unit !== "l" && p.unit !== "un") return false;
   // The store's own data is wrong (data/store-errors.ts): its price per kilo
   // would be impossible, so it sits out, as if its size were unknown.
   if (isStoreError(p.store, p.storeProductId)) return false;
@@ -94,9 +100,9 @@ export function comparable(
  * page never renders an empty second table just because the table said it could
  * exist. Everything else yields its declared unit.
  */
-export function unitsFor(foodTypeId: string, rows: ComparableProduct[]): ("kg" | "l")[] {
+export function unitsFor(foodTypeId: string, rows: ComparableProduct[]): MeasureUnit[] {
   const declared = FOOD_TYPE_BY_ID.get(foodTypeId)?.unit;
-  if (declared === "kg" || declared === "l") return [declared];
+  if (declared === "kg" || declared === "l" || declared === "un") return [declared];
 
   const present: ("kg" | "l")[] = [];
   for (const u of ["kg", "l"] as const) {
@@ -116,7 +122,7 @@ function cheapestOf(
   stocked: ComparableProduct[],
   candidates: ComparableProduct[],
   foodTypeId: string,
-  measuredIn?: "kg" | "l"
+  measuredIn?: MeasureUnit
 ): Map<string, Cell> {
   const byStore = new Map<string, Cell>();
 
@@ -155,7 +161,7 @@ function cheapestOf(
 export function cheapestPerStore(
   rows: ComparableProduct[],
   foodTypeId: string,
-  measuredIn?: "kg" | "l"
+  measuredIn?: MeasureUnit
 ): Map<string, Cell> {
   return cheapestOf(rows, rows, foodTypeId, measuredIn);
 }
@@ -175,7 +181,7 @@ export function cheapestPerStore(
 export function ownBrandPerStore(
   rows: ComparableProduct[],
   foodTypeId: string,
-  measuredIn?: "kg" | "l"
+  measuredIn?: MeasureUnit
 ): Map<string, Cell> {
   const own = rows.filter((p) => isOwnBrand(p.brand, p.store));
   return cheapestOf(own, own, foodTypeId, measuredIn);
@@ -192,7 +198,7 @@ export function ownBrandPerStore(
 export function namedGroup(
   members: ComparableProduct[],
   foodTypeId: string,
-  measuredIn?: "kg" | "l"
+  measuredIn?: MeasureUnit
 ): Map<string, Cell> {
   return cheapestOf(members, members, foodTypeId, measuredIn);
 }

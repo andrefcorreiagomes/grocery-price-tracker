@@ -19,7 +19,7 @@ import styles from "./FoodTypeFilter.module.css";
  * of accents and nobody types them into a search box.
  */
 
-const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L" };
+const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L", un: "un" };
 
 /** How many kinds of food these rows cover. */
 const kinds = (rows: IndexEntry[]) => new Set(rows.map((r) => r.id)).size;
@@ -79,7 +79,7 @@ export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
                   {t.label}
                   {(twiceListed.get(t.id) ?? 0) > 1 && (
                     <span className={styles.qualifier}>
-                      {t.unit === "kg" ? " (ao peso)" : " (ao volume)"}
+                      {t.unit === "kg" ? " (ao peso)" : t.unit === "l" ? " (ao volume)" : " (à unidade)"}
                     </span>
                   )}
                 </span>

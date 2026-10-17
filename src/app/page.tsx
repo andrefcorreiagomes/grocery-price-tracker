@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCategories } from "@/lib/queries";
+import { getComparableFoodTypes } from "@/lib/grupos";
 import styles from "./page.module.css";
 
 // Always read the latest categories from the database rather than a build-time snapshot.
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const categories = await getCategories();
+  // Counted, not written in: the number changes whenever a kind of food is
+  // added or set aside.
+  const foodCount = new Set((await getComparableFoodTypes()).map((e) => e.id)).size;
 
   return (
     <main className={styles.main}>
@@ -19,8 +23,7 @@ export default async function Home() {
       <Link href="/grupos" className={styles.cabazCard}>
         <span className={styles.cabazTitle}>Onde é mais barato?</span>
         <span className={styles.cabazSubtitle}>
-          O preço ao quilo e ao litro de 166 alimentos, das batatas ao azeite, nas
-          três cadeias
+          O preço de {foodCount} alimentos, das batatas ao azeite, nas três cadeias
         </span>
       </Link>
 

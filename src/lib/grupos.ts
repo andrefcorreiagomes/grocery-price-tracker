@@ -8,6 +8,7 @@ import {
   unitsFor,
   type Cell,
   type ComparableProduct,
+  type MeasureUnit,
 } from "./comparison";
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { FOOD_TYPES } from "../../data/food-types";
@@ -34,7 +35,7 @@ async function rowsFor(foodTypeId: string): Promise<ComparableProduct[]> {
 
 /** One ranking: the three stores' answers, measured in one unit. */
 export interface Ranking {
-  unit: "kg" | "l";
+  unit: MeasureUnit;
   cheapest: Map<string, Cell>;
   ownBrand: Map<string, Cell>;
   /** the confirmed same-product groups, largest price gap first */
@@ -60,7 +61,8 @@ export interface FoodTypePage {
 
 export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage | null> {
   const type = FOOD_TYPE_BY_ID.get(foodTypeId);
-  if (!type) return null;
+  // Set aside for later (sweets, drinks): no page, exactly as for an unknown id.
+  if (!type || type.hidden) return null;
 
   const rows = await rowsFor(foodTypeId);
   if (rows.length === 0) return null;
@@ -86,7 +88,7 @@ export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage 
 export interface IndexEntry {
   id: string;
   label: string;
-  unit: "kg" | "l";
+  unit: MeasureUnit;
   storesCompared: number;
   winners: string[];
   cheapestPrice: number | null;
@@ -121,6 +123,7 @@ export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
 
   const entries: IndexEntry[] = [];
   for (const type of FOOD_TYPES) {
+    if (type.hidden) continue; // set aside for later: sweets and drinks
     const typeRows = byType.get(type.id);
     if (!typeRows) continue;
 
@@ -199,7 +202,7 @@ export interface NamedGroups {
  */
 export async function getNamedGroups(
   foodTypeId: string,
-  measuredIn: "kg" | "l"
+  measuredIn: MeasureUnit
 ): Promise<NamedGroups> {
   // Which catalogue rows of this food type belong to a group.
   const rows = await prisma.catalogueProduct.findMany({

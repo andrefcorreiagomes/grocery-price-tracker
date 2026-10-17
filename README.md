@@ -72,9 +72,9 @@ task. This project has two:
 | | |
 |---|---|
 | Food products collected | **44,777**: Continente 17,047 · Pingo Doce 9,706 · Auchan 18,024 |
-| Products assigned a kind of food | **38,827** (87%) |
-| Kinds of food defined so far | **179**, from *alheira* and *farinheira* to *tremoço* and *requeijão* |
-| Kinds of food compared at all three chains so far | **165** |
+| Products assigned a kind of food | **37,793** (84%) |
+| Kinds of food defined so far | **206**, from *alheira* and *farinheira* to *tremoço* and *requeijão*; sweets, desserts and drinks are set aside for now |
+| Kinds of food compared at all three chains so far | **166** |
 | Identical products matched across two chains | **916** |
 | Figures from | the crawls of 3 and 4 October 2026, after the section rules of 17 October left out 1,092 non-food products |
 
@@ -238,7 +238,7 @@ stores include in their pages.
 | `src/scrapers/crawl/` | the catalogue crawler for each chain |
 | `src/scrapers/http.ts` | the shared fetcher: pace, retries, `Retry-After` |
 | `src/lib/matching.ts` | reading sizes and normalising product names |
-| `data/food-types.ts` | the 179 kinds of food |
+| `data/food-types.ts` | the 206 kinds of food |
 | `data/store-sections.ts` | which of each store's sections hold food, decided in one place |
 | `src/lib/comparison.ts` | the comparison rules, including the three cell states |
 | `src/app/grupos/` | the comparison pages (in Portuguese) |
