@@ -16,7 +16,7 @@ import { sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
 import { MAX_NAMED_GROUPS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
-import { correctedSize, implausiblePodSize, pricedPerUnit } from "../scrapers/page-size";
+import { correctedSize, implausiblePodSize, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
 import {
   cheapestPerStore,
   cheapestStores,
@@ -1307,6 +1307,20 @@ function verifyFoodTypes(): number {
   check("a product page still writes both, as before",
     "ean" in fromPage && "enrichedAt" in fromPage && fromPage.sizeSource === "page");
   check("a listing that knows nothing writes nothing", Object.keys(enrichment({})).length === 0);
+
+  // A bottle with no size label: the price over the per-litre figure under it.
+  // Strings as they appear on live Continente pages (17 October 2026).
+  console.log("\n  page sizes: worked out from the price per litre");
+  const fromUnit = (text: string, price: number) => sizeFromUnitPrice(text, price);
+  check("a wine at 4,99 with 6,65 per litre is a 0.75 L bottle",
+    fromUnit("6,65€/lt", 4.99)?.total === 0.75 && fromUnit("6,65€/lt", 4.99)?.unit === "l");
+  check("a cheap wine still rounds to 0.75, not 0.749", fromUnit("4,39€/lt", 3.29)?.total === 0.75);
+  check("a half bottle stays 0.375", fromUnit("15,71€/lt", 5.89)?.total === 0.375);
+  check("a spirit is 0.7 L", fromUnit("19,27€/lt", 13.49)?.total === 0.7);
+  check("a per-kilo figure gives kilos", fromUnit("9,95€/kg", 1.99)?.total === 0.2 && fromUnit("9,95€/kg", 1.99)?.unit === "kg");
+  check("a price per capsule is not a size", fromUnit("0,31€/un", 19.99) === null);
+  check("nor is a per-litre figure labelled per unit", fromUnit("61,32€/un", 45.99) === null);
+  check("and no figure means no size", fromUnit("", 18.68) === null);
 
   // Goods sold by weight: the headline price is already per kilo, and the size
   // label is what one item weighs. Strings as they appear on live pages

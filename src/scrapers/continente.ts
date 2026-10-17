@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
-import { correctedSize, pricedPerUnit } from "./page-size";
+import { correctedSize, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
 import { detached, finiteOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
@@ -37,12 +37,16 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
 
   // Scoped to the product's own price box: the page has exactly one, while
   // carousels of other products elsewhere carry their own per-kilo prices.
-  const headline = $(".ct-pdp--prices").first().find(".pwc-tile--price-primary").first().text();
-  const size = correctedSize(
-    product.name ?? "",
-    parsePackageSize($(".ct-pdp--unit").first().text().trim()),
-    pricedPerUnit(headline, price)
-  );
+  const priceBox = $(".ct-pdp--prices").first();
+  const headline = priceBox.find(".pwc-tile--price-primary").first().text();
+  // No size label: work it out from the per-litre or per-kilo price shown
+  // under the price, which wine and spirit pages carry instead.
+  const size =
+    correctedSize(
+      product.name ?? "",
+      parsePackageSize($(".ct-pdp--unit").first().text().trim()),
+      pricedPerUnit(headline, price)
+    ) ?? sizeFromUnitPrice(priceBox.find(".pwc-tile--price-secondary").first().text(), price);
 
   return {
     name: product.name ?? "",

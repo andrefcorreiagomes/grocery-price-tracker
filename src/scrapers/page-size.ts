@@ -52,6 +52,48 @@ export function implausiblePodSize(name: string, total: number, unit: "kg" | "l"
 }
 
 /** The size a page's label gives, after both corrections. */
+/**
+ * The pack size worked out from the price per kilo or litre a page shows under
+ * the price, for a page that states no size of its own.
+ *
+ * Continente's wine and spirit pages carry no "emb." label at all - 6,856 of
+ * its products had been read and left without a size, almost all of them
+ * bottles - but most show "6,65€/lt" under "4,99€". The size is then the price
+ * divided by that figure, 0.7504 L here, rounded with the figure's own
+ * rounding to the cent in mind: 0.75 L. Measured
+ * on 30 pages without a size (17 October 2026): 25 gave 0.75, 0.70, 0.375 or
+ * 1.5 L exactly this way.
+ *
+ * Only "/kg" and "/lt". A wine page sometimes labels the same per-litre figure
+ * "/un" (EUR 45.99 beside "61,32€/un"), but on coffee "/un" really is per
+ * capsule, so "/un" is left alone rather than guessed at.
+ */
+export function sizeFromUnitPrice(
+  secondaryText: string,
+  price: number | null
+): { total: number; unit: "kg" | "l" } | null {
+  if (price === null || price <= 0) return null;
+  const m = secondaryText.match(/(\d[\d.]*,\d{1,2}|\d+(?:\.\d+)?)\s*€\s*\/\s*(kg|lt?)\b/i);
+  if (!m) return null;
+  const perUnit = Number(m[1].includes(",") ? m[1].replace(/\./g, "").replace(",", ".") : m[1]);
+  if (!Number.isFinite(perUnit) || perUnit <= 0) return null;
+  const unit = m[2].toLowerCase() === "kg" ? "kg" : "l";
+  // The figure shown is rounded to the cent, so the true size lies between
+  // these two. Take the roundest number inside that range: 0.75 rather than
+  // 0.749 for a EUR 3.29 wine at "4,39€/lt", while a half bottle at "15,71€/lt"
+  // stays 0.375, because 0.37 and 0.38 both fall outside its range.
+  const lo = price / (perUnit + 0.005);
+  const hi = perUnit > 0.005 ? price / (perUnit - 0.005) : Infinity;
+  let total = Number((price / perUnit).toPrecision(3));
+  for (const digits of [1, 2, 3]) {
+    const candidate = Number((price / perUnit).toPrecision(digits));
+    if (candidate >= lo && candidate <= hi) { total = candidate; break; }
+  }
+  // The same bounds the name reader uses for one container.
+  const plausible = unit === "kg" ? total >= 0.001 && total <= 30 : total >= 0.01 && total <= 10;
+  return plausible ? { total, unit } : null;
+}
+
 export function correctedSize(
   name: string,
   label: { total: number; unit: "kg" | "l" } | null,
