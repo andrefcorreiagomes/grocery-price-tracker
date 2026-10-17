@@ -1,10 +1,5 @@
-import {
-  CUT_WORDS,
-  FOOD_SECTIONS,
-  FOOD_TYPES,
-  NON_FOOD_SECTIONS,
-  type FoodType,
-} from "../../data/food-types";
+import { CUT_WORDS, FOOD_TYPES, type FoodType } from "../../data/food-types";
+import { isFoodSection } from "./store-sections";
 import { HOUSE_LABELS } from "./candidates";
 import { normalizeName, stripAccents } from "./matching";
 
@@ -58,25 +53,10 @@ export function foldPlural(token: string): string {
 }
 
 /**
- * Is this product in a food section of its store?
- *
- * Continente and Auchan publish a clean food/non-food split at the top level, so
- * they are allow-listed. Pingo Doce publishes a flat shelf name instead - about
- * 67 of them, nearly all food - so it is deny-listed. Allow-listing it lost more
- * than half its catalogue and read its entire drinks section as zero.
+ * Is this product in a food section of its store? Decided by
+ * data/store-sections.ts; re-exported so existing imports keep working.
  */
-export function isFoodSection(store: string, categoryPath: string | null): boolean {
-  const top = (categoryPath ?? "").split(/[/>]/)[0].trim();
-  if (!top) return false;
-
-  const deny = NON_FOOD_SECTIONS[store];
-  if (deny) return !deny.some((s) => s.toLowerCase() === top.toLowerCase());
-
-  const allow = FOOD_SECTIONS[store];
-  if (!allow) return false;
-  const flat = stripAccents(top).toLowerCase();
-  return allow.some((s) => stripAccents(s).toLowerCase() === flat);
-}
+export { isFoodSection };
 
 /** The name's meaningful tokens, chain labels stripped, plurals folded. */
 export function nameTokensForType(name: string, store: string): string[] {

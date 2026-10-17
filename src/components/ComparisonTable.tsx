@@ -1,6 +1,7 @@
 import ProductNameCell from "@/components/ProductNameCell";
 import { STORE_LABELS, STORE_ORDER, type getComparisonData } from "@/lib/queries";
 import { unitPrice } from "@/lib/pricing";
+import { storeName } from "@/lib/stores";
 import styles from "./ComparisonTable.module.css";
 
 interface Props {
@@ -89,7 +90,7 @@ export default function ComparisonTable({ products, latestScrapeDate }: Props) {
                     storeLinks={product.listings
                       .filter((listing) => listing !== undefined)
                       .map((listing) => ({
-                        label: STORE_LABELS[listing.store],
+                        label: storeName(listing.store),
                         url: listing.url,
                       }))}
                   />

@@ -1,6 +1,6 @@
 import { prisma } from "../lib/db";
 import { generateCandidates, type CatalogueEntry, type CandidatePair } from "../lib/candidates";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 
 /**
  * Generate cross-store match candidates from the catalogue.

@@ -1,10 +1,15 @@
 import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
-import { buildGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
+import { sectionKey, sectionOf, topSectionKind } from "../lib/store-sections";
+import { keepInCatalogue } from "../lib/catalogue-filter";
+import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
+import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
+import { buildGroups, reconcileGroups, sizeSpreadOk, OVERSIZE_FACTOR, type GroupLink, type GroupMemberInput } from "../lib/grouping";
 import { auchanTileSize, matchesTerm, parseSize, qualifierMismatch, reconcileTileSize, SOLD_PER_KG, stripAccents } from "../lib/matching";
 import { enrichment } from "../scrapers/crawl/persist";
 import {
   categoryPathFromUrl,
+  nameFromUrl,
   labelFromSlug,
   productIdFromUrl,
   PINGO_DOCE_SECTIONS,
@@ -156,6 +161,64 @@ export async function verifyMatching(): Promise<number> {
   check("one known size is not a spread", sizeSpreadOk([m("a", "X", "400 g"), m("b", "Y")]));
   check("kg against L can never be one product", !sizeSpreadOk([m("a", "X", "1 kg"), m("b", "Y", "1 l")]));
 
+  // --- a group keeps its id from run to run --------------------------------
+  console.log("\n  a group keeps its id from run to run");
+  const C = "CONTINENTE", A = "AUCHAN", P = "PINGO_DOCE";
+  const cluster = (members: GroupMemberInput[], links: GroupLink[]) => buildGroups(members, links);
+
+  const same = reconcileGroups([{ id: "g1", productIds: ["b", "a"] }], cluster([m("a", C), m("b", A)], [link("a", "b")]));
+  check("an unchanged group keeps its id", same.kept.length === 1 && same.kept[0].id === "g1" && same.created.length === 0);
+  check("and is not counted as changed", same.kept[0]?.changed === false);
+
+  const grown = reconcileGroups(
+    [{ id: "g1", productIds: ["a", "b"] }],
+    cluster([m("a", C), m("b", A), m("c", P)], [link("a", "b"), link("b", "c")])
+  );
+  check("a pair that gains a third store keeps its id", grown.kept[0]?.id === "g1" && grown.kept[0].group.storeCount === 3);
+  check("and is counted as changed", grown.kept[0]?.changed === true);
+
+  const fresh = reconcileGroups([], cluster([m("a", C), m("b", A)], [link("a", "b")]));
+  check("a cluster with no earlier group is new", fresh.created.length === 1 && fresh.kept.length === 0);
+
+  // Two groups joined by a new pair: the one sharing more products keeps its id.
+  const merged = reconcileGroups(
+    [{ id: "g1", productIds: ["a", "b"] }, { id: "g2", productIds: ["c", "d"] }],
+    cluster([m("a", C), m("b", A), m("c", P), m("d", A), m("e", C)], [link("a", "b"), link("b", "c"), link("c", "d"), link("d", "e")])
+  );
+  // Five products over three stores is within the two-per-store limit, so this cluster is emitted.
+  check("when two groups merge, one keeps its id", merged.kept.length === 1);
+  check(
+    "and the other is retired as merged into it",
+    merged.retired.length === 1 && merged.retired[0].reason === "merged" && merged.retired[0].mergedIntoId === merged.kept[0]?.id
+  );
+
+  // One group split in two: the bigger part keeps the id, the rest is new.
+  const split = reconcileGroups(
+    [{ id: "g1", productIds: ["a", "b", "c", "d", "e"] }],
+    cluster([m("a", C), m("b", A), m("c", P), m("d", C), m("e", A)], [link("a", "b"), link("b", "c"), link("d", "e")])
+  );
+  check(
+    "when a group splits, the bigger part keeps the id",
+    split.kept.length === 1 && split.kept[0].id === "g1" && split.kept[0].group.productIds.join() === "a,b,c"
+  );
+  check("and the smaller part is a new group", split.created.length === 1 && split.created[0].productIds.join() === "d,e");
+
+  const gone = reconcileGroups([{ id: "g1", productIds: ["a", "b"] }], []);
+  check("a group whose pairs all went is retired as dissolved", gone.retired[0]?.reason === "dissolved");
+
+  const refusedNow = reconcileGroups(
+    [{ id: "g1", productIds: ["a", "b"] }],
+    cluster([m("a", C, "400 g"), m("b", A, "750 g"), m("c", P, "1 kg")], [link("a", "b"), link("b", "c")])
+  );
+  check("a group whose cluster fails a guard is retired as refused", refusedNow.retired[0]?.reason === "refused" && refusedNow.kept.length === 0);
+
+  // The answer must not depend on the order the clusters come in.
+  const twoClusters = cluster([m("a", C), m("b", A), m("c", C), m("d", A)], [link("a", "b"), link("c", "d")]);
+  const old = [{ id: "g1", productIds: ["a", "b"] }, { id: "g2", productIds: ["c", "d"] }];
+  const forward = reconcileGroups(old, twoClusters).kept.map((k) => `${k.id}=${k.group.productIds}`).sort().join(" ");
+  const backward = reconcileGroups(old, [...twoClusters].reverse()).kept.map((k) => `${k.id}=${k.group.productIds}`).sort().join(" ");
+  check("the same clusters in a different order give the same ids", forward === backward && forward === "g1=a,b g2=c,d");
+
   // --- decisions and retirement (DB) ---------------------------------------
   console.log("\n  decisions and retirement");
 
@@ -220,6 +283,7 @@ export async function verifyMatching(): Promise<number> {
   failures += await verifySitemapLastmod();
   failures += verifyComparison();
   failures += verifySectionComparison();
+  failures += verifyStoreSections();
 
   await cleanup();
   return failures;
@@ -818,6 +882,13 @@ function verifyPingoDoceSitemap(): number {
       labelFromSlug("bolsas-de-fruta") === "Bolsas de Fruta"
   );
 
+  // Every Pingo Doce section has a decision in data/store-sections.ts, by label.
+  const pdKind = (slug: string) => topSectionKind("PINGO_DOCE", PINGO_DOCE_SECTIONS[slug]?.label ?? slug);
+  check(
+    "every Pingo Doce section label has a decision",
+    Object.keys(PINGO_DOCE_SECTIONS).every((slug) => pdKind(slug) !== undefined)
+  );
+
   // The department list is DERIVED from the sections table, so the two can
   // never disagree. What is worth checking is that the derivation still selects
   // food only, and still builds an address robots.txt permits.
@@ -826,14 +897,12 @@ function verifyPingoDoceSitemap(): number {
   // 494 of the 1,010 are food.
   check(
     "a mixed aisle is fetched, not skipped",
-    PINGO_DOCE_SECTIONS["as-nossas-marcas"]?.kind === "mixed" &&
-      PINGO_DOCE_SECTIONS["natal-e-ano-novo"]?.kind === "mixed",
+    pdKind("as-nossas-marcas") === "mixed" && pdKind("natal-e-ano-novo") === "mixed",
     "their URL cannot say what a product is, so the name has to"
   );
   check(
     "a non-food aisle is still skipped without a request",
-    PINGO_DOCE_SECTIONS["limpeza"]?.kind === "non-food" &&
-      PINGO_DOCE_SECTIONS["higiene-pessoal-e-beleza"]?.kind === "non-food",
+    pdKind("limpeza") === "non-food" && pdKind("higiene-pessoal-e-beleza") === "non-food",
     "there the URL does settle it - 5,827 pages, 1.6 hours saved"
   );
   check(
@@ -862,8 +931,8 @@ function verifyPingoDoceSitemap(): number {
   check(
     "the food departments are exactly the food-kind sections",
     PINGO_DOCE_FOOD_CATEGORIES.length ===
-      Object.values(PINGO_DOCE_SECTIONS).filter((s) => s.kind === "food").length &&
-      PINGO_DOCE_FOOD_CATEGORIES.every((d) => PINGO_DOCE_SECTIONS[d.slug]?.kind === "food"),
+      Object.keys(PINGO_DOCE_SECTIONS).filter((slug) => pdKind(slug) === "food").length &&
+      PINGO_DOCE_FOOD_CATEGORIES.every((d) => pdKind(d.slug) === "food"),
     `${PINGO_DOCE_FOOD_CATEGORIES.length} departments`
   );
 
@@ -1119,9 +1188,15 @@ function verifyFoodTypes(): number {
   );
   check(
     "Pingo Doce drinks are food (the bug that read its whole drinks aisle as zero)",
-    isFoodSection("PINGO_DOCE", "Águas, Sumos e Refrigerantes") &&
-      isFoodSection("PINGO_DOCE", "Vinho Tinto") &&
-      isFoodSection("PINGO_DOCE", "Cápsulas de Café")
+    isFoodSection("PINGO_DOCE", "Águas, Sumos e Refrigerantes/Aguas") &&
+      isFoodSection("PINGO_DOCE", "Vinhos/Vinho Tinto") &&
+      isFoodSection("PINGO_DOCE", "Café, Chá e Achocolatados/Capsulas de Cafe")
+  );
+  // Paths are department-first since the sitemap crawler; a bare shelf name is
+  // no section the decisions file knows, so it is left out and reported.
+  check(
+    "a section the decisions file does not mention is not food",
+    !isFoodSection("PINGO_DOCE", "Vinho Tinto") && !isFoodSection("CONTINENTE", "undefined")
   );
   check(
     "Pingo Doce non-food is still excluded",
@@ -1394,6 +1469,120 @@ function verifyFoodTypes(): number {
       "Laticínios e Ovos/Leite/Leite Infantil"
     ) === "leite",
     "widening the rule must not start eating milk"
+  );
+
+  return failures - before;
+}
+
+/**
+ * data/store-sections.ts and the section watch: which products are kept, and
+ * what a crawl reports about the store's sections.
+ */
+function verifyStoreSections(): number {
+  const before = failures;
+  console.log("\n  store sections");
+
+  check(
+    "section names compare without accents, case or punctuation",
+    sectionKey("Laticínios e Ovos") === "laticinios-e-ovos" &&
+      sectionKey("laticinios-e-ovos") === "laticinios-e-ovos" &&
+      sectionKey("viagem,-desporto-e-outdoor") === "viagem-desporto-e-outdoor"
+  );
+  check(
+    "every top section the catalogue holds today is decided, but one broken path",
+    ["Frescos/Frutas", "Bio e Saudável", "Marcas/Marcas Continente"].every((p) => sectionOf("CONTINENTE", p).kind !== "unknown") &&
+      sectionOf("CONTINENTE", "undefined").kind === "unknown"
+  );
+
+  const supplements = sectionOf("CONTINENTE", "Bio e Saudável/Suplementos e Vitaminas/Multivitamínicos");
+  check("a skipped sub-section is found below its own level", supplements.skip?.why === "supplements and vitamins");
+  check(
+    "but its food neighbour in the same section is not skipped",
+    sectionOf("CONTINENTE", "Bio e Saudável/Nutrição Desportiva/Barras e Snacks").skip === null
+  );
+  check(
+    "Pingo Doce's unaccented sub-sections match the file's spelling",
+    sectionOf("PINGO_DOCE", "Alternativas Alimentares/Suplementos").skip !== null &&
+      sectionOf("AUCHAN", "congelados/gelo").skip?.why === "ice"
+  );
+
+  check("food in a food section is kept", keepInCatalogue("CONTINENTE", "Mercearia/Conservas", "Atum em Azeite").keep);
+  const tv = keepInCatalogue("PINGO_DOCE", "Promoções/Poupe Esta Semana", "TV LG SMART AI FHD 43LR60006LA");
+  check("a television in a mixed aisle is left out", !tv.keep && tv.reason === "mixed aisle, not recognised as food");
+  check(
+    "a recognised food in the same aisle is kept",
+    keepInCatalogue("PINGO_DOCE", "Promoções/Poupe Esta Semana", "Queijo Flamengo Fatiado").keep
+  );
+  const whey = keepInCatalogue("AUCHAN", "biológicos-e-alternativas/nutrição-desportiva/proteína", "PROTEÍNA WHEY 900G");
+  check("a protein powder is left out, with the sub-section named", !whey.keep && whey.reason === "skipped sub-section" && /protein powders/.test(whey.detail ?? ""));
+  const shampoo = keepInCatalogue("AUCHAN", "beleza-e-higiene/cabelo", "CHAMPÔ");
+  check("a non-food section is left out", !shampoo.keep && shampoo.reason === "non-food section");
+  const unknown = keepInCatalogue("AUCHAN", "uma-seccao-nova/x", "ARROZ");
+  check("an undecided section is left out rather than guessed", !unknown.keep && unknown.reason === "unknown section");
+
+  // --- the section tally -----------------------------------------------------
+  const tally = new SectionTally("CONTINENTE");
+  tally.add("Mercearia/Conservas/Atum/Em Azeite", "Atum A");
+  tally.add("Mercearia/Conservas/Sardinha", "Sardinha B");
+  tally.add("Limpeza/Roupa/Detergentes", "Detergente C");
+  const paths = tally.entries.map((e) => e.path).sort();
+  check(
+    "sections are recorded three levels deep at most",
+    paths.includes("mercearia/conservas/atum") && !paths.some((p) => p.split("/").length > 3)
+  );
+  check("a non-food section's sub-sections are not recorded", paths.includes("limpeza") && !paths.includes("limpeza/roupa"));
+  const conservas = tally.entries.find((e) => e.path === "mercearia/conservas");
+  check("products are counted at every level, with an example", conservas?.products === 2 && conservas.example === "Atum A");
+  const listOnly = new SectionTally("CONTINENTE", false);
+  listOnly.add("mercearia/conservas");
+  check("a list of sections counts no products", listOnly.entries.every((e) => e.products === null));
+
+  // --- comparing with the previous crawl ---------------------------------------
+  const t0 = new Date("2026-10-01T00:00:00Z");
+  const t1 = new Date("2026-10-02T00:00:00Z");
+  const prev = (path: string, at = t1) => ({ path, label: path, depth: path.split("/").length, lastSeenAt: at });
+  const seen = (path: string) => ({ path, label: path, depth: path.split("/").length, products: 1, example: "x" });
+
+  const first = compareSections("CONTINENTE", [], [seen("mercearia"), seen("mercearia/nova")], true);
+  check("the first crawl calls nothing new", first.firstRun && first.added.length === 0);
+
+  const next = compareSections(
+    "CONTINENTE",
+    [prev("mercearia"), prev("mercearia/velha"), prev("mercearia/antiga", t0)],
+    [seen("mercearia"), seen("mercearia/nova")],
+    true
+  );
+  check("a section not seen before is new, with its section's decision", next.added.length === 1 && next.added[0].kind === "food");
+  check(
+    "a section the last crawl saw and this one did not has vanished",
+    next.vanished.map((v) => v.path).join() === "mercearia/velha",
+    "one gone longer ago is not reported again"
+  );
+  const partial = compareSections("CONTINENTE", [prev("mercearia"), prev("mercearia/velha")], [seen("mercearia")], false);
+  check("a partial crawl reports nothing as vanished", partial.vanished.length === 0);
+
+  const undecided = compareSections("AUCHAN", [prev("alimentacao")], [seen("alimentacao"), seen("seccao-nova")], true);
+  check("an undecided top section is reported", undecided.undecided.map((s) => s.path).join() === "seccao-nova");
+  check("and makes the report WARN", sectionProblems(undecided).some((p) => p.includes("not decided")));
+  check(
+    "a new non-food section is listed but does not WARN",
+    sectionProblems(compareSections("CONTINENTE", [prev("limpeza")], [seen("limpeza"), seen("animais")], true)).length === 0
+  );
+
+  const leftOut = new LeftOutTally();
+  leftOut.add(tv, "TV", "Promoções/Poupe Esta Semana");
+  leftOut.add(shampoo, "CHAMPÔ", "beleza-e-higiene/cabelo");
+  check("what was left out is counted, but not the non-food sections", leftOut.total === 1);
+
+  check(
+    "Continente's category sitemap is read at every depth",
+    parseCategoryPaths(
+      "<loc>https://www.continente.pt/mercearia/</loc><loc>https://www.continente.pt/mercearia/conservas/</loc><loc>https://www.continente.pt/</loc>"
+    ).join() === "mercearia,mercearia/conservas"
+  );
+  check(
+    "a Pingo Doce address gives a readable example name",
+    nameFromUrl("https://www.pingodoce.pt/home/produtos/mercearia/conservas/atum-em-azeite-893466.html") === "atum em azeite"
   );
 
   return failures - before;

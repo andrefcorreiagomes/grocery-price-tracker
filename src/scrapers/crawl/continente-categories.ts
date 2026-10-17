@@ -1,5 +1,7 @@
 import { fetchHtml } from "../http";
 import type { CrawlCategory } from "./types";
+import { STORE_SECTIONS, type SectionKind } from "../../../data/store-sections";
+import { sectionKey } from "../../lib/store-sections";
 
 /**
  * Continente's top-level food sections, by category id.
@@ -207,53 +209,27 @@ export async function discoverCategories(): Promise<DiscoveredCategory[]> {
 const CATEGORY_SITEMAP = "https://www.continente.pt/sitemap-custom_sitemap_23-category.xml";
 
 /**
- * Every top-level slug we recognise, and why. Anything published that is not
- * here is reported, exactly as with the cgid audit.
+ * Every top-level section data/store-sections.ts decides, by slug. Anything
+ * published that is not here is reported, exactly as with the cgid audit.
+ *
+ * The sitemap speaks in slugs and the products in labels, but the two agree
+ * once accents and punctuation are set aside ("laticinios-e-ovos" and
+ * "Laticínios e Ovos"), so one list in the decisions file serves both.
  */
-export const CONTINENTE_KNOWN_SLUGS: ReadonlyMap<string, string> = new Map([
-  // the six we crawl
-  ["frescos", "crawled"],
-  ["laticinios-e-ovos", "crawled"],
-  ["congelados", "crawled"],
-  ["mercearia", "crawled"],
-  ["bebidas-e-garrafeira", "crawled"],
-  ["bio-e-saudavel", "crawled"],
-  // non-food, deliberately skipped
-  ["limpeza", "non-food"],
-  ["bebe", "non-food, holds baby food - see the baby-food note"],
-  ["beleza-e-higiene", "non-food"],
-  ["animais", "non-food"],
-  ["casa-e-jardim", "non-food"],
-  ["brinquedos-e-jogos", "non-food"],
-  ["livros", "non-food"],
-  ["papelaria", "non-food"],
-  ["desporto-e-viagem", "non-food"],
-  ["negocios", "non-food, business supplies"],
-  // cross-cutting or seasonal shelves: they re-list products the food sections
-  // already carry, so crawling them would add duplicates rather than products
-  ["marcas", "own-brand shelf, re-lists food we already crawl"],
-  ["novidades", "promotional shelf"],
-  ["oportunidades", "promotional shelf"],
-  ["verao", "seasonal shelf"],
-  ["black-friday", "seasonal shelf"],
-  ["cyber-monday", "seasonal shelf"],
-  ["singles-day", "seasonal shelf"],
-]);
+export const CONTINENTE_KNOWN_SLUGS: ReadonlyMap<string, SectionKind> = new Map(
+  Object.entries(STORE_SECTIONS.CONTINENTE.sections).map(([name, kind]) => [sectionKey(name), kind])
+);
 
 /**
- * The six food sections as the PRODUCTS spell them, which is not how the cgids
- * spell them (`Laticínios e Ovos` against `laticinios`, `Mercearia` against
- * `mercearias`). The product-page crawler has only the product's own category
- * path to judge by, so it needs these rather than the ids.
+ * The food sections as the PRODUCTS spell them, which is not how the cgids
+ * spell them (`Laticínios e Ovos` against `laticinios`). Read from
+ * data/store-sections.ts.
  */
-export const CONTINENTE_FOOD_SECTIONS: ReadonlySet<string> = new Set([
-  "Frescos",
-  "Laticínios e Ovos",
-  "Congelados",
-  "Mercearia",
-  "Bebidas e Garrafeira",
-  "Bio e Saudável",
-]);
+export const CONTINENTE_FOOD_SECTIONS: ReadonlySet<string> = new Set(
+  Object.entries(STORE_SECTIONS.CONTINENTE.sections)
+    .filter(([, kind]) => kind === "food")
+    .map(([name]) => name)
+);
 
 /** Top-level slugs published in the category sitemap. */
 export function parseCategorySlugs(xml: string): string[] {
@@ -267,6 +243,25 @@ export function parseCategorySlugs(xml: string): string[] {
 
 export async function discoverCategorySlugs(): Promise<string[]> {
   return parseCategorySlugs(await fetchHtml(CATEGORY_SITEMAP));
+}
+
+/**
+ * Every category path published in the category sitemap, at every depth:
+ * "mercearia", "mercearia/suplementos-e-vitaminas", ... Query strings and the
+ * site root are dropped.
+ */
+export function parseCategoryPaths(xml: string): string[] {
+  const paths = new Set<string>();
+  for (const match of xml.matchAll(/<loc>https:\/\/www\.continente\.pt\/([^<?#]+)/g)) {
+    const path = match[1].replace(/\/+$/, "");
+    if (path) paths.add(path);
+  }
+  return [...paths];
+}
+
+/** The category sitemap's paths. One request, about 361 KB. */
+export async function discoverCategoryPaths(): Promise<string[]> {
+  return parseCategoryPaths(await fetchHtml(CATEGORY_SITEMAP));
 }
 
 /** Published slugs we do not recognise - the same question the cgid audit asks. */

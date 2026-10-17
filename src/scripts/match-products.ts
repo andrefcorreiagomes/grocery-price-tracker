@@ -1,8 +1,8 @@
 import { prisma } from "../lib/db";
 import { classifyCandidate, parseSize, type Candidate, type Rung } from "../lib/matching";
 import { isOwnBrand } from "../lib/candidates";
-import { buildGroups, type GroupLink, type GroupMemberInput } from "../lib/grouping";
-import type { MatchVerdict, Store } from "@/generated/prisma/client";
+import { buildGroups, reconcileGroups, type GroupLink, type GroupMemberInput, type ProductGroupResult } from "../lib/grouping";
+import type { MatchVerdict } from "@/generated/prisma/client";
 
 /**
  * Decide every candidate pair, then assemble the confirmed ones into groups.
@@ -14,7 +14,8 @@ import type { MatchVerdict, Store } from "@/generated/prisma/client";
  *
  *   1. revalidate  retire decisions whose products died or changed id
  *   2. decide      classify every candidate, record a verdict
- *   3. group       cluster the live confirmed pairs into n-store groups
+ *   3. group       cluster the live confirmed pairs into n-store groups, each
+ *                  carrying on the existing group it overlaps most
  *
  * No network. Idempotent: re-running re-decides from current evidence, except
  * where a HUMAN has ruled, which is never overwritten.
@@ -30,7 +31,7 @@ function arg(name: string): string | undefined {
 
 interface ProductRow {
   id: string;
-  store: Store;
+  store: string;
   name: string;
   brand: string | null;
   price: number | null;
@@ -272,22 +273,54 @@ async function main() {
   const groups = buildGroups(members, links);
   const emitted = groups.filter((g) => g.emit);
 
-  await prisma.productGroupMember.deleteMany({});
-  await prisma.productGroup.deleteMany({});
-  for (const g of emitted) {
-    await prisma.productGroup.create({
+  // Carry existing groups on rather than wiping them, so a group keeps its id
+  // from one run to the next (see reconcileGroups).
+  const live = await prisma.productGroup.findMany({
+    where: { retiredAt: null },
+    select: { id: true, members: { select: { productId: true } } },
+  });
+  const plan = reconcileGroups(
+    live.map((g) => ({ id: g.id, productIds: g.members.map((m) => m.productId) })),
+    groups
+  );
+
+  const fields = (g: ProductGroupResult) => ({
+    storeCount: g.storeCount,
+    memberCount: g.memberCount,
+    strong: g.strong,
+    flags: g.flags.length > 0 ? JSON.stringify(g.flags) : null,
+  });
+  const memberRows = (g: ProductGroupResult) =>
+    g.productIds.map((id) => ({ productId: id, store: (byId.get(id) as ProductRow).store }));
+
+  // Members are cleared first, from every group that changed or retired, so a
+  // product is never in two live groups at once while the rest is written.
+  const clear = [
+    ...plan.kept.filter((k) => k.changed).map((k) => k.id),
+    ...plan.retired.map((r) => r.id),
+  ];
+  for (let i = 0; i < clear.length; i += CHUNK) {
+    await prisma.productGroupMember.deleteMany({ where: { groupId: { in: clear.slice(i, i + CHUNK) } } });
+  }
+  for (const r of plan.retired) {
+    await prisma.productGroup.update({
+      where: { id: r.id },
+      data: { retiredAt: now, retiredReason: r.reason, mergedIntoId: r.mergedIntoId, memberCount: 0 },
+    });
+  }
+  for (const k of plan.kept) {
+    await prisma.productGroup.update({
+      where: { id: k.id },
       data: {
-        storeCount: g.storeCount,
-        memberCount: g.memberCount,
-        strong: g.strong,
-        flags: g.flags.length > 0 ? JSON.stringify(g.flags) : null,
-        members: {
-          create: g.productIds.map((id) => ({
-            productId: id,
-            store: (byId.get(id) as ProductRow).store,
-          })),
-        },
+        ...fields(k.group),
+        checkedAt: now,
+        ...(k.changed ? { changedAt: now, members: { create: memberRows(k.group) } } : {}),
       },
+    });
+  }
+  for (const g of plan.created) {
+    await prisma.productGroup.create({
+      data: { ...fields(g), builtAt: now, checkedAt: now, changedAt: now, members: { create: memberRows(g) } },
     });
   }
 
@@ -297,6 +330,14 @@ async function main() {
   for (const g of groups) for (const f of g.flags) flagged.set(f, (flagged.get(f) ?? 0) + 1);
 
   console.log(`\n3. group: ${emitted.length.toLocaleString()} group(s) built from ${confirmed.length.toLocaleString()} confirmed pair(s)`);
+  const changed = plan.kept.filter((k) => k.changed).length;
+  console.log(
+    `   kept their id: ${plan.kept.length.toLocaleString()} (${changed.toLocaleString()} with different members)` +
+      `   new: ${plan.created.length.toLocaleString()}   retired: ${plan.retired.length.toLocaleString()}`
+  );
+  const whyRetired = new Map<string, number>();
+  for (const r of plan.retired) whyRetired.set(r.reason, (whyRetired.get(r.reason) ?? 0) + 1);
+  for (const [why, n] of whyRetired) console.log(`     retired, ${why.padEnd(10)} ${n.toLocaleString().padStart(7)}`);
   console.log("   by store coverage:");
   for (const [n, count] of [...coverage].sort((a, b) => a[0] - b[0])) {
     const label = n === 2 ? "2 stores (pair)" : n === 3 ? "3 stores (triplet)" : `${n} stores`;

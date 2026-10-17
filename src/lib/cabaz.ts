@@ -1,6 +1,6 @@
 import { unitPrice } from "./pricing";
 import { STORE_ORDER } from "./stores";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 
 /*
  * Basket maths, kept free of React and Prisma so it can be reasoned about (and

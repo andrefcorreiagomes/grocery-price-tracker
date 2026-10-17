@@ -4,10 +4,9 @@ import {
   fetchProducts,
   type ProductTarget,
 } from "../scrapers/crawl/continente-products";
-import {
-  CONTINENTE_FOOD_SECTIONS,
-  fetchPublishedCounts,
-} from "../scrapers/crawl/continente-categories";
+import { discoverCategoryPaths, fetchPublishedCounts } from "../scrapers/crawl/continente-categories";
+import { LeftOutTally, SectionTally, recordSections, sectionLines, sectionProblems, type SectionChanges } from "../scrapers/crawl/section-watch";
+import { keepInCatalogue } from "../lib/catalogue-filter";
 import {
   checkTotals,
   compareCheckTotals,
@@ -80,7 +79,8 @@ function topSection(path: string | null | undefined): string {
   return (path ?? "").split("/")[0].trim() || "(sem categoria)";
 }
 
-const isFood = (path: string | null) => CONTINENTE_FOOD_SECTIONS.has(topSection(path));
+/** data/store-sections.ts, applied to what the product page says. */
+const isFood = (path: string | null, name: string) => keepInCatalogue(STORE, path, name).keep;
 
 /** Save a batch of food products, grouped into the sections the report reads. */
 async function saveGrouped(
@@ -505,6 +505,25 @@ async function main() {
     console.error(`  could not read them: ${(error as Error).message}`);
   }
 
+  // The category sitemap lists every section at every depth - the only place
+  // Continente shows its whole tree, since a product page names one section.
+  // One request. Unreadable is reported, not fatal: prices are already saved.
+  let sectionChanges: SectionChanges | null = null;
+  let sectionError: string | null = null;
+  try {
+    const tally = new SectionTally(STORE, false);
+    for (const path of await discoverCategoryPaths()) tally.add(path);
+    sectionChanges = await recordSections(STORE, tally, seenAt, true);
+  } catch (error) {
+    sectionError = (error as Error).message;
+    console.error(`  could not read the category sitemap: ${sectionError}`);
+  }
+  // What the keep rule left out among the pages fetched tonight.
+  const leftOut = new LeftOutTally();
+  for (const n of [...refresh.nonFood, ...(examine?.nonFood ?? [])]) {
+    leftOut.add(keepInCatalogue(STORE, n.categoryPath, n.name), n.name, n.categoryPath);
+  }
+
   // ---------------------------------------------------------------- phase 5
   const remaining = Math.max(0, unexamined.length - fromBacklog.length);
   const sizesNow = await catalogueSizes();
@@ -692,6 +711,14 @@ async function main() {
 
   if (accepted !== null) {
     report = escalate(report, "WARN", `sitemap baseline moved: ${accepted}`);
+  }
+
+  if (sectionChanges) {
+    report = { ...report, sections: sectionLines(sectionChanges, leftOut) };
+    for (const problem of sectionProblems(sectionChanges)) report = escalate(report, "WARN", problem);
+  } else {
+    report = { ...report, sections: [`The category sitemap could not be read (${sectionError}); sections not checked.`] };
+    report = escalate(report, "WARN", `the category sitemap could not be read - sections not checked`);
   }
 
   if (!sitemapTrusted) {

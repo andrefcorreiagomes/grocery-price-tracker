@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db";
+import { STORE_ORDER } from "../lib/stores";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { FOOD_TYPES } from "../../data/food-types";
 
@@ -19,7 +20,7 @@ import { FOOD_TYPES } from "../../data/food-types";
  * re-running is the normal way to iterate.
  */
 
-const STORES = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"] as const;
+const STORES = STORE_ORDER;
 
 async function main() {
   const dry = process.argv.includes("--dry");

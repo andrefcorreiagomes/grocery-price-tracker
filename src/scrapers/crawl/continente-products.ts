@@ -243,7 +243,7 @@ function topSection(path: string | null): string {
 export async function fetchProducts(
   targets: ProductTarget[],
   opts: {
-    isFood: (categoryPath: string | null) => boolean;
+    isFood: (categoryPath: string | null, name: string) => boolean;
     onProgress?: (p: CrawlProgress) => void;
     /**
      * Called with each batch of food products as it is collected, so a long run
@@ -290,7 +290,7 @@ export async function fetchProducts(
     }
 
     fetched++;
-    if (!opts.isFood(product.categoryPath)) {
+    if (!opts.isFood(product.categoryPath, product.name)) {
       nonFood.push({
         storeProductId: target.storeProductId,
         url: target.url,

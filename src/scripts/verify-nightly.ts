@@ -1,7 +1,11 @@
 import { prisma } from "../lib/db";
+import { STORE_LIST } from "../lib/stores";
+import { syncStores } from "../lib/stores-db";
+import { SectionTally, recordSections } from "../scrapers/crawl/section-watch";
 import { openCatalogueWriter, persistCatalogue } from "../scrapers/crawl/persist";
 import {
   clearChecks,
+  stopTrackingLeftOut,
   recordDead,
   recordRecategorised,
   staleDelisted,
@@ -42,11 +46,56 @@ function hit(n: number, price: number, section = "Mercearia"): SearchHit {
 }
 
 async function cleanup() {
+  await prisma.storeSection.deleteMany({ where: { path: { startsWith: PREFIX } } });
   await prisma.productCheck.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
   await prisma.catalogueProduct.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
 }
 
 async function main() {
+  await cleanup();
+
+  // --- the store table ------------------------------------------------------
+  console.log("the store table");
+  await syncStores();
+  const stores = await prisma.store.findMany({ orderBy: { position: "asc" } });
+  check(
+    "the database lists the same stores as the code, in the same order",
+    JSON.stringify(stores.map((s) => [s.id, s.name, s.website, s.crawlMethod, s.barcodeSource])) ===
+      JSON.stringify(STORE_LIST.map((s) => [s.id, s.name, s.website, s.crawlMethod, s.barcodeSource]))
+  );
+  let refused = false;
+  try {
+    await prisma.catalogueProduct.create({
+      data: { store: "NO_SUCH_STORE", storeProductId: `${PREFIX}nostore`, name: "x", url: "https://example.invalid/x" },
+    });
+  } catch {
+    refused = true;
+  }
+  check("a product naming a store that does not exist is refused", refused);
+
+  // --- the section memory -----------------------------------------------------
+  console.log("\nthe section memory");
+  const tally = new SectionTally(STORE);
+  tally.add(`${PREFIX}seccao/sub`, "Example product");
+  const firstSeen = new Date(Date.now() - 86_400_000);
+  await recordSections(STORE, tally, firstSeen, false);
+  const again = await recordSections(STORE, tally, new Date(), false);
+  const row = await prisma.storeSection.findUnique({ where: { store_path: { store: STORE, path: `${PREFIX}seccao` } } });
+  check("a section is remembered with when it was first and last seen",
+    row !== null && row.firstSeenAt.getTime() === firstSeen.getTime() && row.lastSeenAt.getTime() > firstSeen.getTime());
+  check("and is not new the second time", again.added.every((a) => !a.path.startsWith(PREFIX)));
+  check("an undecided section's sub-sections are not recorded",
+    (await prisma.storeSection.count({ where: { path: { startsWith: `${PREFIX}seccao/` } } })) === 0);
+
+  await prisma.catalogueProduct.create({
+    data: { store: STORE, storeProductId: `${PREFIX}leftout`, name: "Whey", url: "https://example.invalid/w" },
+  });
+  const stopped = await stopTrackingLeftOut(STORE, [`${PREFIX}leftout`, `${PREFIX}not-held`], new Date());
+  const left = await prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}leftout` } },
+  });
+  check("a held product the rules leave out stops being tracked, not deleted", stopped === 1 && left?.delistedAt !== null);
+  check("and marking it again changes nothing", (await stopTrackingLeftOut(STORE, [`${PREFIX}leftout`], new Date())) === 0);
   await cleanup();
 
   // --- 3. writer invariants -------------------------------------------------

@@ -25,7 +25,8 @@ model StoreListing {
   id             String  @id @default(cuid())
   product        Product @relation(fields: [productId], references: [id])
   productId      String
-  store          Store
+  store          String
+  storeRef       Store   @relation(fields: [store], references: [id])
   storeProductId String // sku/id at that store
   url            String // product page URL used to scrape
   ean            String? // barcode as scraped from this store; null if unavailable
@@ -61,10 +62,61 @@ model PriceSnapshot {
   @@unique([storeListingId, date])
 }
 
-enum Store {
-  CONTINENTE
-  PINGO_DOCE
-  AUCHAN
+/// The stores this project crawls, one row each.
+///
+/// A table rather than a fixed list in the schema, so a fourth store is a new
+/// row rather than a change to the database's structure. Every table that
+/// records a store points here, so a row naming a store that does not exist is
+/// refused. The rows are kept equal to the list in `src/lib/stores.ts`, which
+/// the code needs anyway because each store's reader is code; `syncStores`
+/// writes that list here and a test checks the two match.
+model Store {
+  /// the identifier every other table stores, e.g. "PINGO_DOCE"
+  id            String  @id
+  /// as shown on the site, e.g. "Pingo Doce"
+  name          String
+  website       String
+  /// how the nightly crawl reaches the products, in a few words
+  crawlMethod   String
+  /// where its barcodes come from; null when the store publishes none
+  barcodeSource String?
+  /// the order the site shows stores in
+  position      Int
+
+  listings  StoreListing[]
+  catalogue CatalogueProduct[]
+  runs      CrawlRun[]
+  checks    ProductCheck[]
+  sections  StoreSection[]
+}
+
+/// Every section and sub-section a store has shown, down to three levels, with
+/// when it was first and last seen.
+///
+/// The memory that lets a crawl say "this is new": a store that opens a new
+/// aisle - a supplements shelf inside a food section, a new department - shows
+/// up in the next report with an example product, instead of being decided
+/// silently by whichever rule happens to catch it. What each section IS stays
+/// in data/store-sections.ts; this table only records what the store showed.
+/// Sub-sections are recorded only under food and mixed sections.
+model StoreSection {
+  store       String
+  storeRef    Store    @relation(fields: [store], references: [id])
+  /// the path in compared form, e.g. "mercearia/suplementos-e-vitaminas"
+  path        String
+  /// the path as the store last wrote it, e.g. "Mercearia/Suplementos e Vitaminas"
+  label       String
+  /// 1 for a top section, 2 for a sub-section, 3 below that
+  depth       Int
+  firstSeenAt DateTime
+  lastSeenAt  DateTime
+  /// products under it in the last crawl that saw it; null when the source
+  /// lists sections rather than products (Continente's category sitemap)
+  products    Int?
+  /// one product name from it, so a report can say what it holds
+  example     String?
+
+  @@id([store, path])
 }
 
 /// Raw per-store catalogue built by the discovery crawl: every food product a
@@ -74,7 +126,8 @@ enum Store {
 /// output anyone sees. The crawlers upsert into it.
 model CatalogueProduct {
   id             String  @id @default(cuid())
-  store          Store
+  store          String
+  storeRef       Store   @relation(fields: [store], references: [id])
   storeProductId String // the store's own SKU / id
   name           String
   brand          String? // as listed; own-brand / empty is handled by the matcher, not here
@@ -201,8 +254,8 @@ model MatchCandidate {
   aId    String
   b      CatalogueProduct @relation("CandidateB", fields: [bId], references: [id], onDelete: Cascade)
   bId    String
-  storeA Store // denormalised so the review queue can filter by store pair
-  storeB Store
+  storeA String // copied from the two products, so the review queue can filter by store pair
+  storeB String
 
   nameSimilarity Float // token overlap, the score that got this pair in
   block          String // "brand" or "token": which pass found it. Token-only is the weaker claim
@@ -222,7 +275,8 @@ model MatchCandidate {
 /// store is still publishing what it did yesterday.
 model CrawlRun {
   id        String         @id @default(cuid())
-  store     Store
+  store     String
+  storeRef  Store          @relation(fields: [store], references: [id])
   startedAt DateTime       @default(now())
   /// distinct products kept across the whole run
   total     Int
@@ -350,7 +404,8 @@ model CrawlRun {
 /// the definition of an id still needing examination.
 model ProductCheck {
   id             String  @id @default(cuid())
-  store          Store
+  store          String
+  storeRef       Store   @relation(fields: [store], references: [id])
   storeProductId String
   url            String
   verdict        Verdict
@@ -439,11 +494,17 @@ enum DecisionSource {
 /// A set of catalogue products, at different stores, believed to be the same
 /// product - the thing the app compares prices across.
 ///
-/// DERIVED, like MatchCandidate: recomputed from scratch on every matcher run by
-/// clustering the currently-valid confirmed pairs. That is deliberate. It means a
-/// group shrinks from a triplet to a pair when one store drops the product, and
-/// grows back when a new match is confirmed, with no incremental repair path to
-/// get wrong.
+/// Built by clustering the currently-valid confirmed pairs, so a group shrinks
+/// from a triplet to a pair when one store drops the product, and grows back
+/// when a new match is confirmed.
+///
+/// STABLE: a matcher run does not wipe and rebuild the groups. It works out the
+/// new clusters, then hands each one the id of the existing group it overlaps
+/// most, so "this product across stores" keeps one id from run to run and
+/// anything else - a price history, a basket - can safely refer to it. A
+/// cluster that overlaps no existing group gets a new id. A group that no
+/// cluster takes over is RETIRED, not deleted: when two groups merge, the one
+/// that lost its id records which group it went into.
 ///
 /// Deliberately NOT the same thing as `Product`/`StoreListing`, which are the
 /// hand-curated comparisons the live site shows. Auto-derived groups must not
@@ -463,21 +524,37 @@ model ProductGroup {
   strong    Boolean  @default(false)
   /// guard flags raised while clustering, as JSON; empty on a clean group
   flags     String?
+  /// when the group was first formed
   builtAt   DateTime @default(now())
+  /// the last matcher run that found this group still holding together
+  checkedAt DateTime @default(now())
+  /// the last time its members changed; equal to builtAt until they do
+  changedAt DateTime @default(now())
+
+  /// Set when no cluster took this group over: its pairs were retired or
+  /// rejected, or it merged into another group. A retired group has no members.
+  retiredAt     DateTime?
+  /// "merged", "dissolved" (fewer than two members left) or "refused" (the
+  /// cluster it became failed a guard, e.g. sizes too far apart)
+  retiredReason String?
+  /// for a merge, the group that took its members over
+  mergedIntoId  String?
 
   members ProductGroupMember[]
 
   @@index([storeCount])
+  @@index([retiredAt])
 }
 
 model ProductGroupMember {
   id      String       @id @default(cuid())
   group   ProductGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   groupId String
-  /// the CatalogueProduct.id; a plain id rather than a relation because groups
-  /// are wiped and rebuilt, and nothing should cascade back into the catalogue
+  /// the CatalogueProduct.id; a plain id rather than a relation, so nothing done
+  /// to a group can cascade back into the catalogue
   productId String
-  store     Store
+  /// copied from the product
+  store     String
 
   @@unique([groupId, productId])
   @@index([productId])

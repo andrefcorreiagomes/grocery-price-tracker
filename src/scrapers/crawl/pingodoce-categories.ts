@@ -1,4 +1,5 @@
 import { PINGO_DOCE_SECTIONS } from "./pingodoce-sitemap";
+import { topSectionKind } from "../../lib/store-sections";
 
 /**
  * Pingo Doce's food departments, as LISTING PAGE URLs.
@@ -40,7 +41,8 @@ export interface PingoDoceDepartment {
 }
 
 /**
- * Derived from `PINGO_DOCE_SECTIONS` rather than listed again here, so a
+ * Derived from `PINGO_DOCE_SECTIONS` and data/store-sections.ts rather than
+ * listed again here, so a
  * department can never be food for the sitemap crawler and absent from the
  * coverage check, or the reverse. That divergence is exactly the kind of thing
  * that hides for months.
@@ -48,7 +50,7 @@ export interface PingoDoceDepartment {
 export const PINGO_DOCE_FOOD_CATEGORIES: PingoDoceDepartment[] = Object.entries(
   PINGO_DOCE_SECTIONS
 )
-  .filter(([, section]) => section.kind === "food")
+  .filter(([, section]) => topSectionKind("PINGO_DOCE", section.label) === "food")
   .map(([slug, section]) => ({
     slug,
     label: section.label,

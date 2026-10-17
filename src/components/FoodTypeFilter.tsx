@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { stripAccents } from "@/lib/matching";
 import { STORE_LABELS } from "@/lib/stores";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import type { IndexEntry } from "@/lib/grupos";
 import styles from "./FoodTypeFilter.module.css";
 

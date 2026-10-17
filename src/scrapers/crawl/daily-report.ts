@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/db";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import { megabytes, totalStats, type HostStats } from "../http";
 import type { CategoryAudit } from "./continente-categories";
 import type { PriceHistorySummary } from "./price-history";
@@ -179,6 +179,13 @@ export interface DailyReport {
    * run. Present on runs that bothered to count.
    */
   catalogueByStore?: import("./catalogue-size").StoreSizeChange[];
+
+  /**
+   * The store's sections against data/store-sections.ts and the previous crawl:
+   * undecided, new and vanished sections, and what the keep rule left out.
+   * Lines from section-watch.ts; absent on runs that did not look.
+   */
+  sections?: string[];
 
   /**
    * Products whose id changed and were reconciled by barcode this run, plus the

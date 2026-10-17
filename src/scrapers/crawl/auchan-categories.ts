@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { fetchHtml } from "../http";
 import type { CrawlCategory } from "./types";
+import { topSectionKind } from "../../lib/store-sections";
 
 /**
  * Auchan food filter, and the food department ids for the faster crawl mode.
@@ -9,52 +10,26 @@ import type { CrawlCategory } from "./types";
  * Auchan's products are food?":
  *
  * 1. `isFoodSegment` judges a product by the top segment of its OWN category
- *    path. This is what makes the `root` crawl safe: we walk everything and keep
- *    what Auchan itself labels as food.
+ *    path, as decided in data/store-sections.ts. This is what makes the `root`
+ *    crawl safe: we walk everything and keep what Auchan itself labels as food.
  * 2. `discoverFoodDepartments` finds the ids of the five food departments, so
  *    the `departments` crawl mode can fetch only those instead of the whole
  *    54,859-product catalogue. Auchan serves ~13 products/second whatever we
  *    ask, so fetching less is the only thing that makes a crawl faster.
  *
- * The whitelist still applies in both modes: a department page carries some
+ * The decisions still apply in both modes: a department page carries some
  * cross-listed non-food, and rule 1 filters it out.
  */
 
-/** Lowercase and strip diacritics, for accent-insensitive segment matching. */
-export function normalizeSegment(segment: string): string {
-  return segment
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-/** Food department top-segments observed in Auchan's category paths, normalised. */
-export const AUCHAN_FOOD_SEGMENTS = new Set(
-  [
-    "alimentação",
-    "produtos-frescos",
-    "bebidas-e-garrafeira",
-    "congelados",
-    "biológicos-e-alternativas",
-    "gelados", // included defensively; may appear under another segment
-    // Auchan's local-produce line, filed outside the food departments. Small
-    // (2-4 products) and unambiguously food - "COUVE BRÓCOLOS LOCAL KG",
-    // "BATATA DOCE PRODUTO LOCAL KG" - found by the dropped-segment samples.
-    "produtos-locais",
-  ].map(normalizeSegment)
-);
-
 /**
- * Deliberately NOT whitelisted, though it holds food: `o-mundo-do-bebé` mixes
- * ordinary biscuits (Artiach Dinosaurus, Gullón Magic, Cuétara Flakes) in with
- * nappies and bottles, so keeping the whole segment would feed non-food to the
- * matcher. It needs a sub-path rule keeping only its alimentação branch, which
- * is tracked with the rest of the baby-food work.
+ * Does Auchan's own top segment hold food? Decided in data/store-sections.ts:
+ * true for a food or a mixed segment. (`o-mundo-do-bebé` holds ordinary
+ * biscuits next to nappies and is decided non-food there; baby food is its own
+ * piece of work.)
  */
-
 export function isFoodSegment(segment: string): boolean {
-  return AUCHAN_FOOD_SEGMENTS.has(normalizeSegment(segment));
+  const kind = topSectionKind("AUCHAN", segment);
+  return kind === "food" || kind === "mixed";
 }
 
 /**

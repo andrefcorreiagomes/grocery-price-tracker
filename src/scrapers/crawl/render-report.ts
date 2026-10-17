@@ -316,6 +316,19 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     );
   }
 
+  if (report.sections && report.sections.length > 0) {
+    lines.push(
+      ...section(
+        "Store sections",
+        "Which sections the store showed, against data/store-sections.ts and the previous crawl. " +
+          "A section the file does not decide is left out until someone decides it; a new section " +
+          "inside a food section is kept as food, so check that it is.",
+        report.sections,
+        explain
+      )
+    );
+  }
+
   if (report.gridHealth) {
     const g = report.gridHealth;
     const yieldPct = ((100 * g.tilesKept) / Math.max(1, g.tilesSeen)).toFixed(1);

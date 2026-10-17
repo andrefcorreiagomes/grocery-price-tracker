@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/db";
-import type { Store } from "@/generated/prisma/client";
+import { STORE_ORDER, type Store } from "@/lib/stores";
 
 /**
  * How big the catalogue is, per store, and how that moved since the last run.
@@ -30,12 +30,10 @@ export interface StoreSizeChange extends StoreSize {
   percent: number | null;
 }
 
-const STORES: Store[] = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"];
-
 /** Count every store's rows. Six cheap indexed counts. */
 export async function catalogueSizes(): Promise<StoreSize[]> {
   const sizes = await Promise.all(
-    STORES.map(async (store) => ({
+    STORE_ORDER.map(async (store) => ({
       store,
       total: await prisma.catalogueProduct.count({ where: { store } }),
       delisted: await prisma.catalogueProduct.count({

@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/db";
-import type { Store, Verdict } from "@/generated/prisma/client";
+import type { Verdict } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 
 /**
  * The record of product ids we opened and decided not to keep.
@@ -257,6 +258,30 @@ export async function recordRecategorised(
     where: { store, storeProductId: { in: storeProductIds } },
     data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
   });
+}
+
+/**
+ * Stop tracking the products among `storeProductIds` that we hold as live, when
+ * a crawl saw them on the store and data/store-sections.ts left them out - a
+ * supplements shelf, or a mixed-aisle product not recognised as food. The same
+ * marker as `recordRecategorised`, for the same reason: the store still sells
+ * them, they are just not food we compare. Returns how many were marked.
+ */
+export async function stopTrackingLeftOut(
+  store: Store,
+  storeProductIds: string[],
+  checkedAt: Date
+): Promise<number> {
+  let marked = 0;
+  // In batches: the database driver accepts at most 999 values per query.
+  for (let i = 0; i < storeProductIds.length; i += 500) {
+    const { count } = await prisma.catalogueProduct.updateMany({
+      where: { store, delistedAt: null, storeProductId: { in: storeProductIds.slice(i, i + 500) } },
+      data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+    });
+    marked += count;
+  }
+  return marked;
 }
 
 /**

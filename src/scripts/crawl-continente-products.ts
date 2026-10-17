@@ -4,10 +4,8 @@ import {
   fetchProducts,
   type ProductTarget,
 } from "../scrapers/crawl/continente-products";
-import {
-  CONTINENTE_FOOD_SECTIONS,
-  fetchPublishedCounts,
-} from "../scrapers/crawl/continente-categories";
+import { fetchPublishedCounts } from "../scrapers/crawl/continente-categories";
+import { keepInCatalogue } from "../lib/catalogue-filter";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { persistCatalogue } from "../scrapers/crawl/persist";
@@ -100,7 +98,7 @@ async function main() {
 
   const started = Date.now();
   const crawl = await fetchProducts(slice, {
-    isFood: (path) => CONTINENTE_FOOD_SECTIONS.has((path ?? "").split("/")[0].trim()),
+    isFood: (path, name) => keepInCatalogue("CONTINENTE", path, name).keep,
     onProgress: (p) =>
       console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} products`),
   });

@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/db";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import { megabytes, totalStats, type HostStats } from "../http";
 import type { DailyReport, ProductNote } from "./daily-report";
 import type { PriceHistorySummary } from "./price-history";

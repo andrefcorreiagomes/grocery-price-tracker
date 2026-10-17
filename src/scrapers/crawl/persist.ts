@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/db";
 import { matchableEan } from "../../lib/matching";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
+import { syncStores } from "../../lib/stores-db";
 import { recordPrices, type PriceHistorySummary } from "./price-history";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult } from "./types";
@@ -144,6 +145,10 @@ export interface CatalogueWriter {
 }
 
 export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter> {
+  // Every saved row points at its store's row in the Store table, so make sure
+  // the table holds every store in the code's list before the first save.
+  await syncStores();
+
   // One instant for the whole run, so a crawl lands at a single point in time
   // rather than smeared across however long it took.
   const seenAt = new Date();

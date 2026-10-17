@@ -3,7 +3,13 @@ import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import type { PingoDoceProductUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { stopTrackingLeftOut } from "../scrapers/crawl/product-checks";
 import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
+import type { SearchHit } from "../scrapers/search/types";
+import { keepInCatalogue } from "../lib/catalogue-filter";
+import { LeftOutTally, recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 /**
  * Crawl Pingo Doce ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
@@ -56,6 +62,7 @@ async function main() {
   console.log(
     `\n  food products:     ${sitemap.food.length}\n` +
       `  non-food skipped:  ${sitemap.nonFood} (never fetched)\n` +
+      `  sub-sections skipped: ${sitemap.skipped} (supplements, pet food, ... - data/store-sections.ts)\n` +
       `  of those, from mixed aisles: ${sitemap.fromMixed} (promotions, seasonal, own-brand -\n` +
       `                               fetched because their URL cannot say what they are)` +
       (sitemap.unfiled.length > 0
@@ -69,7 +76,10 @@ async function main() {
   if (sitemap.unknownSections.size > 0) {
     // A department we have never seen is products we would never crawl. Loud on
     // purpose.
-    console.log(`\n  WARNING: ${sitemap.unknownSections.size} unknown section(s) - add them to PINGO_DOCE_SECTIONS:`);
+    console.log(
+      `\n  WARNING: ${sitemap.unknownSections.size} unknown section(s) - add them to PINGO_DOCE_SECTIONS` +
+        " and decide them in data/store-sections.ts:"
+    );
     for (const [section, count] of sitemap.unknownSections) console.log(`    ${section}: ${count} product(s)`);
   }
 
@@ -115,8 +125,29 @@ async function main() {
   const writer = await openCatalogueWriter("PINGO_DOCE");
   const started = Date.now();
 
+  // The sitemap is the store's whole tree, so this is a complete view of its
+  // sections whatever slice of products is fetched below.
+  const sectionChanges = await recordSections("PINGO_DOCE", sitemap.sections, new Date(), true);
+
+  // Held products the sitemap files under a non-food section or a skipped
+  // sub-section stop being tracked - no request needed, the URL settles it.
+  const stoppedBySection = await stopTrackingLeftOut("PINGO_DOCE", sitemap.excludedIds, new Date());
+  if (stoppedBySection > 0) console.log(`  ${stoppedBySection} held product(s) are no longer in a food section; no longer tracked`);
+
+  // A mixed-aisle product is kept only when its name is recognised as food,
+  // which the page's real name settles; the URL cannot.
+  const leftOut = new LeftOutTally();
+  const leftOutIds: string[] = [];
+  const kept = (products: SearchHit[]) =>
+    products.filter((p) => {
+      const decision = keepInCatalogue("PINGO_DOCE", p.category, p.name);
+      leftOut.add(decision, p.name, p.category);
+      if (!decision.keep) leftOutIds.push(p.id);
+      return decision.keep;
+    });
+
   const crawl = await fetchPingoDoceProducts(targets, {
-    onBatch: (products) => writer.save(products, "product pages"),
+    onBatch: (products) => writer.save(kept(products), "product pages"),
     onProgress: (p) => {
       const rate = p.page / ((Date.now() - started) / 1000);
       const left = (targets.length - p.page) / rate;
@@ -128,6 +159,10 @@ async function main() {
   });
 
   const summary = writer.finish();
+  const stoppedByName = await stopTrackingLeftOut("PINGO_DOCE", leftOutIds, new Date());
+  if (stoppedByName > 0) {
+    console.log(`\n${stoppedByName} held mixed-aisle product(s) not recognised as food; no longer tracked`);
+  }
 
   console.log("\nby department:");
   for (const r of crawl.results.sort((a, b) => b.products.length - a.products.length)) {
@@ -156,6 +191,26 @@ async function main() {
   const created = summary.summaries.reduce((n, s) => n + s.created, 0);
   const updated = summary.summaries.reduce((n, s) => n + s.updated, 0);
   console.log(`Done: ${created} product(s) created, ${updated} updated.`);
+
+  // Pingo Doce's crawl writes no full report yet, so its sections get a file of
+  // their own beside the other stores' reports.
+  const lines = sectionLines(sectionChanges, leftOut);
+  const problems = sectionProblems(sectionChanges);
+  const stamp = new Date().toISOString().slice(0, 16);
+  const text = [
+    `# PINGO_DOCE sections - ${stamp.replace("T", " ")}`,
+    "",
+    `**${problems.length > 0 ? "WARN" : "OK"}**`,
+    "",
+    ...problems.map((p) => `- ${p}`),
+    ...(problems.length > 0 ? [""] : []),
+    ...lines,
+    "",
+  ].join("\n");
+  await mkdir("reports", { recursive: true });
+  const file = join("reports", `pingodoce-sections-${stamp.replace(/[:T]/g, "-")}.md`);
+  await writeFile(file, text, "utf8");
+  console.log(`\nsections:\n${lines.map((l) => `  ${l}`).join("\n")}\n  written to ${file}`);
 }
 
 main()

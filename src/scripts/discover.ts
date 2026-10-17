@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "../lib/db";
+import { STORE_ORDER } from "../lib/stores";
 import { matchesTerm, stripAccents } from "../lib/matching";
 
 /**
@@ -25,7 +26,7 @@ import { matchesTerm, stripAccents } from "../lib/matching";
  * current as the last crawl, so each store's freshness is printed first.
  */
 
-const STORES = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"] as const;
+const STORES = STORE_ORDER;
 
 async function main() {
   const term = process.argv.slice(2).filter((a) => !a.startsWith("--")).join(" ").trim();

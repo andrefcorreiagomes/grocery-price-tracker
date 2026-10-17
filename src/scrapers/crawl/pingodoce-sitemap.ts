@@ -1,4 +1,6 @@
 import { fetchHtml } from "../http";
+import { sectionOf } from "../../lib/store-sections";
+import { SectionTally } from "./section-watch";
 
 /**
  * Discovery for the COMPLIANT Pingo Doce crawler: product URLs from the sitemap
@@ -44,85 +46,58 @@ const PRODUCT_SITEMAPS = [
  */
 export const NON_PRODUCT_SITEMAP = "https://www.pingodoce.pt/home/sitemap_2.xml";
 
-export type SectionKind =
-  /** a food department; crawl it */
-  | "food"
-  /** pencils, shampoo, dog food; skip without fetching */
-  | "non-food"
-  /**
-   * A cross-cutting or seasonal aisle - promotions, Christmas, Easter, the
-   * own-brand showcase - holding BOTH food and non-food, where the URL cannot
-   * tell them apart. Fetched like any food section; what a product IS gets
-   * decided from its NAME by `classifyFoodType`.
-   *
-   * These were skipped wholesale until a re-sample showed that was wrong. The
-   * original reason - "every page sampled published 0,00 EUR" - came from six
-   * pages, and taking a spread across a whole section instead found real
-   * prices. Measured by name across all 1,010, 494 are food; natal-e-ano-novo
-   * and pascoa are food almost entirely. They sampled as priceless because they
-   * were sampled at the end of August, when Christmas and Easter stock is out
-   * of season - a seasonal state mistaken for a permanent property.
-   *
-   * The deeper error was making a SECTION-level decision from a PRODUCT-level
-   * observation. Whether a page carries a price is a fact about one product on
-   * one day, and `scrapePingoDoce` already handles it: `0,00 EUR` stores a null
-   * price, which every query downstream skips.
-   */
-  | "mixed";
-
-interface Section {
-  label: string;
-  kind: SectionKind;
-}
-
 /**
- * Every top-level section Pingo Doce publishes, with the display label the rest
- * of the pipeline expects.
+ * Every top-level section Pingo Doce publishes, by URL slug, with its display
+ * label. Whether each holds food is decided in data/store-sections.ts, by
+ * label.
  *
- * The labels matter, and are not cosmetic: `isFoodSection` in
- * `src/lib/food-types.ts` compares the FIRST segment of `categoryPath` against
- * `NON_FOOD_SECTIONS` by exact (case-insensitive) text, accents included. A
- * title-cased slug would give "Bebe E Crianca" and quietly stop matching
- * "Bebé e Criança", so the accented labels are written out by hand here.
+ * The labels matter, and are not cosmetic: they are what the rest of the
+ * pipeline stores as the first segment of `categoryPath`, and a title-cased
+ * slug cannot restore the accents a slug threw away ("Bebe E Crianca" for
+ * "Bebé e Criança"), so they are written out by hand here.
+ *
+ * A note on the MIXED aisles - promotions, Christmas, Easter, the own-brand
+ * showcase. They were once skipped wholesale because "every page sampled
+ * published 0,00 EUR". That came from six pages sampled at the end of August,
+ * when Christmas and Easter stock is out of season - a seasonal state mistaken
+ * for a permanent property, and a SECTION-level decision made from a
+ * PRODUCT-level observation. They are fetched like food departments, and what
+ * a product IS gets decided from its name.
  */
-export const PINGO_DOCE_SECTIONS: Record<string, Section> = {
-  "frutas-e-vegetais": { label: "Frutas e Vegetais", kind: "food" },
-  talho: { label: "Talho", kind: "food" },
-  peixaria: { label: "Peixaria", kind: "food" },
-  "padaria-e-pastelaria": { label: "Padaria e Pastelaria", kind: "food" },
-  "charcutaria-e-queijos": { label: "Charcutaria e Queijos", kind: "food" },
-  ovos: { label: "Ovos", kind: "food" },
-  "manteiga-margarina-e-natas": { label: "Manteiga, Margarina e Natas", kind: "food" },
-  "iogurtes-e-sobremesas": { label: "Iogurtes e Sobremesas", kind: "food" },
-  "leite-e-bebidas-vegetais": { label: "Leite e Bebidas Vegetais", kind: "food" },
-  congelados: { label: "Congelados", kind: "food" },
-  "cafe-cha-e-achocolatados": { label: "Café, Chá e Achocolatados", kind: "food" },
-  "bolachas-cereais-e-guloseimas": { label: "Bolachas, Cereais e Guloseimas", kind: "food" },
-  mercearia: { label: "Mercearia", kind: "food" },
-  "aguas-sumos-e-refrigerantes": { label: "Águas, Sumos e Refrigerantes", kind: "food" },
-  "cervejas-e-sidras": { label: "Cervejas e Sidras", kind: "food" },
-  espirituosas: { label: "Espirituosas", kind: "food" },
-  vinhos: { label: "Vinhos", kind: "food" },
-  "take-away": { label: "Take Away", kind: "food" },
-  "alternativas-alimentares": { label: "Alternativas Alimentares", kind: "food" },
-
-  limpeza: { label: "Limpeza", kind: "non-food" },
-  "higiene-pessoal-e-beleza": { label: "Higiene Pessoal e Beleza", kind: "non-food" },
-  "casa-e-eletrodomesticos": { label: "Casa e Eletrodomésticos", kind: "non-food" },
-  "livraria-e-papelaria": { label: "Livraria e Papelaria", kind: "non-food" },
-  parafarmacia: { label: "Parafarmácia", kind: "non-food" },
-  animais: { label: "Animais", kind: "non-food" },
-  // Mixed food and nappies, exactly as Auchan's o-mundo-do-bebé is excluded.
-  // Baby food is tracked as its own piece of work.
-  "bebe-e-crianca": { label: "Bebé e Criança", kind: "non-food" },
-
-  promocoes: { label: "Promoções", kind: "mixed" },
-  "as-nossas-marcas": { label: "As Nossas Marcas", kind: "mixed" },
-  "natal-e-ano-novo": { label: "Natal e Ano Novo", kind: "mixed" },
-  pascoa: { label: "Páscoa", kind: "mixed" },
-  "santos-populares": { label: "Santos Populares", kind: "mixed" },
-  "feira-do-bebe": { label: "Feira do Bebé", kind: "mixed" },
-  "pingo-doce-master-catalog": { label: "Master Catalog", kind: "mixed" },
+export const PINGO_DOCE_SECTIONS: Record<string, { label: string }> = {
+  "frutas-e-vegetais": { label: "Frutas e Vegetais" },
+  talho: { label: "Talho" },
+  peixaria: { label: "Peixaria" },
+  "padaria-e-pastelaria": { label: "Padaria e Pastelaria" },
+  "charcutaria-e-queijos": { label: "Charcutaria e Queijos" },
+  ovos: { label: "Ovos" },
+  "manteiga-margarina-e-natas": { label: "Manteiga, Margarina e Natas" },
+  "iogurtes-e-sobremesas": { label: "Iogurtes e Sobremesas" },
+  "leite-e-bebidas-vegetais": { label: "Leite e Bebidas Vegetais" },
+  congelados: { label: "Congelados" },
+  "cafe-cha-e-achocolatados": { label: "Café, Chá e Achocolatados" },
+  "bolachas-cereais-e-guloseimas": { label: "Bolachas, Cereais e Guloseimas" },
+  mercearia: { label: "Mercearia" },
+  "aguas-sumos-e-refrigerantes": { label: "Águas, Sumos e Refrigerantes" },
+  "cervejas-e-sidras": { label: "Cervejas e Sidras" },
+  espirituosas: { label: "Espirituosas" },
+  vinhos: { label: "Vinhos" },
+  "take-away": { label: "Take Away" },
+  "alternativas-alimentares": { label: "Alternativas Alimentares" },
+  limpeza: { label: "Limpeza" },
+  "higiene-pessoal-e-beleza": { label: "Higiene Pessoal e Beleza" },
+  "casa-e-eletrodomesticos": { label: "Casa e Eletrodomésticos" },
+  "livraria-e-papelaria": { label: "Livraria e Papelaria" },
+  parafarmacia: { label: "Parafarmácia" },
+  animais: { label: "Animais" },
+  "bebe-e-crianca": { label: "Bebé e Criança" },
+  promocoes: { label: "Promoções" },
+  "as-nossas-marcas": { label: "As Nossas Marcas" },
+  "natal-e-ano-novo": { label: "Natal e Ano Novo" },
+  pascoa: { label: "Páscoa" },
+  "santos-populares": { label: "Santos Populares" },
+  "feira-do-bebe": { label: "Feira do Bebé" },
+  "pingo-doce-master-catalog": { label: "Master Catalog" },
 };
 
 /** Words a Portuguese label keeps lowercase when title-casing a URL slug. */
@@ -170,6 +145,21 @@ export function productIdFromUrl(url: string): string | null {
   }
 }
 
+/**
+ * A readable product name from the URL alone, for examples in a report:
+ * ".../alho-frances-embalado-893466.html" gives "alho frances embalado". The
+ * page has the real name; this costs no request.
+ */
+export function nameFromUrl(url: string): string | null {
+  const slug = url.match(/\/([^/]+)-[^-/]+\.html$/)?.[1];
+  if (!slug) return null;
+  try {
+    return decodeURIComponent(slug).replace(/-/g, " ");
+  } catch {
+    return slug.replace(/-/g, " ");
+  }
+}
+
 /** The `/home/produtos/...` path segments of a product URL, minus the filename. */
 function pathSegments(url: string): string[] {
   const path = url.match(/\/home\/produtos\/(.+)\.html$/)?.[1];
@@ -211,8 +201,14 @@ export interface PingoDoceSitemap {
   nonFood: number;
   /** of `food`, how many came from a mixed aisle rather than a food department */
   fromMixed: number;
+  /** in a food or mixed section, but under a sub-section data/store-sections.ts skips */
+  skipped: number;
+  /** every section the sitemap shows, for section-watch.ts */
+  sections: SectionTally;
+  /** ids in non-food sections or skipped sub-sections, so held ones can stop being tracked */
+  excludedIds: string[];
   /**
-   * Sections absent from `PINGO_DOCE_SECTIONS`. Should be zero. A new
+   * Top sections data/store-sections.ts does not decide. Should be zero. A new
    * department appearing here is a real event - it is products we would
    * otherwise never crawl - so it is surfaced rather than lumped in with
    * non-food. Continente lost 170 URLs for months to exactly this kind of
@@ -255,8 +251,11 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   const unparseableSamples: string[] = [];
   const perFile: { url: string; entries: number }[] = [];
   const seen = new Set<string>();
+  const sections = new SectionTally("PINGO_DOCE");
   let nonFood = 0;
   let fromMixed = 0;
+  let skipped = 0;
+  const excludedIds: string[] = [];
   let unparseable = 0;
 
   for (const sitemap of PRODUCT_SITEMAPS) {
@@ -285,28 +284,33 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
         unfiled.push(url);
         continue;
       }
-      const known = PINGO_DOCE_SECTIONS[section];
-      if (!known) {
+      const categoryPath = categoryPathFromUrl(url) ?? section;
+      sections.add(categoryPath, nameFromUrl(url));
+      const verdict = sectionOf("PINGO_DOCE", categoryPath);
+      if (verdict.kind === "unknown") {
         unknownSections.set(section, (unknownSections.get(section) ?? 0) + 1);
         continue;
       }
-      if (known.kind === "non-food") {
+      if (verdict.kind === "non-food") {
         nonFood++;
+        excludedIds.push(storeProductId);
+        continue;
+      }
+      if (verdict.skip) {
+        skipped++;
+        excludedIds.push(storeProductId);
         continue;
       }
       // A mixed aisle is fetched exactly like a food department. What the
-      // product IS gets decided later, from its name.
-      if (known.kind === "mixed") fromMixed++;
-      food.push({
-        storeProductId,
-        url,
-        section,
-        categoryPath: categoryPathFromUrl(url) ?? known.label,
-      });
+      // product IS gets decided after the fetch, from its name.
+      if (verdict.kind === "mixed") fromMixed++;
+      food.push({ storeProductId, url, section, categoryPath });
     }
 
     perFile.push({ url: sitemap, entries });
   }
 
-  return { food, nonFood, fromMixed, unknownSections, unfiled, unparseable, unparseableSamples, perFile };
+  return {
+    food, nonFood, fromMixed, skipped, sections, excludedIds, unknownSections, unfiled, unparseable, unparseableSamples, perFile,
+  };
 }

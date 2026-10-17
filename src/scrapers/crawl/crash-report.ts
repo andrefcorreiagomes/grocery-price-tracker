@@ -1,4 +1,4 @@
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import { buildFailureReport } from "./daily-report";
 import { renderReport, writeReport } from "./render-report";
 import { httpStats } from "../http";

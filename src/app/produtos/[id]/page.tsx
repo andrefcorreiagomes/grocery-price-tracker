@@ -5,7 +5,7 @@ import PriceHistoryChart, {
 } from "@/components/PriceHistoryChart";
 import { getProductHistory, STORE_LABELS, STORE_ORDER } from "@/lib/queries";
 import { unitPrice } from "@/lib/pricing";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
 
 // Always read the latest prices from the database rather than a build-time snapshot.

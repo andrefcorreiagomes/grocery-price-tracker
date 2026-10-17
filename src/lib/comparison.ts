@@ -2,6 +2,7 @@ import { FOOD_TYPE_BY_ID } from "./food-types";
 import { isOwnBrand } from "./candidates";
 import { unitPrice } from "./pricing";
 import { isStoreError } from "../../data/store-errors";
+import { STORE_ORDER } from "./stores";
 
 /**
  * Deciding what each store has to say about one kind of food.
@@ -50,7 +51,7 @@ export type Cell =
   | { kind: "no-size"; example: ComparableProduct };
 
 /** Every store the app compares, in the order the page shows them. */
-export const STORES = ["CONTINENTE", "PINGO_DOCE", "AUCHAN"] as const;
+export const STORES = STORE_ORDER;
 
 /**
  * Can this product take part in a price-per-kilo comparison of `foodType`?

@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/db";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import { stripAccents } from "../../lib/matching";
 
 /**

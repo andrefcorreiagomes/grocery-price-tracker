@@ -1,7 +1,7 @@
 import FoodTypeFilter from "@/components/FoodTypeFilter";
 import { getComparableFoodTypes, getFreshness } from "@/lib/grupos";
 import { STORE_LABELS } from "@/lib/stores";
-import type { Store } from "@/generated/prisma/client";
+import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
 
 // Prices change under us; read them live rather than from a build-time snapshot.

@@ -1,7 +1,9 @@
 import { fetchHtml } from "../http";
 import { parseAuchanTilesDetailed, parseAuchanTotal, type TileParse } from "../search/auchan";
 import type { SearchHit } from "../search/types";
-import { discoverFoodDepartments, isFoodSegment } from "./auchan-categories";
+import { discoverFoodDepartments } from "./auchan-categories";
+import { keepInCatalogue } from "../../lib/catalogue-filter";
+import { LeftOutTally, SectionTally } from "./section-watch";
 import type { CategoryResult, CrawlCategory, CrawlProgress } from "./types";
 
 /**
@@ -97,6 +99,12 @@ export interface AuchanCrawlResult {
   segmentTally: Map<string, number>;
   /** a few example product names per segment, so dropped segments can be judged */
   segmentSamples: Map<string, string[]>;
+  /** every section and sub-section the walk saw, for section-watch.ts */
+  sections: SectionTally;
+  /** products in food or mixed sections that data/store-sections.ts left out */
+  leftOut: LeftOutTally;
+  /** their ids, so the nightly can stop tracking any it already holds */
+  leftOutIds: string[];
   /** distinct products walked, food and non-food together */
   crawled: number;
   /** one entry per category walked: `root`, or the five departments */
@@ -211,6 +219,9 @@ export async function crawlAuchan(
   const seen = new Set<string>();
   const segmentTally = new Map<string, number>();
   const segmentSamples = new Map<string, string[]>();
+  const sections = new SectionTally("AUCHAN");
+  const leftOut = new LeftOutTally();
+  const leftOutIds: string[] = [];
   const foodBySegment = new Map<string, SearchHit[]>();
   const walks: AuchanWalkSummary[] = [];
 
@@ -253,9 +264,19 @@ export async function crawlAuchan(
             segmentSamples.set(segment, samples);
           }
 
-          // The whitelist applies in both modes: a department page carries some
-          // cross-listed non-food, judged here by the product's own category path.
-          if (!isFoodSegment(segment)) continue;
+          sections.add(tile.category, tile.name);
+
+          // data/store-sections.ts applies in both modes: a department page
+          // carries some cross-listed non-food, judged here by the product's own
+          // category path - and, in a mixed aisle, by its name.
+          const decision = keepInCatalogue("AUCHAN", tile.category, tile.name);
+          if (!decision.keep) {
+            if (decision.reason !== "non-food section" && decision.reason !== "unknown section") {
+              leftOut.add(decision, tile.name, tile.category);
+              leftOutIds.push(tile.id);
+            }
+            continue;
+          }
 
           if (opts.onBatch) {
             const list = freshFood.get(segment) ?? [];
@@ -296,6 +317,9 @@ export async function crawlAuchan(
     food,
     segmentTally,
     segmentSamples,
+    sections,
+    leftOut,
+    leftOutIds,
     crawled: seen.size,
     walks,
     failedDepartments,

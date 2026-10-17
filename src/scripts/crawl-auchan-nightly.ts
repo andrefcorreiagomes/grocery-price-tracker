@@ -3,10 +3,12 @@ import { crawlAuchan, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
 import { classifyAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import {
   recordDead,
   recordUnavailable,
+  stopTrackingLeftOut,
   touchChecked,
   UNAVAILABLE_RECHECK_DAYS,
 } from "../scrapers/crawl/product-checks";
@@ -109,6 +111,18 @@ async function main() {
     `  ${walk.crawled.toLocaleString()} products walked, ${foodTotal.toLocaleString()} food saved` +
       `, ${walk.tilesKept.toLocaleString()} of ${walk.tilesSeen.toLocaleString()} tiles parsed`
   );
+
+  // Products the walk SAW but data/store-sections.ts left out stop being
+  // tracked now. Before the missing set is read, so they are not mistaken for
+  // products that vanished and have their pages fetched one by one.
+  const stoppedTracking = await stopTrackingLeftOut(STORE, walk.leftOutIds, seenAt);
+  if (walk.leftOut.total > 0) {
+    console.log(
+      `  left out by data/store-sections.ts: ${walk.leftOut.total.toLocaleString()}` +
+        (stoppedTracking > 0 ? ` (${stoppedTracking} held before, no longer tracked)` : "")
+    );
+  }
+  const sectionChanges = await recordSections(STORE, walk.sections, seenAt, complete);
 
   // ---------------------------------------------------------------- phase 2
   const live = await prisma.catalogueProduct.count({ where: { store: STORE, delistedAt: null } });
@@ -303,6 +317,7 @@ async function main() {
   // so the report does not claim "no previous run" while showing drift against it.
   report = {
     ...report,
+    sections: sectionLines(sectionChanges, walk.leftOut),
     gridHealth,
     catalogueByStore,
     drift,
@@ -364,6 +379,7 @@ async function main() {
       `${alive.length.toLocaleString()} product(s) were missing from the walk yet their pages still answer - the walk has a hole`
     );
   }
+  for (const problem of sectionProblems(sectionChanges)) report = escalate(report, "WARN", problem);
   for (const s of segmentDiff.appeared) {
     report = escalate(
       report,

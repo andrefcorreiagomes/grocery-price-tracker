@@ -114,41 +114,7 @@ export const ANIMALS: readonly string[] = [
   "peixe", "marisco", "sapateira", "santola", "lagosta",
 ];
 
-/**
- * Store top-level categories that hold food.
- *
- * Continente and Auchan publish a clean food/non-food split at the top level, so
- * they use an allow-list. **Pingo Doce does not**: its `categoryPath` is a flat
- * shelf name ("Mercearia", "Vinho Tinto", "Águas, Sumos e Refrigerantes") with
- * ~67 distinct values, nearly all food. An allow-list there silently lost more
- * than half its catalogue - the entire drinks section read as zero - so it is
- * inverted: everything is food except these.
- */
-export const NON_FOOD_SECTIONS: Record<string, readonly string[]> = {
-  PINGO_DOCE: [
-    "Casa e Eletrodomésticos",
-    "Sacos e Sacos de Compras",
-    "Gelo",
-    "Suplementos",
-    "Go Active",
-    "Poupe Esta Semana",
-    // Mixed food and nappies, exactly as Auchan's o-mundo-do-bebé is excluded
-    // from its whitelist. Baby food is tracked as its own piece of work.
-    "Bebé e Criança",
-  ],
-};
-
-/** Continente's food top-levels, mirroring CONTINENTE_FOOD_SECTIONS. */
-export const FOOD_SECTIONS: Record<string, readonly string[]> = {
-  CONTINENTE: [
-    "Frescos", "Laticínios e Ovos", "Congelados", "Mercearia",
-    "Bebidas e Garrafeira", "Bio e Saudável",
-  ],
-  AUCHAN: [
-    "alimentação", "produtos-frescos", "bebidas-e-garrafeira", "congelados",
-    "biológicos-e-alternativas", "produtos-locais",
-  ],
-};
+// Which store sections hold food is decided in data/store-sections.ts.
 
 export const FOOD_TYPES: readonly FoodType[] = [
   // --- Frescos: fruta e legumes -------------------------------------------

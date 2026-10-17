@@ -206,3 +206,99 @@ export function buildGroups(
 
   return results;
 }
+
+/**
+ * A group already in the database, with its current members.
+ */
+export interface ExistingGroup {
+  id: string;
+  productIds: string[];
+}
+
+export type RetiredReason = "merged" | "dissolved" | "refused";
+
+export interface GroupPlan {
+  /** clusters that carry on an existing group, under that group's id */
+  kept: { id: string; group: ProductGroupResult; changed: boolean }[];
+  /** clusters that overlap no existing group, or lost every one to a bigger overlap */
+  created: ProductGroupResult[];
+  /** existing groups no cluster carried on */
+  retired: { id: string; reason: RetiredReason; mergedIntoId: string | null }[];
+}
+
+/**
+ * Decide which new cluster carries on which existing group, so a group keeps
+ * its id from one matcher run to the next.
+ *
+ * Each emitted cluster takes over the existing group it shares the most
+ * products with. Taken greedily, biggest overlap first, and one-to-one: when
+ * two groups merge, the one sharing more products keeps its id and the other is
+ * retired as "merged" into it; when a group splits, the bigger part keeps the id
+ * and the rest is a new group. A group whose products are all in no cluster any
+ * more is "dissolved"; one whose cluster failed a guard is "refused". Ties are
+ * broken by the older id, which sorts first, so the result never depends on the
+ * order the clusters arrive in.
+ */
+export function reconcileGroups(existing: ExistingGroup[], clusters: ProductGroupResult[]): GroupPlan {
+  const emitted = clusters.filter((c) => c.emit);
+
+  const groupOf = new Map<string, string>();
+  for (const g of existing) for (const id of g.productIds) groupOf.set(id, g.id);
+
+  // Every (cluster, group) pair that shares a product, with how many it shares.
+  const overlaps: { cluster: number; group: string; shared: number }[] = [];
+  for (const [i, c] of emitted.entries()) {
+    const shared = new Map<string, number>();
+    for (const id of c.productIds) {
+      const g = groupOf.get(id);
+      if (g !== undefined) shared.set(g, (shared.get(g) ?? 0) + 1);
+    }
+    for (const [group, n] of shared) overlaps.push({ cluster: i, group, shared: n });
+  }
+  overlaps.sort(
+    (a, b) =>
+      b.shared - a.shared ||
+      (a.group < b.group ? -1 : a.group > b.group ? 1 : 0) ||
+      a.cluster - b.cluster
+  );
+
+  const idOfCluster = new Map<number, string>();
+  const claimed = new Set<string>();
+  for (const o of overlaps) {
+    if (idOfCluster.has(o.cluster) || claimed.has(o.group)) continue;
+    idOfCluster.set(o.cluster, o.group);
+    claimed.add(o.group);
+  }
+
+  const before = new Map(existing.map((g) => [g.id, [...g.productIds].sort().join(" ")]));
+  const kept: GroupPlan["kept"] = [];
+  const created: ProductGroupResult[] = [];
+  const clusterOf = new Map<string, number>();
+  for (const [i, c] of emitted.entries()) {
+    for (const id of c.productIds) clusterOf.set(id, i);
+    const id = idOfCluster.get(i);
+    if (id === undefined) created.push(c);
+    else kept.push({ id, group: c, changed: before.get(id) !== c.productIds.join(" ") });
+  }
+
+  // Products sitting in a cluster that a guard refused to emit.
+  const refused = new Set(clusters.filter((c) => !c.emit).flatMap((c) => c.productIds));
+
+  const retired: GroupPlan["retired"] = [];
+  for (const g of existing) {
+    if (claimed.has(g.id)) continue;
+    // Where did most of its products go?
+    const into = new Map<string, number>();
+    for (const id of g.productIds) {
+      const i = clusterOf.get(id);
+      const target = i === undefined ? undefined : idOfCluster.get(i);
+      if (target !== undefined) into.set(target, (into.get(target) ?? 0) + 1);
+    }
+    const best = [...into].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+    if (best) retired.push({ id: g.id, reason: "merged", mergedIntoId: best[0] });
+    else if (g.productIds.some((id) => refused.has(id))) retired.push({ id: g.id, reason: "refused", mergedIntoId: null });
+    else retired.push({ id: g.id, reason: "dissolved", mergedIntoId: null });
+  }
+
+  return { kept, created, retired };
+}
