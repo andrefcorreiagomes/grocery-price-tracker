@@ -1005,6 +1005,48 @@ function verifyFoodTypes(): number {
       "alimentação/mercearia/café,-chá-e-infusão/café-saco,-solúvel-e-cevadas") !== "cafe");
   is("TABLETE LINDT EXCELLENCE 70% 100G", "AUCHAN", "alimentação/mercearia/chocolates-e-achocolatados", "chocolate");
   is("Chouriça Tradicional Prisca", "CONTINENTE", "Frescos/Charcutaria/Chouriço e Morcela", "chourico");
+
+  // Five foods whose cheapest product was not that food (17 October 2026).
+  const codShelf = "Frescos/Peixaria/Bacalhau";
+  check("pollock on the cod shelf is not cod",
+    classifyFoodType("Paloco do Pacífico Desfiado Seco Continente", "CONTINENTE", codShelf) !== "bacalhau");
+  check("nor are cod heads, the cheapest 'cod' at EUR 5.99/kg",
+    classifyFoodType("Caras de Bacalhau Seco Continente", "CONTINENTE", codShelf) !== "bacalhau");
+  check("nor tongues and cheeks",
+    classifyFoodType("Línguas de Bacalhau Ultracongelado Lugrade", "CONTINENTE", codShelf) !== "bacalhau" &&
+    classifyFoodType("BOCHECHAS BACALHAU RIBERALVES 400G", "AUCHAN", "congelados/peixe/bacalhau-e-paloco") !== "bacalhau");
+  check("and a cod head on the general fish shelf is not 'other fish' either",
+    classifyFoodType("BACALHAU CABEÇA KG", "AUCHAN", "produtos-frescos/peixaria/peixe-fresco") === null);
+  is("Lombos de Bacalhau Graúdo Continente", "CONTINENTE", codShelf, "bacalhau");
+  is("LOMBOS RIBERALVES 4M CURA UNIDOSE MSC 240G", "AUCHAN", "congelados/peixe/bacalhau-e-paloco", "bacalhau");
+  const smoked = "Frescos/Charcutaria/Bacon e Fumados";
+  check("a smoked ham hock on the bacon shelf is not bacon",
+    classifyFoodType("Pernil Fumado Primor", "CONTINENTE", smoked) !== "bacon");
+  is("Bacon Fumado Fatiado Continente", "CONTINENTE", smoked, "bacon");
+  is("Barriga Fumada Forno a Lenha Prisca", "CONTINENTE", smoked, "bacon");
+  is("PANCETTA AUCHAN 12 FATIAS 100G", "AUCHAN", "produtos-frescos/charcutaria/chouriço,-bacon-e-fumados", "bacon");
+  const spices = "Mercearia/Molhos, Temperos e Sal/Especiarias e Ervas";
+  is("Caril em Frasco Continente", "CONTINENTE", spices, "caril");
+  check("a curry dish is not the spice",
+    classifyFoodType("Caril de Lentilhas Bonduelle", "CONTINENTE", "Mercearia/Conservas/Cogumelos, Milho, Ervilha") !== "caril");
+  check("nor is paprika on the curry shelf",
+    classifyFoodType("COLORAU-PIMENTÃO AUCHAN DOCE 100G", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos/caril-e-especiarias") !== "caril");
+  check("nor a curry paste, cheaper per kilo than the powder",
+    classifyFoodType("CARIL SHARWOOD'S PASTA SUAVE 295G", "AUCHAN", "alimentação/sabores-do-mundo/cozinha-indiana") !== "caril");
+  check("and a shrimp curry meal is not 'other fish'",
+    classifyFoodType("Caril Thai de Camarão O Passe", "CONTINENTE", "Congelados/Refeições/Peixe") === null);
+  const easter = "Páscoa/Amendoas";
+  check("chocolate almonds are not almonds",
+    classifyFoodType("Amêndoas de Chocolate Negro", "PINGO_DOCE", easter) !== "amendoa");
+  check("nor are sugared almonds, and they are not chocolate either",
+    classifyFoodType("Amêndoas Tipo Francês Bem Me Quer", "CONTINENTE", "Mercearia/Chocolate, Gomas e Rebuçados/Chocolates") === null);
+  check("nor sugared pine nuts that reached the almond shelf",
+    classifyFoodType("Confeitos de Pinhão", "PINGO_DOCE", easter) !== "amendoa");
+  is("Amêndoa com Pele Continente", "CONTINENTE", "Frescos/Frutas/Frutos Secos, Desidratados e Sementes", "amendoa");
+  is("Amêndoas com Mel e Sal Marinho", "PINGO_DOCE", "Mercearia/Batatas Fritas Snacks e Frutos Secos", "amendoa");
+  check("chocolate hazelnuts are not hazelnuts",
+    classifyFoodType("Avelãs Cobertas com Chocolate de Leite", "PINGO_DOCE", easter) !== "avela");
+  is("Miolo de Avelã Torrada Continente", "CONTINENTE", "Frescos/Frutas/Frutos Secos, Desidratados e Sementes", "avela");
   is("PÃES GARCIA CACETE SEM GLÚTEN 5X80G", "AUCHAN", "alimentação/padaria-e-pastelaria", "pao");
 
   check("a name ending in a weight range is sold by the kilo",

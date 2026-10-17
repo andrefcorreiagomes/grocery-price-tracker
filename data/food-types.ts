@@ -206,7 +206,13 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "chourico", label: "Chouriço", unit: "kg", heads: ["chourico", "chouricao", "chourica"] },
   { id: "presunto", label: "Presunto", unit: "kg", heads: ["presunto"] },
   { id: "hamburguer", label: "Hambúrguer", unit: "kg", heads: ["hamburguer", "hamburguere", "hamburger"] },
-  { id: "bacon", label: "Bacon", unit: "kg", heads: ["bacon"] },
+  // Bacon must say so in its own name, or be one of its close relatives:
+  // pancetta, and "barriga fumada" (smoked pork belly, which is what bacon
+  // is). Continente's shelf "Bacon e Fumados" also holds smoked ham hock,
+  // pig's head and ear, loin and pastrami, and filed all 29 of them here -
+  // a smoked ham hock at EUR 7.89/kg was the cheapest "bacon". Decided by
+  // hand, 17 October 2026.
+  { id: "bacon", label: "Bacon", unit: "kg", heads: ["bacon", "pancetta"], require: /\bbacon\b|\bpancetta\b|\bbarriga fumada\b/i },
   { id: "almondega", label: "Almôndega", unit: "kg", heads: ["almondega"] },
   { id: "mortadela", label: "Mortadela", unit: "kg", heads: ["mortadela"] },
   { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"] },
@@ -222,7 +228,12 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // --- Peixaria ------------------------------------------------------------
   { id: "filete", label: "Filete", unit: "kg", heads: ["filete"] },
   { id: "atum", label: "Atum", unit: "kg", heads: ["atum"] },
-  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"] },
+  // Not cod: Alaska pollock ("paloco") and coley ("escamudo"), sold on the
+  // cod shelf as cheaper substitutes. And not cod as people mean it: heads
+  // ("caras"), tongues, cheeks and swim bladders ("samos"), sold for specific
+  // dishes - heads at EUR 5.99/kg were the cheapest "cod". The same reasoning
+  // as salmon heads. Decided by hand, 17 October 2026.
+  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b/i },
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
   { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha"] },
   // Heads are sold for stock and soup, not as salmon to eat: three Auchan
@@ -249,7 +260,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Salmon heads, kept out of salmão, would otherwise fall to this type through
   // Auchan's "peixe-fresco" shelf. Only SALMON heads: Auchan writes CABEÇA into
   // many fish names, and at EUR 21.99/kg "DOURADA MAR CABEÇA" is not a head.
-  { id: "peixe", label: "Peixe (outro)", unit: "kg", heads: ["peixe"], exclude: /salmao.*\bcabeca\b|\bcabeca\b.*salmao/i },
+  { id: "peixe", label: "Peixe (outro)", unit: "kg", heads: ["peixe"], exclude: /(salmao|bacalhau).*\bcabeca\b|\bcabeca\b.*(salmao|bacalhau)|\bcaril\b/i },
   { id: "marisco", label: "Marisco (outro)", unit: "kg", heads: ["marisco"] },
 
   // --- Laticínios e ovos ---------------------------------------------------
@@ -319,7 +330,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // "TABLETE LINDT EXCELLENCE 70%". They used to reach chocolate only through
   // their shelf, which no longer decides when it names several foods.
   { id: "chocolate", label: "Chocolate", unit: "kg", heads: ["chocolate", "tablete"],
-    exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz)/i },
+    // Sugared almonds ("tipo francês", "lisas cores") sit on the chocolate
+    // shelf but are sugar-coated, not chocolate.
+    exclude: /^(?!.*(?:chocolat|cacau|choco\b)).*(?:rebucado|\bchupa|\bgoma|caramelo|torrao|nougat|marshmallow|alcacuz|tipo frances|\blisas? cores\b)/i },
   { id: "arroz", label: "Arroz", unit: "kg", heads: ["arroz"], exclude: /arroz doce/i },
   { id: "gelatina", label: "Gelatina", unit: "kg", heads: ["gelatina"] },
   { id: "farinha", label: "Farinha", unit: "kg", heads: ["farinha"] },
@@ -358,18 +371,29 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "milho", label: "Milho", unit: "kg", heads: ["milho"] },
   { id: "tortilha", label: "Tortilha", unit: "kg", heads: ["tortilha"] },
   { id: "caju", label: "Caju", unit: "kg", heads: ["caju"] },
-  { id: "amendoa", label: "Amêndoa", unit: "kg", heads: ["amendoa", "amendoas"] },
+  // The nut, plain, roasted or salted - not the sweet. 54 of 134 were Easter
+  // chocolate almonds, sugared almonds ("tipo francês", "lisas cores"),
+  // drageias and cakes, and a sugared almond at EUR 9.93/kg was the cheapest
+  // "almond". Honey-and-salt almonds stay: a snack nut, not a sweet. Decided
+  // by hand, 17 October 2026.
+  { id: "amendoa", label: "Amêndoa", unit: "kg", heads: ["amendoa", "amendoas"], exclude: /chocolate|\bcobert|acucar|tipo frances|\blisas? cores\b|drageia|confeit|biscoito|\bbolos?\b/i },
   // Nuts are usually sold as "Miolo de Noz", "Miolo de Avelã" - the head is
   // `miolo` (the kernel), so they are only reachable by scanning past it.
   { id: "noz", label: "Noz", unit: "kg", heads: ["noz", "nozes"] },
-  { id: "avela", label: "Avelã", unit: "kg", heads: ["avela"] },
+  // Chocolate-coated hazelnuts are sweets, as with almonds above.
+  { id: "avela", label: "Avelã", unit: "kg", heads: ["avela"], exclude: /chocolate|\bcobert|acucar/i },
   { id: "pinhao", label: "Pinhão", unit: "kg", heads: ["pinhao"] },
   { id: "castanha", label: "Castanha", unit: "kg", heads: ["castanha"] },
   { id: "pistacio", label: "Pistácio", unit: "kg", heads: ["pistacio", "pistachio"] },
   { id: "pevide", label: "Pevide", unit: "kg", heads: ["pevide"] },
   { id: "adocante", label: "Adoçante", unit: "kg", heads: ["adocante"] },
   { id: "quinoa", label: "Quinoa", unit: "kg", heads: ["quinoa"] },
-  { id: "caril", label: "Caril", unit: "kg", heads: ["caril"] },
+  // The spice. Not a curry DISH ("Caril de Lentilhas", "Caril de Frango" -
+  // a jar of lentil curry at EUR 4.85/kg was the cheapest "caril"), and not
+  // the paprika and turmeric on the same Auchan spice shelf, whose names never
+  // say curry. Nor a curry paste or sauce, sold in bigger jars and cheaper per
+  // kilo than the powder. Decided by hand, 17 October 2026.
+  { id: "caril", label: "Caril", unit: "kg", heads: ["caril", "curry"], require: /\b(caril|curry)\b/i, exclude: /\b(caril|curry) (thai |indiano )?(de|com)\b|refeic|\bpasta\b|tikka|masala|\bmolho\b/i },
   { id: "marmelada", label: "Marmelada", unit: "kg", heads: ["marmelada"] },
   { id: "lentilha", label: "Lentilha", unit: "kg", heads: ["lentilha"] },
   { id: "grao", label: "Grão", unit: "kg", heads: ["grao"] },
