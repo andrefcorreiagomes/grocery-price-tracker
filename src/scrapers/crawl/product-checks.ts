@@ -306,10 +306,10 @@ export async function stopTrackingLeftOut(
 
 /**
  * Record that a product page loaded but carries no price: listed but
- * unavailable (out of stock, or variable-weight). Stamps `unavailableAt` so the
- * nightly stops re-confirming it every night - it is rechecked on a slow cadence
- * instead - and touches the clock. Never advances `deadCount`: the page answered,
- * so the product is not gone.
+ * unavailable (out of stock, or variable-weight). Stamps `unavailableAt`, which
+ * the next crawl re-checks (see UNAVAILABLE_RECHECK_DAYS), and touches the
+ * clock. Never advances `deadCount`: the page answered, so the product is not
+ * gone.
  */
 export async function recordUnavailable(
   store: Store,
@@ -323,8 +323,12 @@ export async function recordUnavailable(
   });
 }
 
-/** How long an "unavailable" verdict is trusted before the page is re-checked. */
-export const UNAVAILABLE_RECHECK_DAYS = 14;
+/**
+ * How long an "unavailable" verdict is trusted before the page is re-checked.
+ * Zero: every crawl looks again, until the product is back in stock or its page
+ * says it is gone (decided by the user, 18 October 2026; it was 14).
+ */
+export const UNAVAILABLE_RECHECK_DAYS = 0;
 
 /** Mark an attempt without judging it - used when the failure was transient. */
 export async function touchChecked(

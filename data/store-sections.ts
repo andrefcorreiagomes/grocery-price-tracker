@@ -197,6 +197,11 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       halloween: "mixed",
       "regresso-às-aulas": "mixed",
       folhetos: "mixed",
+      // First seen 18 October 2026, decided by the user the same day: a
+      // promotion shelf (8 products, heaters) and Auchan's own ready-meal line
+      // (2 products, a pork dish and a trifle).
+      "black-friday": "mixed",
+      "sabores-auchan": "mixed",
     },
     skip: [
       // 93 products, none with a food type (creatine, pre-workout)

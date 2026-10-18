@@ -304,6 +304,10 @@ model CrawlRun {
   wireBytes Int?
   fetchMs   Int?
   retries   Int?
+  /// How long the whole run took, start to finish, in milliseconds - fetching,
+  /// waiting between requests, saving and reporting. Added 18 October 2026, so
+  /// the next run's length can be predicted from the last one's.
+  durationMs Int?
   /// Product ids the sitemap published this run. The next run compares against
   /// it: a sitemap that suddenly shrinks is far more likely to be a bad deploy
   /// or a truncated response than a store that lost thousands of products

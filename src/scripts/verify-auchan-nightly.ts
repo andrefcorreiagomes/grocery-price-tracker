@@ -291,6 +291,15 @@ export async function verifyAuchanNightly(): Promise<number> {
     "a page with no product block at all reads as unreachable, not gone",
     auchanStatusFromHtml(ldPage(null)) === "unreachable"
   );
+  // Auchan answers a withdrawn product with 200 and its own "not found" page
+  // (seen 18 October 2026 on 540 of 600 checked products).
+  check(
+    "Auchan's own not-found page, though served with 200, reads as gone",
+    auchanStatusFromHtml(
+      `<html><head><title>BOLO DE ARROZ UN | Auchan</title></head><body><main>` +
+        `<p>Não temos o que procura. Vamos tentar de novo?</p><a href="/">Ir para Homepage</a></main></body></html>`
+    ) === "gone"
+  );
 
   // --- segment comparison ---------------------------------------------------
   console.log("\n  segment comparison");
@@ -455,16 +464,16 @@ export async function verifyAuchanNightly(): Promise<number> {
       oos?.delistedAt === null
   );
 
-  // The throttle: a product confirmed unavailable within the window is NOT
-  // re-fetched; one past the window is. This is the orchestrator's toConfirm
-  // filter, tested directly.
+  // The recheck rule: since 18 October 2026 the window is zero days, so a
+  // product found out of stock by an earlier crawl is looked at again by the
+  // next one, every time, until it is back or its page says it is gone. This is
+  // the orchestrator's toConfirm filter, tested directly.
   const nowInstant = new Date(n3.getTime() + 1000);
   const cutoff = new Date(nowInstant.getTime() - UNAVAILABLE_RECHECK_DAYS * 86_400_000);
-  const recent = { unavailableAt: n3 }; // stamped just now
-  const stale = { unavailableAt: new Date(cutoff.getTime() - 86_400_000) }; // older than the window
+  const lastNight = { unavailableAt: n3 }; // stamped by an earlier crawl
   const shouldFetch = (m: { unavailableAt: Date | null }) => m.unavailableAt === null || m.unavailableAt < cutoff;
-  check("a recently-unavailable product is skipped this run", !shouldFetch(recent));
-  check("an unavailable product past the window is rechecked", shouldFetch(stale));
+  check("the recheck window is zero days", UNAVAILABLE_RECHECK_DAYS === 0);
+  check("an out-of-stock product from an earlier crawl is checked again by the next", shouldFetch(lastNight));
   check("a never-unavailable product is always confirmed", shouldFetch({ unavailableAt: null }));
 
   // The writer clears the marker: seeing the product in a grid again means it is

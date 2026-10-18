@@ -132,12 +132,13 @@ async function main() {
   });
   const nameOf = new Map(missing.map((m) => [m.storeProductId, m.name]));
 
-  // The full missing set drives the under-collected guard, but we only FETCH the
-  // ones not confirmed unavailable recently. An out-of-stock product is missing
-  // every night (its priceless grid tile is always skipped), and its page has no
-  // price either, so re-fetching it nightly only re-learns the same thing. Once
-  // stamped `unavailableAt` it is left alone for UNAVAILABLE_RECHECK_DAYS, then
-  // looked at again in case it came back or was truly withdrawn.
+  // The full missing set drives the under-collected guard, and we FETCH the ones
+  // not confirmed unavailable within UNAVAILABLE_RECHECK_DAYS. An out-of-stock
+  // product is missing every night (its priceless grid tile is always skipped).
+  // Since 18 October 2026 that is zero days, by the user's decision: every out-
+  // of-stock product is looked at again at every crawl, so a product back in
+  // stock, or withdrawn, is known the next night rather than a fortnight later.
+  // It costs one request per out-of-stock product per crawl.
   const unavailableCutoff = new Date(seenAt.getTime() - UNAVAILABLE_RECHECK_DAYS * 86_400_000);
   const toConfirm = missing.filter((m) => m.unavailableAt === null || m.unavailableAt < unavailableCutoff);
   const skippedUnavailable = missing.length - toConfirm.length;
@@ -350,6 +351,7 @@ async function main() {
       tilesUnpriced: walk.tilesUnpriced,
       tilesMalformed: walk.tilesMalformed,
       emptyCategory: walk.withoutCategory,
+      durationMs: Date.now() - started,
     });
   }
 

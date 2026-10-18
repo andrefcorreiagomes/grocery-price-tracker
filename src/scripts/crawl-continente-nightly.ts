@@ -654,6 +654,7 @@ async function main() {
     await recordRun(STORE, total, sections, {
       http: { ...stats, wireBytes: stats.wireBytes || null },
       seenAt,
+      durationMs: Date.now() - started,
       // Recorded whether or not we believed them: a disbelieved observation is
       // what lets the next run tell a persistent change from a one-night glitch.
       sitemapEntries: published.size,

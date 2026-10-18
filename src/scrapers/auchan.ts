@@ -20,7 +20,8 @@ interface SchemaProduct {
  *               products usually KEEP their price and flip `availability`, so the
  *               signal is availability, not a missing price. Its grid tile is
  *               skipped too, so the walk always misses it.
- *   gone        404/410 - the store no longer has this page.
+ *   gone        404/410, or 200 with Auchan's own "not found" page - the store
+ *               no longer has this product.
  *   unreachable a 5xx, a network error, or a page with no Product block at all -
  *               we could not tell, so no claim is made. Auchan's fresh /
  *               variable-weight pages carry no structured product data and land
@@ -28,6 +29,9 @@ interface SchemaProduct {
  *               is a known, small residual.
  */
 export type AuchanPageStatus = "alive" | "unavailable" | "gone" | "unreachable";
+
+/** Auchan's own "not found" page, served with 200 for a withdrawn product. */
+const NOT_FOUND_PAGE = /N[ãa]o temos o que procura/i;
 
 /** schema.org availability values that mean "listed but not sellable right now". */
 const NOT_SELLABLE = /OutOfStock|SoldOut|Discontinued|BackOrder|PreOrder/i;
@@ -40,14 +44,20 @@ const NOT_SELLABLE = /OutOfStock|SoldOut|Discontinued|BackOrder|PreOrder/i;
  * product keeps a price in its ld+json and only flips availability to
  * OutOfStock, so a price-presence test both misses it and mislabels it "alive".
  * "No Product block at all" is unreachable, not gone: a 200 with no product data
- * is a fresh-produce template or a markup change, not proof of withdrawal.
+ * is a fresh-produce template or a markup change, not proof of withdrawal -
+ * with one exception. Auchan answers a withdrawn product with 200 and its own
+ * "not found" page, "Não temos o que procura. Vamos tentar de novo?", instead
+ * of a 404. Read on 18 October 2026 from two saved pages: 540 of 600 products
+ * missing from the walk got this page, and being "unreachable" they were never
+ * counted as gone, which kept about 470 withdrawn products "on sale" since
+ * August. That page is a fact, like a 404, so it is "gone".
  */
-export function auchanStatusFromHtml(html: string): "alive" | "unavailable" | "unreachable" {
+export function auchanStatusFromHtml(html: string): "alive" | "unavailable" | "gone" | "unreachable" {
   const product = extractLdJsonBlocks(html).find(
     (block): block is SchemaProduct =>
       typeof block === "object" && block !== null && (block as SchemaProduct)["@type"] === "Product"
   );
-  if (!product) return "unreachable";
+  if (!product) return NOT_FOUND_PAGE.test(html) ? "gone" : "unreachable";
   return NOT_SELLABLE.test(String(product.offers?.availability ?? "")) ? "unavailable" : "alive";
 }
 

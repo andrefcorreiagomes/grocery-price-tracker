@@ -10,7 +10,9 @@ import {
   recordDead,
   stopTrackingLeftOut,
 } from "../scrapers/crawl/product-checks";
-import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
+import { formatHttpStats, httpStats, requireCrawlerContact, wireBytesOf } from "../scrapers/http";
+import { recordRun } from "../scrapers/crawl/history";
+import { catalogueSizes } from "../scrapers/crawl/catalogue-size";
 import type { SearchHit } from "../scrapers/search/types";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { LeftOutTally, recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
@@ -58,6 +60,7 @@ async function main() {
   }
   const dry = flag("dry");
   const onlyNew = flag("new");
+  const runStarted = Date.now();
 
   console.log("Reading Pingo Doce's sitemap...");
   const sitemap = await discoverPingoDoceProducts();
@@ -212,6 +215,41 @@ async function main() {
 
   console.log("\nrequests:");
   for (const line of formatHttpStats()) console.log(line);
+
+  // The run's own record, as the other two chains keep: how long it took, how
+  // many requests, how many products per department. Until 18 October 2026
+  // Pingo Doce kept none, so nobody could say how long its crawl takes. Only a
+  // full run is recorded: a --limit or --new slice would make the next
+  // comparison, and the next time estimate, meaningless.
+  const durationMs = Date.now() - runStarted;
+  if (limit === undefined && !onlyNew) {
+    const stats = httpStats().reduce(
+      (a, h) => ({
+        requests: a.requests + h.requests,
+        bytes: a.bytes + h.bytes,
+        wireBytes: a.wireBytes + (wireBytesOf(h) ?? 0),
+        fetchMs: a.fetchMs + h.fetchMs,
+        retries: a.retries + h.retries,
+      }),
+      { requests: 0, bytes: 0, wireBytes: 0, fetchMs: 0, retries: 0 }
+    );
+    await recordRun(
+      "PINGO_DOCE",
+      crawl.results.reduce((n, r) => n + r.products.length, 0),
+      crawl.results.map((r) => ({ cgid: r.category.cgid, label: r.category.label, collected: r.products.length })),
+      {
+        http: { ...stats, wireBytes: stats.wireBytes || null },
+        seenAt: summary.seenAt,
+        catalogueSizes: await catalogueSizes(),
+        sitemapEntries: sitemap.perFile.reduce((n, f) => n + f.entries, 0),
+        sitemapFiles: sitemap.perFile.length,
+        sitemapPerFile: sitemap.perFile,
+        sitemapUnparseable: sitemap.unparseable,
+        durationMs,
+      }
+    );
+  }
+  console.log(`\nDone in ${(durationMs / 60000).toFixed(1)} min${limit === undefined && !onlyNew ? " (run recorded)" : ""}.`);
 
   console.log(
     `\nprices: ${summary.prices.changed} changed, ${summary.prices.unchanged} held,` +

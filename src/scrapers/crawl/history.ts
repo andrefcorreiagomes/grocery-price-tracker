@@ -130,6 +130,8 @@ export interface RunRecord {
   tilesMalformed?: number | null;
   /** tiles that parsed but carried no category path, so would drop as non-food */
   emptyCategory?: number | null;
+  /** the whole run, start to finish, in milliseconds */
+  durationMs?: number | null;
 }
 
 /**
@@ -169,6 +171,7 @@ export async function recordRun(
       emptyCategory: record.emptyCategory ?? null,
       fetchMs: http?.fetchMs ?? null,
       retries: http?.retries ?? null,
+      durationMs: record.durationMs ?? null,
       sections: {
         create: sections.map((s) => ({
           cgid: s.cgid,
