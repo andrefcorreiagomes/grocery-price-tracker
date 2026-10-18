@@ -1,17 +1,16 @@
 import { prisma } from "./db";
 import {
-  cheapestPerStore,
   cheapestStores,
-  comparableStoreCount,
   namedGroup,
-  ownBrandPerStore,
   unitsFor,
   type Cell,
   type ComparableProduct,
   type MeasureUnit,
 } from "./comparison";
 import { FOOD_TYPE_BY_ID } from "./food-types";
-import { FOOD_TYPES } from "../../data/food-types";
+import { CATEGORIES } from "../../data/food-tree";
+import { categoryOf } from "./food-tree";
+import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type TreeProduct } from "./comparison-groups";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -22,40 +21,31 @@ import { FOOD_TYPES } from "../../data/food-types";
  * database.
  */
 
-/** Rows of one food type, in the shape the comparison rules take. */
-async function rowsFor(foodTypeId: string): Promise<ComparableProduct[]> {
+/** Rows of one food type, with their place in the tree. */
+async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
   return prisma.catalogueProduct.findMany({
     where: { foodType: foodTypeId, delistedAt: null },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true,
+      price: true, packageSize: true, unit: true, subKind: true, labels: true,
     },
   });
-}
-
-/** One ranking: the three stores' answers, measured in one unit. */
-export interface Ranking {
-  unit: MeasureUnit;
-  cheapest: Map<string, Cell>;
-  ownBrand: Map<string, Cell>;
-  /** the confirmed same-product groups, largest price gap first */
-  named: NamedGroups;
-  /** the stores with the lowest price (all of them on a tie), none when fewer than two can be compared */
-  winners: string[];
-  /** the same for the own-brand row, which can name a different store */
-  ownBrandWinners: string[];
-  storesCompared: number;
 }
 
 export interface FoodTypePage {
   id: string;
   label: string;
+  category: { id: string; label: string } | null;
   /**
-   * One per unit. Nearly always a single ranking; a food genuinely sold both
-   * ways (tarts baked and frozen, mayonnaise) gets two, shown side by side.
+   * One per comparison group - same sub-kind, same labels, same unit - that at
+   * least two chains can be priced in (src/lib/comparison-groups.ts).
    */
-  rankings: Ranking[];
-  /** distinct products of this food type we hold, across all three chains */
+  groups: ComparisonGroup[];
+  /** products in groups too thin to compare (fewer than two chains priced) */
+  notCompared: number;
+  /** the confirmed same-product groups, one block per unit the kind is measured in */
+  named: { unit: MeasureUnit; groups: NamedGroups }[];
+  /** distinct products of this food type we hold, across all chains */
   productCount: number;
 }
 
@@ -67,54 +57,63 @@ export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage 
   const rows = await rowsFor(foodTypeId);
   if (rows.length === 0) return null;
 
-  const rankings: Ranking[] = [];
+  const all = comparisonGroups(foodTypeId, rows);
+  const groups = shownGroups(all);
+  const notCompared = all.filter((g) => !groups.includes(g)).reduce((n, g) => n + g.products, 0);
+
+  const named: FoodTypePage["named"] = [];
   for (const unit of unitsFor(foodTypeId, rows)) {
-    const cheapest = cheapestPerStore(rows, foodTypeId, unit);
-    const ownBrand = ownBrandPerStore(rows, foodTypeId, unit);
-    rankings.push({
-      unit,
-      cheapest,
-      ownBrand,
-      named: await getNamedGroups(foodTypeId, unit),
-      winners: cheapestStores(cheapest),
-      ownBrandWinners: cheapestStores(ownBrand),
-      storesCompared: comparableStoreCount(cheapest),
-    });
+    named.push({ unit, groups: await getNamedGroups(foodTypeId, unit) });
   }
 
-  return { id: type.id, label: type.label, rankings, productCount: rows.length };
+  const category = categoryOf(foodTypeId);
+  return {
+    id: type.id,
+    label: type.label,
+    category: category ? { id: category.id, label: category.label } : null,
+    groups,
+    notCompared,
+    named,
+    productCount: rows.length,
+  };
 }
 
 export interface IndexEntry {
   id: string;
   label: string;
+  categoryId: string;
+  categoryLabel: string;
+  /** the comparison that stands for the kind: plain before labelled, then the largest */
+  mainTitle: string;
   unit: MeasureUnit;
   storesCompared: number;
   winners: string[];
   cheapestPrice: number | null;
+  /** how many comparisons the kind's page holds */
+  comparisons: number;
 }
 
 /**
- * The index: every kind of food that can be compared across ALL THREE chains.
+ * The food list: every kind of food with at least one comparison that two or
+ * more chains can be priced in, grouped by category in the tree's order.
  *
- * Three is the bar because the page's promise is a three-way comparison; a food
- * only two chains can be priced on is a thinner claim and would need saying so
- * on the page rather than sitting silently in the same list. Those are not lost
- * - `validate:comparisons` reports them - they simply are not this page yet.
+ * Two chains, not three, by the user's rule of 18 October 2026: a store added
+ * later should not change what counts as a comparison, and a store that does
+ * not sell a food says so on the page ("Não vende").
  *
- * One query for the whole catalogue rather than 177 queries: the per-type work
- * is grouping in memory, which is far cheaper than 177 round trips.
+ * One query for the whole catalogue rather than one per kind: the per-kind work
+ * is grouping in memory, which is far cheaper than two hundred round trips.
  */
 export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
   const rows = await prisma.catalogueProduct.findMany({
     where: { foodType: { not: null }, delistedAt: null },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, foodType: true,
+      price: true, packageSize: true, unit: true, foodType: true, subKind: true, labels: true,
     },
   });
 
-  const byType = new Map<string, ComparableProduct[]>();
+  const byType = new Map<string, TreeProduct[]>();
   for (const row of rows) {
     const list = byType.get(row.foodType as string) ?? [];
     list.push(row);
@@ -122,33 +121,32 @@ export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
   }
 
   const entries: IndexEntry[] = [];
-  for (const type of FOOD_TYPES) {
-    if (type.hidden) continue; // set aside for later: sweets and drinks
-    const typeRows = byType.get(type.id);
-    if (!typeRows) continue;
-
-    for (const unit of unitsFor(type.id, typeRows)) {
-      const cheapest = cheapestPerStore(typeRows, type.id, unit);
-      if (comparableStoreCount(cheapest) < 3) continue;
-
-      let lowest: number | null = null;
-      for (const cell of cheapest.values()) {
-        if (cell.kind === "price" && (lowest === null || cell.unitPrice < lowest)) {
-          lowest = cell.unitPrice;
-        }
-      }
+  for (const category of CATEGORIES) {
+    const kinds = category.kinds
+      .map((id) => FOOD_TYPE_BY_ID.get(id))
+      .filter((t): t is NonNullable<typeof t> => t !== undefined && !t.hidden)
+      .sort((a, b) => a.label.localeCompare(b.label, "pt"));
+    for (const type of kinds) {
+      const typeRows = byType.get(type.id);
+      if (!typeRows) continue;
+      const groups = comparisonGroups(type.id, typeRows);
+      const main = mainGroup(groups);
+      if (!main) continue;
       entries.push({
         id: type.id,
         label: type.label,
-        unit,
-        storesCompared: 3,
-        winners: cheapestStores(cheapest),
-        cheapestPrice: lowest,
+        categoryId: category.id,
+        categoryLabel: category.label,
+        mainTitle: main.title,
+        unit: main.unit,
+        storesCompared: main.storesCompared,
+        winners: main.winners,
+        cheapestPrice: main.cheapestPrice,
+        comparisons: shownGroups(groups).length,
       });
     }
   }
-
-  return entries.sort((a, b) => a.label.localeCompare(b.label, "pt"));
+  return entries;
 }
 
 /**

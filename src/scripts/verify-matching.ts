@@ -4,6 +4,7 @@ import { sectionKey, sectionOf, topSectionKind } from "../lib/store-sections";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { capsuleCountFromName, eggCountFromName, eggCountFromUnitPrice, itemCount } from "../lib/egg-count";
 import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "../lib/food-tree";
+import { comparisonGroups, mainGroup, MIN_CHAINS, shownGroups, type TreeProduct } from "../lib/comparison-groups";
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
@@ -290,6 +291,7 @@ export async function verifyMatching(): Promise<number> {
   failures += verifyRealFoodList();
   failures += verifySplitKinds();
   failures += verifyFoodTree();
+  failures += verifyComparisonGroups();
 
   await cleanup();
   return failures;
@@ -1691,15 +1693,20 @@ function verifySplitKinds(): number {
   check("a scabbardfish steak is scabbardfish", c("Posta de Peixe Espada Preto Fresco", "PINGO_DOCE", "Peixaria/Peixe") === "peixe-espada");
   check("a grouper head is not grouper", c("Cabeça de Garoupa Fresca", "PINGO_DOCE", "Peixaria/Peixe") === null);
   check("an unnamed fish has no kind now", c("Cachucho Fresco", "PINGO_DOCE", "Peixaria/Peixe") === null);
-  check("a fillet goes to its fish", c("Filetes de Pescada do Cabo Congelados") === "pescada" && c("Filetes de Atum em Azeite") === "atum-lata");
+  check("a fillet goes to its fish", c("Filetes de Pescada do Cabo Congelados") === "pescada" && c("Filetes de Atum em Azeite") === "atum");
+  // Since 18 October 2026 tinned and fresh fish are one kind each, kept apart by
+  // the label "lata" rather than by separate kinds.
+  const tin = (kind: string, name: string) => labelsOf(kind, name).includes("lata");
   check(
-    "tinned and fresh fish are different kinds",
-    c("Atum ao Natural Bom Petisco 120 (84) G") === "atum-lata" && c("Bife de Atum Fresco") === "atum" &&
-      c("CAVALA KG", "AUCHAN", "produtos-frescos/peixaria") === "cavala" && c("Filetes de Cavala em Azeite") === "cavala-lata"
+    "tinned and fresh fish are one kind, told apart by the label",
+    c("Atum ao Natural Bom Petisco 120 (84) G") === "atum" && tin("atum", "Atum ao Natural Bom Petisco 120 (84) G") &&
+      c("Bife de Atum Fresco") === "atum" && !tin("atum", "Bife de Atum Fresco") &&
+      c("CAVALA KG", "AUCHAN", "produtos-frescos/peixaria") === "cavala" && tin("cavala", "Filetes de Cavala em Azeite")
   );
   check(
-    "a tinned squid is not fresh squid",
-    c("Lulas em Molho Americano") === null && c("LULA COSTA FRESCA INTEIRA KG", "AUCHAN", "produtos-frescos/peixaria") === "lula"
+    "a tinned squid is squid, labelled tinned",
+    c("Lulas em Molho Americano") === "lula" && tin("lula", "Lulas em Molho Americano") &&
+      !tin("lula", "LULA COSTA FRESCA INTEIRA KG")
   );
   check(
     "piri-piri sauce and dried piri-piri are different kinds, and a bottle saying neither has none",
@@ -1708,10 +1715,10 @@ function verifySplitKinds(): number {
   );
   check(
     "tinned fish written without \"em\", or with a drained weight, is tinned",
-    c("Filetes Cavala Óleo Vegetal") === "cavala-lata" && c("FILETE CAVALA PITEU EM MOSTARDA 120G") === "cavala-lata" &&
-      c("SARDINHA AUCHAN COLLECTION SEM PELE E SEM ESPINHA (85)120G") === "sardinha-lata"
+    tin("cavala", "Filetes Cavala Óleo Vegetal") && tin("cavala", "FILETE CAVALA PITEU EM MOSTARDA 120G") &&
+      tin("sardinha", "SARDINHA AUCHAN COLLECTION SEM PELE E SEM ESPINHA (85)120G")
   );
-  check("smoked fish is neither tinned nor fresh", c("SARDINHA FUMADA FILETE REAL 100 GR") === null);
+  check("smoked fish is labelled smoked", labelsOf("sardinha", "SARDINHA FUMADA FILETE REAL 100 GR").includes("fumado"));
   check("a cow's foot is not beef", c("MÃO DE BOVINO CONGELADO KG", "AUCHAN", "produtos-frescos/talho") === null);
   check("breaded fillets are a kind of their own", c("Filetes de Pescada Panados com Limão Congelados") === "filete-panado");
   check("but breaded CHICKEN is not a fish fillet", c("Panado de Frango", "PINGO_DOCE", "Talho/Aves") !== "filete-panado");
@@ -1788,5 +1795,33 @@ function verifyFoodTree(): number {
   check("each pack's count comes from the right rule", itemCount("ovo", "OVOS M 12UN", 2.99, null, null) === 12 &&
     itemCount("cafe-capsula", "CAPSULAS DOLCE GUSTO ROBUSTO 30 UN", 10.49, null, null) === 30 && itemCount("arroz", "Arroz 1kg", 1, null, null) === null);
 
+  return failures - before;
+}
+
+/** Comparisons inside a kind: same sub-kind, same labels, same unit, and two chains at least. */
+function verifyComparisonGroups(): number {
+  const before = failures;
+  console.log("\n  comparison groups");
+  const p = (store: string, name: string, price: number, size: number, subKind: string | null, labels: string | null): TreeProduct => ({
+    storeProductId: `${store}-${name}`, store, name, brand: "X", price, packageSize: size, unit: "kg", subKind, labels,
+  });
+  const rows = [
+    p("CONTINENTE", "Peito de Frango", 8, 1, "peito", null),
+    p("AUCHAN", "Peito de Frango", 7, 1, "peito", null),
+    p("PINGO_DOCE", "Peito de Frango Congelado", 5, 1, "peito", "congelado"),
+    p("CONTINENTE", "Peito de Frango Congelado", 6, 1, "peito", "congelado"),
+    p("AUCHAN", "Asas de Frango", 3, 1, "asa", null),
+    p("CONTINENTE", "Frango para Churrasco", 4, 1, null, null),
+    p("PINGO_DOCE", "Frango para Churrasco", 4.5, 1, null, null),
+  ];
+  const groups = comparisonGroups("frango", rows);
+  const titles = groups.map((g) => g.title);
+  check("fresh and frozen breast are separate comparisons", titles.includes("Peito e bifes") && titles.includes("Peito e bifes · Congelado"));
+  check("frozen breast is never cheaper than fresh by mixing them", groups.find((g) => g.title === "Peito e bifes")?.cheapestPrice === 7);
+  check("groups follow the tree's order, products with no sub-kind last", titles[0] === "Peito e bifes" && titles[titles.length - 1] === "Outros");
+  check("a group one chain sells is kept but not shown", groups.some((g) => g.subKind === "asa") && !shownGroups(groups).some((g) => g.subKind === "asa"));
+  check("two chains are enough to show a group", shownGroups(groups).length === 3 && MIN_CHAINS === 2);
+  check("the main group is plain before labelled", mainGroup(groups)?.title === "Peito e bifes");
+  check("a kind with no sub-kinds is titled by its own name", comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.title === "Banana");
   return failures - before;
 }

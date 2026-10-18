@@ -303,44 +303,39 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // which are a product of their own. 17 October 2026.
   { id: "filete-panado", label: "Filetes panados", unit: "kg", heads: ["filete"],
     require: /panad|primavera|crocante/i },
-  // Tinned and fresh are different products at very different prices per
-  // kilo: tinned is most of tuna, sardines and mackerel (221 of 250, 89 of 105,
-  // 43 of 50), and each fresh side is sold at all three chains too. A name
-  // saying how it is packed - "em azeite", "ao natural", a drained weight
-  // "120 (84) G" - is tinned. 17 October 2026.
-  { id: "atum-lata", label: "Atum em lata", unit: "kg", heads: ["atum"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
-  { id: "atum", label: "Atum fresco ou congelado", unit: "kg", heads: ["atum"], exclude: /fumad/i },
+  // Tinned and fresh used to be separate kinds (17 October 2026); since the
+  // site compares by label they are one kind each, and the label "em lata"
+  // (data/food-tree.ts) keeps tinned apart from fresh. 18 October 2026.
+  { id: "atum", label: "Atum", unit: "kg", heads: ["atum"] },
   // Not cod: Alaska pollock ("paloco") and coley ("escamudo"), sold on the
   // cod shelf as cheaper substitutes. And not cod as people mean it: heads
   // ("caras"), tongues, cheeks and swim bladders ("samos"), sold for specific
   // dishes - heads at EUR 5.99/kg were the cheapest "cod". The same reasoning
   // as salmon heads. Decided by hand, 17 October 2026.
-  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b|\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b/i },
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
-  { id: "sardinha-lata", label: "Sardinha em lata", unit: "kg", heads: ["sardinha"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
-  { id: "sardinha", label: "Sardinha fresca ou congelada", unit: "kg", heads: ["sardinha"], exclude: /fumad/i },
+  { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha"] },
   // Heads are sold for stock and soup, not as salmon to eat: three Auchan
   // salmon heads at EUR 1.89-1.99/kg were the cheapest "salmon" in the country.
   // Decided by hand, 4 October 2026.
-  { id: "salmao", label: "Salmão", nameOnly: true, unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b|\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "salmao", label: "Salmão", nameOnly: true, unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b/i },
   { id: "pescada", label: "Pescada", nameOnly: true, unit: "kg", heads: ["pescada", "pescadinha"], exclude: /panad/i },
-  { id: "lula", label: "Lula", unit: "kg", heads: ["lula"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
-  { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "lula", label: "Lula", unit: "kg", heads: ["lula"] },
+  { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"] },
   { id: "douradinho", label: "Douradinho", unit: "kg", heads: ["douradinho"] },
-  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"] },
   { id: "choco", label: "Choco", unit: "kg", heads: ["choco"], exclude: /chocolate/i },
   { id: "ameijoa", label: "Amêijoa", unit: "kg", heads: ["ameijoa"] },
   { id: "dourada", label: "Dourada", unit: "kg", heads: ["dourada"] },
   { id: "robalo", label: "Robalo", unit: "kg", heads: ["robalo"] },
   { id: "carapau", label: "Carapau", unit: "kg", heads: ["carapau"] },
-  { id: "cavala-lata", label: "Cavala em lata", unit: "kg", heads: ["cavala"], require: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
-  { id: "cavala", label: "Cavala fresca ou congelada", unit: "kg", heads: ["cavala"], exclude: /fumad/i },
+  { id: "cavala", label: "Cavala", unit: "kg", heads: ["cavala"] },
   { id: "corvina", label: "Corvina", unit: "kg", heads: ["corvina"] },
   { id: "tamboril", label: "Tamboril", unit: "kg", heads: ["tamboril"] },
   { id: "perca", label: "Perca", unit: "kg", heads: ["perca"] },
   { id: "truta", label: "Truta", unit: "kg", heads: ["truta"] },
   { id: "linguado", label: "Linguado", unit: "kg", heads: ["linguado"] },
-  { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"], exclude: /\bazeite\b|\boleo\b|ao natural|\btomate\b|\bmolho\b|mostarda|escabeche|\blatas?\b|conserva|piri.?piri|\bem agua\b|\blimao\b|picante|malagueta|\bcaril\b|\balho\b|\(\d+\)/i },
+  { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"] },
   // Salmon heads, kept out of salmão, would otherwise fall to this type through
   // Auchan's "peixe-fresco" shelf. Only SALMON heads: Auchan writes CABEÇA into
   // many fish names, and at EUR 21.99/kg "DOURADA MAR CABEÇA" is not a head.
@@ -619,7 +614,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     exclude: /maca|chocolate|goiabada|\bcreme\b|\bdoce\b|\bnata\b|frutos|canela|twists?|feuilletine|manteiga/i },
   { id: "rissol", label: "Rissol", unit: "kg", heads: ["rissoi", "rissol"] },
   { id: "panqueca", label: "Panqueca", hidden: "sweets", unit: "kg", heads: ["panqueca"] },
-  { id: "empada", label: "Empada", unit: "kg", heads: ["empada", "empadao"] },
+  // "Empanada de Atum" is a pie, not tuna: the word used to be read past as a cut.
+  { id: "empada", label: "Empada", unit: "kg", heads: ["empada", "empadao", "empanada"] },
   { id: "croquete", label: "Croquete", unit: "kg", heads: ["croquete", "croqueta"] },
   // "Pastel" used to be one kind: pastel de nata next to codfish cakes.
   // 17 October 2026.

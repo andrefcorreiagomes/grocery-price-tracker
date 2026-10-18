@@ -9,7 +9,8 @@ import type { IndexEntry } from "@/lib/grupos";
 import styles from "./FoodTypeFilter.module.css";
 
 /**
- * Narrowing a list of 166 kinds of food down to the one you want.
+ * The food list, grouped under the categories of the food tree, and narrowed
+ * as you type.
  *
  * A filter over names already on the page, NOT a search over products - the
  * whole list arrives from the server and nothing is fetched again as you type.
@@ -37,12 +38,13 @@ export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
   const needle = stripAccents(query).toLowerCase().trim();
   const shown = needle === "" ? entries : prepared.filter((p) => p.haystack.includes(needle)).map((p) => p.entry);
 
-  // A food sold both ways appears twice; the qualifier tells the two apart.
-  const twiceListed = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const e of entries) seen.set(e.id, (seen.get(e.id) ?? 0) + 1);
-    return seen;
-  }, [entries]);
+  // In the tree's category order, which the server already gives.
+  const byCategory: { id: string; label: string; rows: IndexEntry[] }[] = [];
+  for (const e of shown) {
+    const last = byCategory[byCategory.length - 1];
+    if (last && last.id === e.categoryId) last.rows.push(e);
+    else byCategory.push({ id: e.categoryId, label: e.categoryLabel, rows: [e] });
+  }
 
   return (
     <>
@@ -56,54 +58,63 @@ export default function FoodTypeFilter({ entries }: { entries: IndexEntry[] }) {
           aria-label="Procurar um alimento"
         />
         <span className={styles.count} aria-live="polite">
-          {/* Kinds of food, not rows: a food sold both by weight and by volume
-              (eggs, sauces) has a row for each, and counting rows said 166
-              where there are 163. */}
-          {shown.length === entries.length
-            ? `${kinds(entries)} alimentos`
-            : `${kinds(shown)} de ${kinds(entries)}`}
+          {shown.length === entries.length ? `${kinds(entries)} alimentos` : `${kinds(shown)} de ${kinds(entries)}`}
         </span>
       </div>
 
       {shown.length === 0 ? (
         <p className={styles.empty}>
-          Nada encontrado para “{query}”. Só aparecem aqui alimentos que as três
-          cadeias vendem e que podemos comparar ao quilo ou ao litro.
+          Nada encontrado para “{query}”. Só aparecem aqui alimentos que pelo menos
+          duas cadeias vendem e que podemos comparar ao quilo, ao litro ou à unidade.
         </p>
       ) : (
-        <ul className={styles.list}>
-          {shown.map((t) => (
-            <li key={`${t.id}-${t.unit}`}>
-              <Link href={`/grupos/${encodeURIComponent(t.id)}`} className={styles.row}>
-                <span className={styles.name}>
-                  {t.label}
-                  {(twiceListed.get(t.id) ?? 0) > 1 && (
-                    <span className={styles.qualifier}>
-                      {t.unit === "kg" ? " (ao peso)" : t.unit === "l" ? " (ao volume)" : " (à unidade)"}
+        byCategory.map((c) => (
+          <section key={c.id} className={styles.category}>
+            <h2 className={styles.categoryHeading}>
+              {c.label}
+              <span className={styles.categoryCount}>{c.rows.length}</span>
+            </h2>
+            <ul className={styles.list}>
+              {c.rows.map((t) => (
+                <li key={t.id}>
+                  <Link href={`/grupos/${encodeURIComponent(t.id)}`} className={styles.row}>
+                    <span className={styles.name}>
+                      {t.label}
+                      {/* What the headline price compares, when the page holds
+                          several comparisons: "desde 4.99 €/kg" for chicken is
+                          the price of breast, not of chicken in general. */}
+                      {t.comparisons > 1 && (
+                        <span className={styles.qualifier}>
+                          {" "}
+                          {t.mainTitle !== t.label ? t.mainTitle.toLowerCase() : ""}
+                          {t.mainTitle !== t.label ? " · " : ""}
+                          {t.comparisons} comparações
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <span className={styles.price}>
-                  {t.cheapestPrice !== null && (
-                    <>
-                      desde <strong>{t.cheapestPrice.toFixed(2)} €</strong>
-                      <span className={styles.per}>/{UNIT_LABEL[t.unit]}</span>
-                    </>
-                  )}
-                </span>
-                <span className={styles.winner}>
-                  {/* A tie names every store in it: naming one would say it
-                      was cheaper. Three names do not fit a phone row. */}
-                  {t.winners.length === 0
-                    ? "—"
-                    : t.winners.length === 3
-                      ? "As três"
-                      : t.winners.map((w) => STORE_LABELS[w as Store]).join(" · ")}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                    <span className={styles.price}>
+                      {t.cheapestPrice !== null && (
+                        <>
+                          desde <strong>{t.cheapestPrice.toFixed(2)} €</strong>
+                          <span className={styles.per}>/{UNIT_LABEL[t.unit]}</span>
+                        </>
+                      )}
+                    </span>
+                    <span className={styles.winner}>
+                      {/* A tie names every store in it: naming one would say it
+                          was cheaper. Three names do not fit a phone row. */}
+                      {t.winners.length === 0
+                        ? "—"
+                        : t.winners.length === 3
+                          ? "As três"
+                          : t.winners.map((w) => STORE_LABELS[w as Store]).join(" · ")}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </>
   );

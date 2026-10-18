@@ -36,16 +36,26 @@ export function subKindOf(kind: string, name: string): string | null {
   return rules.find((r) => r.match.test(n))?.id ?? null;
 }
 
-/** Every label that applies to a product of this kind, in the order LABELS lists them. */
-export function labelsOf(kind: string, name: string): string[] {
+/**
+ * Every label that applies to a product of this kind, in the order LABELS lists
+ * them, each once (a label can have more than one rule).
+ */
+export function labelsOf(kind: string, name: string, categoryPath: string | null = null): string[] {
   const n = plain(name);
+  const shelf = plain(categoryPath ?? "");
   const category = categoryOf(kind)?.id;
-  return LABELS.filter(
+  const ids = LABELS.filter(
     (l) =>
       (!l.categories || (category !== undefined && l.categories.includes(category))) &&
       (!l.kinds || l.kinds.includes(kind)) &&
-      l.match.test(n)
+      (l.match.test(n) || (l.shelf !== undefined && shelf !== "" && l.shelf.test(shelf)))
   ).map((l) => l.id);
+  return [...new Set(ids)];
+}
+
+/** A label's name as the site shows it ("Congelado"). */
+export function labelName(id: string): string {
+  return LABELS.find((l) => l.id === id)?.label ?? id;
 }
 
 /**

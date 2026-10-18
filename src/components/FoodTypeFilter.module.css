@@ -103,3 +103,23 @@
   }
 }
 
+
+/* One category of the food tree, with its kinds of food below. */
+.category {
+  margin-top: 1.6rem;
+}
+
+.categoryHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  padding: 0 0.4rem 0.4rem;
+}
+
+.categoryCount {
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}

@@ -57,7 +57,7 @@ async function main() {
       continue;
     }
     const subKind = subKindOf(type, r.name);
-    const labels = labelsOf(type, r.name);
+    const labels = labelsOf(type, r.name, r.categoryPath);
     assignments.push({ id: r.id, foodType: type, subKind, labels: labels.length ? labels.join(",") : null });
     for (const l of labels) labelCount.set(l, (labelCount.get(l) ?? 0) + 1);
     if (SUB_KINDS[type]) {

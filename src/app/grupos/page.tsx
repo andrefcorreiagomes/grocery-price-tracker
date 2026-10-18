@@ -15,9 +15,10 @@ export default async function GruposPage() {
       <header className={styles.header}>
         <h1>Onde é mais barato?</h1>
         <p className={styles.lede}>
-          O preço por quilo ou por litro de {new Set(types.map((t) => t.id)).size} tipos de alimento, nas três
-          cadeias. Cada um mostra o produto mais barato de cada loja, e não apenas o
-          número.
+          O preço por quilo, por litro ou por unidade de {new Set(types.map((t) => t.id)).size} tipos de
+          alimento, arrumados por categoria. Cada um compara só produtos do mesmo
+          tipo e vendidos da mesma forma (o peito com o peito, o congelado com o
+          congelado) e mostra o produto mais barato de cada loja.
         </p>
       </header>
 
@@ -27,9 +28,9 @@ export default async function GruposPage() {
 
       <footer className={styles.footer}>
         <p>
-          Só aparecem aqui os alimentos que as três cadeias vendem e que podemos
-          comparar ao quilo ou ao litro. Um produto sem peso indicado não entra na
-          comparação, porque sem o peso não há preço por quilo.
+          Só aparecem aqui os alimentos que pelo menos duas cadeias vendem e que
+          podemos comparar ao quilo, ao litro ou à unidade. Um produto sem peso
+          indicado não entra na comparação, porque sem o peso não há preço por quilo.
         </p>
         <p className={styles.freshness}>
           Preços recolhidos:{" "}

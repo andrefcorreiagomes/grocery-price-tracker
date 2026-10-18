@@ -51,9 +51,8 @@ export const CATEGORIES: Category[] = [
     "hamburguer", "almondega", "nugget",
   ] },
   { id: "peixe", label: "Peixe e marisco", kinds: [
-    // The tinned kinds join their fish, with the label "em lata", once the
-    // site compares by label (step 2 of the tree).
-    "bacalhau", "salmao", "pescada", "atum", "atum-lata", "sardinha", "sardinha-lata", "cavala", "cavala-lata",
+    // Tinned and fresh fish are one kind each; the label "em lata" keeps them apart.
+    "bacalhau", "salmao", "pescada", "atum", "sardinha", "cavala",
     "dourada", "robalo", "carapau", "corvina", "tamboril", "perca", "truta", "linguado", "peixe-espada", "pargo",
     "garoupa", "raia", "red-fish", "safio", "maruca", "pregado", "besugo", "faneca", "sargo", "filete-panado",
     "douradinho", "camarao", "ameijoa", "mexilhao", "lula", "polvo", "pota", "choco", "sapateira", "berbigao",
@@ -267,6 +266,8 @@ export interface Label {
   id: string;
   label: string;
   match: RegExp;
+  /** also applies when the store's own shelf matches this */
+  shelf?: RegExp;
   /** limited to these categories; everywhere when absent */
   categories?: string[];
   /** or to these kinds */
@@ -284,7 +285,18 @@ export const LABELS: Label[] = [
     // In fish, "em azeite" and a drained weight "120 (84) G" mean a tin; in
     // pulses and vegetables, "cozido" means the cooked jar rather than dried.
     match: /\blatas?\b|conserva|\bfrasco\b|\bem (azeite|oleo|agua|tomate|molho|escabeche)\b|ao natural|\(\d+\)|\bcozid[oa]s?\b/,
+    // Whatever a chain files under its tinned-goods shelf is tinned, though
+    // the name may not say so ("Atum Posta Natural"). 18 October 2026.
+    shelf: /conserva/,
     categories: ["peixe", "legumes", "leguminosas", "fruta", "charcutaria"],
+  },
+  {
+    // Tinned fish names say more ways than other tins: "Filetes Cavala Óleo
+    // Vegetal", "em Mostarda", "Picante", "com Alho". These words mean a tin
+    // only for fish - "alho" is garlic in a vegetable. 17 October 2026.
+    id: "lata", label: "Em lata ou frasco",
+    match: /\bazeite\b|\boleo\b|\btomate\b|\bmolho\b|mostarda|piri.?piri|\blimao\b|picante|malagueta|\bcaril\b|\balho\b/,
+    categories: ["peixe"],
   },
   { id: "fumado", label: "Fumado", match: /fumad/ },
   // Not "frutos secos" (nuts), which names a whole aisle.

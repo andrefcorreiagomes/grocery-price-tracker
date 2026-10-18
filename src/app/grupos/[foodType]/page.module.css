@@ -156,3 +156,57 @@
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
   font-variant-numeric: tabular-nums;
 }
+
+/* The category this kind of food belongs to, above its name. */
+.category {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  margin-bottom: 0.3rem;
+}
+
+/* Links to each comparison on a page that holds several. */
+.contents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+}
+
+.contents a {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 999px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.contents a:hover,
+.contents a:focus-visible {
+  border-color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+/* One comparison's heading: what is compared, and how many products. */
+.groupHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.8rem;
+  font-size: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  scroll-margin-top: 1rem;
+}
+
+.groupCount {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.unitWord {
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
