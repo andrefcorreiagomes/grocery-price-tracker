@@ -2,6 +2,8 @@ import { prisma } from "../lib/db";
 import { STORE_ORDER } from "../lib/stores";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { FOOD_TYPES } from "../../data/food-types";
+import { SUB_KINDS } from "../../data/food-tree";
+import { labelsOf, subKindOf } from "../lib/food-tree";
 
 /**
  * Label every catalogue product with the KIND of food it is. No network.
@@ -39,7 +41,10 @@ async function main() {
 
   interface Row { labelled: number; sized: number; byStore: Map<string, number>; samples: string[] }
   const perType = new Map<string, Row>();
-  const assignments: { id: string; foodType: string }[] = [];
+  const assignments: { id: string; foodType: string; subKind: string | null; labels: string | null }[] = [];
+  /** kind -> sub-kind -> stores that sell it, for the sub-kind coverage report */
+  const subStores = new Map<string, Map<string, Map<string, number>>>();
+  const labelCount = new Map<string, number>();
   let unmatched = 0;
   const unmatchedHeads = new Map<string, number>();
 
@@ -51,7 +56,18 @@ async function main() {
       unmatchedHeads.set(head, (unmatchedHeads.get(head) ?? 0) + 1);
       continue;
     }
-    assignments.push({ id: r.id, foodType: type });
+    const subKind = subKindOf(type, r.name);
+    const labels = labelsOf(type, r.name);
+    assignments.push({ id: r.id, foodType: type, subKind, labels: labels.length ? labels.join(",") : null });
+    for (const l of labels) labelCount.set(l, (labelCount.get(l) ?? 0) + 1);
+    if (SUB_KINDS[type]) {
+      const byKind = subStores.get(type) ?? new Map<string, Map<string, number>>();
+      const key = subKind ?? "(none)";
+      const byStore = byKind.get(key) ?? new Map<string, number>();
+      byStore.set(r.store, (byStore.get(r.store) ?? 0) + 1);
+      byKind.set(key, byStore);
+      subStores.set(type, byKind);
+    }
 
     const row: Row =
       perType.get(type) ?? { labelled: 0, sized: 0, byStore: new Map<string, number>(), samples: [] };
@@ -129,26 +145,51 @@ async function main() {
     }
   }
 
+  // --- sub-kinds and labels (data/food-tree.ts) ------------------------------
+  if (!only) {
+    console.log("\nsub-kinds: products per chain (C/P/A); a sub-kind needs at least two chains");
+    const thin: string[] = [];
+    for (const [kind, rules] of Object.entries(SUB_KINDS)) {
+      const byKind = subStores.get(kind);
+      if (!byKind) continue;
+      const parts = [...rules.map((r) => r.id), "(none)"].map((id) => {
+        const st = byKind.get(id) ?? new Map<string, number>();
+        if (id !== "(none)" && st.size < 2) thin.push(`${kind}/${id}`);
+        return `${id} ${STORES.map((x) => st.get(x) ?? 0).join("/")}`;
+      });
+      console.log(`  ${kind.padEnd(10)} ${parts.join(" | ")}`);
+    }
+    if (thin.length > 0) console.log(`  below two chains today: ${thin.join(", ")}`);
+    console.log(`labels: ${[...labelCount].map(([l, n]) => `${l} ${n}`).join(", ")}`);
+  }
+
   // --- write ----------------------------------------------------------------
   if (dry || only) {
     console.log("\nnothing written (dry run or single-type inspection).");
   } else {
-    await prisma.catalogueProduct.updateMany({ data: { foodType: null } });
-    const groups = new Map<string, string[]>();
+    await prisma.catalogueProduct.updateMany({ data: { foodType: null, subKind: null, labels: null } });
+    // Grouped by (kind, sub-kind, labels), so this is a few hundred updateMany
+    // calls rather than 37,000 single ones.
+    const groups = new Map<string, { foodType: string; subKind: string | null; labels: string | null; ids: string[] }>();
     for (const a of assignments) {
-      const bucket = groups.get(a.foodType) ?? [];
-      bucket.push(a.id);
-      groups.set(a.foodType, bucket);
+      const key = `${a.foodType}|${a.subKind ?? ""}|${a.labels ?? ""}`;
+      const bucket = groups.get(key) ?? { foodType: a.foodType, subKind: a.subKind, labels: a.labels, ids: [] };
+      bucket.ids.push(a.id);
+      groups.set(key, bucket);
     }
     let written = 0;
-    for (const [foodType, ids] of groups) {
-      for (let i = 0; i < ids.length; i += 500) {
-        const batch = ids.slice(i, i + 500);
-        await prisma.catalogueProduct.updateMany({ where: { id: { in: batch } }, data: { foodType } });
+    for (const g of groups.values()) {
+      for (let i = 0; i < g.ids.length; i += 500) {
+        const batch = g.ids.slice(i, i + 500);
+        await prisma.catalogueProduct.updateMany({
+          where: { id: { in: batch } },
+          data: { foodType: g.foodType, subKind: g.subKind, labels: g.labels },
+        });
         written += batch.length;
       }
     }
-    console.log(`\nwrote foodType on ${written.toLocaleString()} products across ${groups.size} types.`);
+    const types = new Set(assignments.map((a) => a.foodType)).size;
+    console.log(`\nwrote foodType, sub-kind and labels on ${written.toLocaleString()} products across ${types} types.`);
   }
 
   await prisma.$disconnect();

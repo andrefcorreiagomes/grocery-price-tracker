@@ -195,6 +195,17 @@ model CatalogueProduct {
   /// deliberately left honest rather than forced into a bucket.
   foodType String?
 
+  /// The cut or variety within the kind of food - "peito" within frango,
+  /// "basmati" within arroz - from data/food-tree.ts. Null when the kind has no
+  /// sub-kinds or the name matches none. Rewritten by `npm run classify:food`.
+  subKind String?
+
+  /// How the product is sold, as a comma-separated list of label ids from
+  /// data/food-tree.ts: "congelado", "lata", "fumado", "seco", "bio",
+  /// "sem-lactose", "sem-gluten", "porco-preto". Null when none apply.
+  /// Rewritten by `npm run classify:food`.
+  labels String?
+
   /// Last time a product-page confirmed this product is LISTED BUT UNAVAILABLE:
   /// the page loads and the product exists, but carries no price - out of stock,
   /// or sold by variable weight with no fixed price. Distinct from `delistedAt`

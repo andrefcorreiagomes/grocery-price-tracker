@@ -1,7 +1,11 @@
 import { prisma } from "../lib/db";
 import { parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/matching";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
-import { eggCountFromName, eggCountFromUnitPrice } from "../lib/egg-count";
+import { itemCount } from "../lib/egg-count";
+import { FOOD_TYPES } from "../../data/food-types";
+
+/** The kinds compared per item rather than per kilo or litre. */
+const PER_ITEM = new Set(FOOD_TYPES.filter((t) => t.unit === "un").map((t) => t.id));
 import { implausiblePodSize } from "../scrapers/page-size";
 
 /**
@@ -41,17 +45,19 @@ async function main() {
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
 
-  // Eggs are COUNTED, not weighed (src/lib/egg-count.ts): the count from the
-  // name, or from the store's own price per egg. Worked out first, and kept
-  // out of both passes below, which deal in kilos and litres and would read a
-  // box of eggs as unknown. A box whose count cannot be found keeps whatever it
-  // has, which leaves it out of the egg comparison rather than guessed.
+  // Eggs and coffee capsules are COUNTED, not weighed (src/lib/egg-count.ts):
+  // the count from the name, or from the store's own price per item. Worked out
+  // first, and kept out of both passes below, which deal in kilos and litres
+  // and would read a box of eggs as unknown. A pack whose count cannot be found
+  // keeps whatever it has, which leaves it out of the comparison rather than
+  // guessed.
   const eggs: { id: string; count: number }[] = [];
   const eggIds = new Set<string>();
   for (const r of food) {
-    if (classifyFoodType(r.name, r.store, r.categoryPath) !== "ovo") continue;
+    const kind = classifyFoodType(r.name, r.store, r.categoryPath);
+    if (kind === null || !PER_ITEM.has(kind)) continue;
     eggIds.add(r.id);
-    const count = eggCountFromName(r.name) ?? eggCountFromUnitPrice(r.price, r.shownUnitPrice, r.shownUnitPriceUnit);
+    const count = itemCount(kind, r.name, r.price, r.shownUnitPrice, r.shownUnitPriceUnit);
     if (count !== null && !(r.packageSize === count && r.unit === "un")) eggs.push({ id: r.id, count });
   }
 
@@ -208,7 +214,7 @@ async function main() {
     }
   }
 
-  console.log(`\negg boxes: ${eggIds.size}, ${eggs.length} count(s) to write`);
+  console.log(`\npacks counted per item (eggs, capsules): ${eggIds.size}, ${eggs.length} count(s) to write`);
 
   if (dry) {
     console.log("\n--dry: nothing written.");

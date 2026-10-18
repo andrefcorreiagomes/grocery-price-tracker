@@ -108,7 +108,7 @@ export const CUT_WORDS: readonly string[] = [
   "miolo", "rillette", "foie", "copita",
   // cut formats
   "bife", "bifinho", "tira", "tranche", "medalhao", "escalope", "rodela",
-  "cubo", "pedaco", "porcao", "metade", "suprema", "atado",
+  "cubo", "pedaco", "porcao", "metade", "quarto", "suprema", "atado",
   // "Flocos de Aveia", "FLOCOS SALUTEM AVEIA": the flakes are the format, the
   // grain is the food. 17 October 2026.
   "floco",
@@ -138,6 +138,22 @@ export const ANIMALS: readonly string[] = [
 ];
 
 // Which store sections hold food is decided in data/store-sections.ts.
+
+/**
+ * What makes a name coffee, shared by the two coffee kinds. "compativ":
+ * capsules sold as compatible with a machine are coffee capsules unless the
+ * exclusion below says otherwise.
+ */
+const COFFEE_WORDS = String.raw`(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|roast|blend|meia de leite|latte|macchiato|cap+uc|buondi|sical|delta|nicola|nespresso|\bnsp\b|dolce gusto|\bdg\b|tassimo|starbucks|torrie|l'or|intensidade|compativ`;
+
+/**
+ * Sweets flavoured with coffee are sweets, wherever they are shelved. The
+ * plural only: "caramelos" are the sweets, "Cápsulas de Café Caramelo" is
+ * coffee with a flavour. Barley and chicory are coffee substitutes, not
+ * coffee: "CEVADA DELTA TORRADA MOÍDA" got in on the Delta brand and became the
+ * cheapest coffee in the country at EUR 6.09/kg.
+ */
+const COFFEE_EXCLUDE = /rebucado|\bcaramelos\b|\bdrops\b|\bgomas?\b|\bchupa|elastica|^(?!.*(?:(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|meia de leite|latte|macchiato|cap+uc)).*(?:choco|\bcha\b|tisana|infus|milka|nesquik|leite|cevada|chicoria|malte)/i;
 
 export const FOOD_TYPES: readonly FoodType[] = [
   // --- Frescos: fruta e legumes -------------------------------------------
@@ -195,8 +211,13 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "abacate", label: "Abacate", unit: "kg", heads: ["abacate"], exclude: /guacamole|\boleo\b/i },
   { id: "limao", label: "Limão", unit: "kg", heads: ["limao"],
     exclude: /sumo|limonada|refresco|\bcha\b|infus|tarte|bolo|bolacha|gelado|iogurte|\bdoce\b/i },
-  { id: "tangerina", label: "Tangerina e clementina", unit: "kg", heads: ["tangerina", "clementina", "mandarina"],
-    exclude: /sumo|gelado|iogurte|\bdoce\b|calda/i },
+  // Two different fruits (decided 18 October 2026). Pingo Doce names its
+  // tangerines "Mandarina". A product sold as both ("Clementina/Mandarina")
+  // goes in neither rather than being guessed.
+  { id: "clementina", label: "Clementina", unit: "kg", heads: ["clementina", "tangerina", "mandarina"], require: /clementin/i,
+    exclude: /mandarin|tangerin|sumo|gelado|iogurte|\bdoce\b|calda/i },
+  { id: "tangerina", label: "Tangerina", unit: "kg", heads: ["clementina", "tangerina", "mandarina"], require: /mandarin|tangerin/i,
+    exclude: /clementin|sumo|gelado|iogurte|\bdoce\b|calda/i },
   { id: "cereja", label: "Cereja", unit: "kg", heads: ["cereja"],
     exclude: /calda|cristaliz|licor|chocolate|bombo|\bdoce\b|compota|tomate cereja/i },
   { id: "nectarina", label: "Nectarina", unit: "kg", heads: ["nectarina"], exclude: /calda|sumo|\bdoce\b/i },
@@ -234,16 +255,29 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pato", label: "Pato", unit: "kg", heads: ["pato"], exclude: /codorni|perdiz|faisao/i },
   { id: "porco", label: "Porco", unit: "kg", heads: ["porco", "suino", "leitao"] },
   // Meat, not offal: a beef kidney was the cheapest "beef". 17 October 2026.
-  { id: "vaca", label: "Vaca e novilho", unit: "kg", heads: ["vaca", "bovino", "novilho", "vitela"],
+  // Beef in two kinds (decided 18 October 2026): calf, whose name always says
+  // so ("vitela", "vitelão"), and all other beef ("novilho", "bovino", or no
+  // age at all). Picanha is a cut of either, not a kind of its own. Meat, not
+  // offal: a beef kidney was the cheapest "beef". 17 October 2026.
+  { id: "vitela", label: "Vitela", unit: "kg", heads: ["vaca", "bovino", "novilho", "novilha", "vitela", "vitelao", "picanha"],
+    require: /\bvitela\b|vitelao/i,
     exclude: /\b(rim|rins|figado|lingua|dobrada|bucho|tripas?|mioleira|rabo|maos?)\b|coracao de (bovino|vaca|vitela|novilho)/i },
-  { id: "borrego", label: "Borrego e cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"] },
+  { id: "vaca", label: "Vaca", unit: "kg", heads: ["vaca", "bovino", "novilho", "novilha", "vitela", "vitelao", "picanha"],
+    exclude: /\bvitela\b|vitelao|\b(rim|rins|figado|lingua|dobrada|bucho|tripas?|mioleira|rabo|maos?)\b|coracao de (bovino|vaca|vitela|novilho)/i },
+  // Lamb and kid goat are different meats (decided 18 October 2026).
+  { id: "borrego", label: "Borrego", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"], exclude: /cabrito/i },
+  { id: "cabrito", label: "Cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"], require: /cabrito/i },
   { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"] },
   { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"] },
   // Charcutaria: these name an animal but ARE the food type - see CUT_WORDS.
   { id: "salsicha", label: "Salsicha", nameOnly: true, unit: "kg", heads: ["salsicha", "salsichao"] },
   { id: "fiambre", label: "Fiambre", unit: "kg", heads: ["fiambre"] },
   { id: "chourico", label: "Chouriço", unit: "kg", heads: ["chourico", "chouricao", "chourica"] },
-  { id: "presunto", label: "Presunto", unit: "kg", heads: ["presunto"] },
+  // Cured shoulder ("Paleta de Porco Preto", sliced, about EUR 64/kg) is ham,
+  // not fresh pork shoulder: a "paleta" that is sliced, cured, or sold by the
+  // gram. Otherwise "paleta" is read past as a cut. 18 October 2026.
+  { id: "presunto", label: "Presunto", unit: "kg", heads: ["presunto", "paleta"],
+    require: /presunto|speck|jamon|prosciutto|parma|serrano|fatiad|curad|cebo|bolota|montanheira|iberic|\b\d{2,3}\s*g\b/i },
   { id: "hamburguer", label: "Hambúrguer", unit: "kg", heads: ["hamburguer", "hamburguere", "hamburger"] },
   // Bacon must say so in its own name, or be one of its close relatives:
   // pancetta, and "barriga fumada" (smoked pork belly, which is what bacon
@@ -260,7 +294,6 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "alheira", label: "Alheira", unit: "kg", heads: ["alheira"] },
   { id: "farinheira", label: "Farinheira", unit: "kg", heads: ["farinheira"] },
   { id: "linguica", label: "Linguiça", unit: "kg", heads: ["linguica"] },
-  { id: "picanha", label: "Picanha", unit: "kg", heads: ["picanha"] },
   { id: "salpicao", label: "Salpicão", unit: "kg", heads: ["salpicao"] },
   { id: "morcela", label: "Morcela", unit: "kg", heads: ["morcela"] },
 
@@ -363,7 +396,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // coffee drinks, condensed or powdered milk, or coconut "milk" (all came in
   // through shelves or the name). 17 October 2026.
   { id: "leite", label: "Leite", nameOnly: true, unit: "l", heads: ["leite", "bebida"], require: /\bleite\b/i,
-    exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|protei|crescimento|infantil|fermentad/i },
+    // "Leite Creme" is a custard dessert. 18 October 2026.
+    exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|leite creme|protei|crescimento|infantil|fermentad/i },
   { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"] },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
@@ -410,7 +444,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "barbecue", label: "Molho barbecue", unit: "either", heads: ["molho"], require: /barbecue|\bbbq\b/i, exclude: /\bcom molho\b/i },
   { id: "molho-tomate", label: "Molho de tomate", unit: "either", heads: ["molho"], require: /\btomate\b/i, exclude: /\bcom molho\b|ketchup/i },
   // massa the pasta, not massa the dough
-  { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli"],
+  // Ravioli and tortellini are filled fresh pasta (a sub-kind), not a kind of
+  // their own. 18 October 2026.
+  { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli", "ravioli", "tortellini"],
     // Tofu, seitan and potato starch share Auchan's fresh-pasta shelves.
     exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
   // Sweets that are not chocolate, which reach here through the shelf rather
@@ -506,7 +542,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "mostarda", label: "Mostarda", unit: "kg", heads: ["mostarda"] },
   // Sweetcorn, not cornflakes, which the read past "flocos" would otherwise reach.
   { id: "milho", label: "Milho", unit: "kg", heads: ["milho"], exclude: /\bflocos?\b/i },
-  { id: "tortilha", label: "Tortilha", unit: "kg", heads: ["tortilha"] },
+  // The three chains sell the same flatbreads as "tortilhas" and "wraps".
+  // A filled wrap ("Wrap de Atum") is a sandwich, not the flatbread.
+  { id: "tortilha", label: "Tortilha e wrap", unit: "kg", heads: ["tortilha", "wrap"],
+    exclude: /\bwraps? de (?!trigo|milho|espelta|centeio|aveia|cereais)/i },
   { id: "caju", label: "Caju", unit: "kg", heads: ["caju"] },
   // The nut, plain, roasted or salted - not the sweet. 54 of 134 were Easter
   // chocolate almonds, sugared almonds ("tipo francês", "lisas cores"),
@@ -574,7 +613,6 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // "TOPOKKI ... KIMCHI") can still be a meal. 17 October 2026.
   { id: "refeicao", label: "Refeição pronta", unit: "kg", heads: ["refeicao"],
     exclude: /\b(fuba|flocao|canjic\w*|canjiquinha|xerem|sagu|farofa|mandioca|palmito|chucrute|jalapeno|tofu|tempeh|riced|veggie rice)\b|^(bulgur|seitan|kimchi)\b|trigo para kibe|preparados? (koala|duncan|mississippi)|mistura preparada|base (de pinsa|sopa)/i },
-  { id: "wrap", label: "Wrap", unit: "kg", heads: ["wrap"] },
   // Savoury: the sweet ones (apple, chocolate, guava) are set aside with the
   // sweets. 17 October 2026.
   { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"],
@@ -588,13 +626,16 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pastel-bacalhau", label: "Pastéis de bacalhau", unit: "kg", heads: ["pastel", "pastei"], require: /bacalhau/i },
   { id: "pastel-nata", label: "Pastel de nata", hidden: "sweets", unit: "kg", heads: ["pastel", "pastei"], require: /\bnata\b|belem/i },
   { id: "quiche", label: "Quiche", unit: "kg", heads: ["quiche"] },
-  { id: "ravioli", label: "Ravioli", unit: "kg", heads: ["ravioli"] },
   { id: "sande", label: "Sande", unit: "kg", heads: ["sande"] },
 
   // --- Bebidas -------------------------------------------------------------
   { id: "vinho", label: "Vinho", hidden: "drinks", unit: "l", heads: ["vinho"] },
   { id: "cerveja", label: "Cerveja", hidden: "drinks", unit: "l", heads: ["cerveja"] },
   { id: "refrigerante", label: "Refrigerante", hidden: "drinks", unit: "l", heads: ["refrigerante"] },
+  // Tonic water and flavoured waters are soft drinks, set aside with the other
+  // drinks; listed first so they claim those names. 18 October 2026.
+  { id: "agua-sabor", label: "Água tónica e com sabor", hidden: "drinks", nameOnly: true, unit: "l", heads: ["agua"],
+    require: /tonica|ginger|\bsabor|aromatizad|botanic|\bpink\b|\blima\b|\blimao\b|framboesa|morango|pessego|frutos/i },
   { id: "agua", label: "Água", nameOnly: true, unit: "l", heads: ["agua"] },
   // Breakfast cereals, not cereal BARS (a snack, set aside with the sweets) or
   // protein powders sold on the sports-nutrition cereal shelf. 17 October 2026.
@@ -610,16 +651,16 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // LEITE" is coffee, "CÁPSULAS TASSIMO MILKA" and "Cápsulas de Chá" are not.
   // Names like "CÁPSULAS DOLCE GUSTO BUONDI" used to reach café only through a
   // shelf that also names tea, which no longer decides.
+  //
+  // Capsules are their own kind, compared per CAPSULE (decided 18 October
+  // 2026): a box is sold by count - "30 UN" - and a price per kilo of capsules
+  // means nothing. Listed first, so it claims every coffee name that also says
+  // capsule, pod or a capsule system; the rest is ground, bean or instant.
+  { id: "cafe-capsula", label: "Café em cápsulas", unit: "un", heads: ["cafe", "capsula", "pastilha"],
+    require: new RegExp(`(?=.*(?:capsul|pastilha|\\bpods?\\b|nespresso|dolce gusto|tassimo|\\bnsp\\b|\\bdg\\b|delta q|compativ))(?=.*(?:${COFFEE_WORDS}))`, "i"),
+    exclude: COFFEE_EXCLUDE },
   { id: "cafe", label: "Café", unit: "kg", heads: ["cafe", "capsula", "pastilha"],
-    // "compativ": capsules sold as compatible with a machine are coffee
-    // capsules unless the exclude below says otherwise.
-    require: /(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|roast|blend|meia de leite|latte|macchiato|cap+uc|buondi|sical|delta|nicola|nespresso|\bnsp\b|dolce gusto|\bdg\b|tassimo|starbucks|torrie|l'or|intensidade|compativ/i,
-    // Sweets flavoured with coffee are sweets, wherever they are shelved. The
-    // plural only: "caramelos" are the sweets, "Cápsulas de Café Caramelo" is
-    // coffee with a flavour. Barley and chicory are coffee substitutes, not
-    // coffee: "CEVADA DELTA TORRADA MOÍDA" got in on the Delta brand and became
-    // the cheapest coffee in the country at EUR 6.09/kg.
-    exclude: /rebucado|\bcaramelos\b|\bdrops\b|\bgomas?\b|\bchupa|elastica|^(?!.*(?:(?:\b|nes)caf|coffee|galao|mocha|e[xs]pres|lungo|ristretto|meia de leite|latte|macchiato|cap+uc)).*(?:choco|\bcha\b|tisana|infus|milka|nesquik|leite|cevada|chicoria|malte)/i },
+    require: new RegExp(COFFEE_WORDS, "i"), exclude: COFFEE_EXCLUDE },
   { id: "sumo", label: "Sumo", hidden: "drinks", unit: "l", heads: ["sumo"] },
   { id: "infusao", label: "Infusão", unit: "kg", heads: ["infusao"] },
   { id: "espumante", label: "Espumante", hidden: "drinks", unit: "l", heads: ["espumante"] },

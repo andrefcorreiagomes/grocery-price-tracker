@@ -2,7 +2,8 @@ import { prisma } from "../lib/db";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { sectionKey, sectionOf, topSectionKind } from "../lib/store-sections";
 import { keepInCatalogue } from "../lib/catalogue-filter";
-import { eggCountFromName, eggCountFromUnitPrice } from "../lib/egg-count";
+import { capsuleCountFromName, eggCountFromName, eggCountFromUnitPrice, itemCount } from "../lib/egg-count";
+import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "../lib/food-tree";
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
@@ -288,6 +289,7 @@ export async function verifyMatching(): Promise<number> {
   failures += verifyStoreSections();
   failures += verifyRealFoodList();
   failures += verifySplitKinds();
+  failures += verifyFoodTree();
 
   await cleanup();
   return failures;
@@ -1031,11 +1033,11 @@ function verifyFoodTypes(): number {
   is("Quinta do Carmo Alentejano Vinho Branco", "CONTINENTE", "Bebidas e Garrafeira/Vinhos", "vinho");
   is("Herdade dos Grous Alentejo Vinho Rosé", "CONTINENTE", "Bebidas e Garrafeira/Vinhos", "vinho");
   // Category fallback: nothing in this name says coffee, but the shelf does.
-  is("Cápsulas Dolce Gusto Espresso Napoli", "PINGO_DOCE", "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas", "cafe");
+  is("Cápsulas Dolce Gusto Espresso Napoli", "PINGO_DOCE", "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas", "cafe-capsula");
   check(
-    "the category is read leaf-first, so Café em Cápsulas is café and not chá",
+    "capsules are coffee capsules, compared per capsule since 18 October 2026",
     classifyFoodType("Cápsulas Compatíveis 16un", "PINGO_DOCE",
-      "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas") === "cafe"
+      "Mercearia/Café, Chá e Bebidas Solúveis/Café em Cápsulas") === "cafe-capsula"
   );
 
   // A shelf that names several foods says what is NEAR a product, not what it
@@ -1058,9 +1060,9 @@ function verifyFoodTypes(): number {
   // What the old shelf rule got right is now claimed by name.
   console.log("\n  food types: claimed by name instead of by shelf");
   const cafeShelf = "alimentação/mercearia/café,-chá-e-infusão/cápsula-dolce-gusto-e-compatíveis";
-  is("CÁPSULAS DOLCE GUSTO BUONDI 64 UN", "AUCHAN", cafeShelf, "cafe");
-  is("CÁPSULAS TORRIÉ CAFÉ COM LEITE SOLÚVEL DOLCE GUSTO 16UN", "AUCHAN", cafeShelf, "cafe");
-  is("Cápsulas de Galão", "PINGO_DOCE", "Café, Chá e Achocolatados/Capsulas de Cafe", "cafe");
+  is("CÁPSULAS DOLCE GUSTO BUONDI 64 UN", "AUCHAN", cafeShelf, "cafe-capsula");
+  is("CÁPSULAS TORRIÉ CAFÉ COM LEITE SOLÚVEL DOLCE GUSTO 16UN", "AUCHAN", cafeShelf, "cafe-capsula");
+  is("Cápsulas de Galão", "PINGO_DOCE", "Café, Chá e Achocolatados/Capsulas de Cafe", "cafe-capsula");
   check("capsules of something else are not coffee",
     classifyFoodType("CÁPSULAS TASSIMO MILKA 8UN", "AUCHAN", cafeShelf) !== "cafe");
   check("nor are Nesquik capsules, even on a coffee shelf",
@@ -1073,7 +1075,7 @@ function verifyFoodTypes(): number {
   check("nor is saffron gum, though açafrão contains caf",
     classifyFoodType("Pastilhas Elásticas de Gengibre e Açafrão True Gum", "CONTINENTE", sweets) !== "cafe");
   is("Pastilhas Delta Café Platinum 16un", "AUCHAN",
-    "alimentação/mercearia/café,-chá-e-infusão/café-de-máquina,-grão-e-pastilhas", "cafe");
+    "alimentação/mercearia/café,-chá-e-infusão/café-de-máquina,-grão-e-pastilhas", "cafe-capsula");
   check("roasted barley is not coffee, though Delta also sells coffee",
     classifyFoodType("CEVADA DELTA TORRADA MOÍDA 220 G", "AUCHAN",
       "alimentação/mercearia/café,-chá-e-infusão/café-saco,-solúvel-e-cevadas") !== "cafe");
@@ -1733,12 +1735,58 @@ function verifySplitKinds(): number {
   check("codfish cakes are not pastel de nata", c("Pastéis de Bacalhau Congelados") === "pastel-bacalhau" && c("Pastel de Nata") === "pastel-nata");
   check("tomato pulp is its own kind", c("Polpa de Tomate") === "polpa-tomate" && c("Passata de Tomate Mutti") === "polpa-tomate");
   check("beef offal is not beef, but coração de alcatra is", c("Rim de Bovino Embalado", "PINGO_DOCE", "Talho") === null &&
-    c("Bife do Coração de Alcatra de Vitela", "CONTINENTE", "Frescos/Talho") === "vaca");
+    c("Bife do Coração de Alcatra de Vitela", "CONTINENTE", "Frescos/Talho") === "vitela");
   check("Caldo Verde is a soup, not a stock", c("Caldo Verde Continente") !== "caldo");
   check("salt flakes are salt", c("Flor de Sal Marnoto", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Sal") === "sal");
   check(
     "dried herbs on the salt-and-herbs shelf are not salt",
     c("TOMILHO PICADO AUCHAN DESIDRATADO", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos/ervas-aromáticas") === null
   );
+  return failures - before;
+}
+
+/** The food tree of 18 October 2026: categories, sub-kinds, labels, and the kinds it changed. */
+function verifyFoodTree(): number {
+  const before = failures;
+  console.log("\n  the food tree");
+  const c = (name: string, store = "PINGO_DOCE", path = "Mercearia") => classifyFoodType(name, store, path);
+
+  check("the tree is sound: every kind on the site in exactly one category", treeProblems().length === 0, treeProblems().join("; "));
+  check("a kind's category follows from the kind", categoryOf("frango")?.id === "carne" && categoryOf("coentros")?.id === "temperos");
+  check("a set-aside kind has no category yet, only where it will go", categoryOf("chocolate") === null && laterCategoryOf("vinho") === "Bebidas");
+
+  check("chicken breast is peito, wings are asa", subKindOf("frango", "Peito de Frango Embalado") === "peito" && subKindOf("frango", "ASAS DE FRANGO KG") === "asa");
+  check("semi-skimmed milk is not read as whole milk", subKindOf("leite", "Leite UHT Meio Gordo Mimosa") === "meio-gordo");
+  check("basmati and risotto rice", subKindOf("arroz", "Arroz Basmati Cigala") === "basmati" && subKindOf("arroz", "Arroz Arbório para Risotto") === "risotto");
+  check("a name matching no sub-kind has none", subKindOf("frango", "Frango para Churrasco Embalado") === null);
+  check("a kind with no sub-kinds gives none", subKindOf("banana", "Banana da Madeira") === null);
+
+  check("frozen and organic are labels, and can come together", labelsOf("ervilha", "Ervilhas Biológicas Congeladas").join() === "congelado,bio");
+  check("tuna in olive oil is tinned", labelsOf("atum", "Atum em Azeite Bom Petisco").includes("lata"));
+  check("olive oil is not tinned, though it says azeite", !labelsOf("azeite", "Azeite Virgem Extra Gallo").includes("lata"));
+  check("nuts are not dried fruit by the word secos", !labelsOf("noz", "Miolo de Noz Frutos Secos").includes("seco"));
+  check("porco preto is a label on pork and charcutaria", labelsOf("porco", "Lombo de Porco Preto").includes("porco-preto") &&
+    labelsOf("chourico", "Chouriço de Porco Preto").includes("porco-preto") && !labelsOf("pao", "Pão Alentejano").includes("porco-preto"));
+  check("Pingo Doce's \"Livre\" milk is lactose-free", labelsOf("leite", "Bebida de Leite UHT Livre Meio Gordo").includes("sem-lactose"));
+
+  check("clementines and tangerines are different kinds", c("CLEMENTINA KG", "AUCHAN", "produtos-frescos/fruta") === "clementina" &&
+    c("Mandarina Embalada", "PINGO_DOCE", "Frutas e Vegetais/Frutas") === "tangerina");
+  check("a product sold as both is neither", c("Clementina/Mandarina Continente", "CONTINENTE", "Frescos/Frutas") === null);
+  check("veal and beef are different kinds", c("Lombo de Vitelão", "PINGO_DOCE", "Talho") === "vitela" &&
+    c("Maminha de Novilho", "PINGO_DOCE", "Talho") === "vaca" && c("Picanha de Bovino Europa", "PINGO_DOCE", "Talho") === "vaca");
+  check("lamb and kid goat are different kinds", c("Perna de Borrego", "PINGO_DOCE", "Talho") === "borrego" &&
+    c("Quartos de Cabrito Balcão Continente", "CONTINENTE", "Frescos/Talho") === "cabrito");
+  check("cured shoulder is ham, fresh shoulder is pork", c("PALETA DE PORCO PRETO MONTARAZ 70 G", "AUCHAN", "produtos-frescos/charcutaria") === "presunto" &&
+    c("Paleta de Porco", "PINGO_DOCE", "Talho/Porco") === "porco");
+  check("Leite Creme is not milk", c("Leite Creme", "PINGO_DOCE", "Leite e Bebidas Vegetais/Leite") !== "leite");
+  check("tonic water is set aside with the drinks", c("Água Tónica Schweppes", "CONTINENTE", "Bebidas e Garrafeira/Água") === "agua-sabor");
+  check("ravioli is pasta, a filled wrap is not a flatbread", c("Ravioli 4 Queijos") === "massa" && c("Wrap de Atum") !== "tortilha" &&
+    c("Wraps de Trigo Integral") === "tortilha");
+  check("capsules are counted: 40UN, 10 cápsulas, x16", capsuleCountFromName("CÁPSULAS DELTA Q PACK XL 40UN") === 40 &&
+    capsuleCountFromName("Café 10 Cápsulas Nespresso") === 10 && capsuleCountFromName("Pastilhas x16") === 16 &&
+    capsuleCountFromName("Cápsulas de Café Intenso Int 13 Continente") === null);
+  check("each pack's count comes from the right rule", itemCount("ovo", "OVOS M 12UN", 2.99, null, null) === 12 &&
+    itemCount("cafe-capsula", "CAPSULAS DOLCE GUSTO ROBUSTO 30 UN", 10.49, null, null) === 30 && itemCount("arroz", "Arroz 1kg", 1, null, null) === null);
+
   return failures - before;
 }
