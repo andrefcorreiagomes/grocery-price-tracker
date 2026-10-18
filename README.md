@@ -74,7 +74,7 @@ task. This project has two:
 | Food products collected | **44,777**: Continente 17,047 · Pingo Doce 9,706 · Auchan 18,024 |
 | Products assigned a kind of food | **36,922** (82%), and 6,615 of them a cut or variety (sub-kind) as well |
 | Kinds of food defined so far | **233**, in 15 categories, from *alheira* and *farinheira* to *tremoço* and *requeijão*; sweets, desserts and drinks are set aside for now |
-| Kinds of food compared on the site | **196**, in 558 comparisons (same cut or variety, sold the same way), each priced at two chains or more |
+| Kinds of food compared on the site | **195**, in 554 comparisons (same cut or variety, sold the same way), each priced at two chains or more, using only products seen by their chain's crawls within the last 14 days |
 | Identical products matched across two chains | **916** |
 | Figures from | the crawls of 3 and 4 October 2026, after the section rules of 17 October left out 1,092 non-food products |
 

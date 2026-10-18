@@ -208,6 +208,12 @@ export interface PingoDoceSitemap {
   /** ids in non-food sections or skipped sub-sections, so held ones can stop being tracked */
   excludedIds: string[];
   /**
+   * Every product id the sitemap lists, in any section. A product we hold that
+   * is not here has left the store's own list - the only sign Pingo Doce gives,
+   * since a product it stops selling is simply never fetched again.
+   */
+  allIds: Set<string>;
+  /**
    * Top sections data/store-sections.ts does not decide. Should be zero. A new
    * department appearing here is a real event - it is products we would
    * otherwise never crawl - so it is surfaced rather than lumped in with
@@ -311,6 +317,6 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   }
 
   return {
-    food, nonFood, fromMixed, skipped, sections, excludedIds, unknownSections, unfiled, unparseable, unparseableSamples, perFile,
+    food, nonFood, fromMixed, skipped, sections, excludedIds, allIds: seen, unknownSections, unfiled, unparseable, unparseableSamples, perFile,
   };
 }

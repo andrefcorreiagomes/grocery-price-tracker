@@ -206,6 +206,26 @@ export async function staleDelisted(
 }
 
 /**
+ * At most this share of the products we hold may vanish from a store's own
+ * product list in one night before we stop believing the list. A store does
+ * not drop a twentieth of its range overnight; a truncated or broken list does.
+ */
+export const MAX_SHARE_MISSING = 0.05;
+
+/**
+ * Which of the products we hold the store's own product list no longer names,
+ * and whether that many is believable. Pure, so the guard is tested without a
+ * database.
+ */
+export function missingFromList(
+  held: string[],
+  listed: Set<string>
+): { missing: string[]; believable: boolean } {
+  const missing = held.filter((id) => !listed.has(id));
+  return { missing, believable: held.length === 0 || missing.length <= MAX_SHARE_MISSING * held.length };
+}
+
+/**
  * Record that a product page did not answer.
  *
  * Only a page that actually said the product is gone should land here - a 5xx

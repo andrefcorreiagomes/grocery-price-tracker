@@ -5,6 +5,7 @@ import { keepInCatalogue } from "../lib/catalogue-filter";
 import { capsuleCountFromName, eggCountFromName, eggCountFromUnitPrice, itemCount } from "../lib/egg-count";
 import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "../lib/food-tree";
 import { comparisonGroups, mainGroup, MIN_CHAINS, shownGroups, type TreeProduct } from "../lib/comparison-groups";
+import { missingFromList } from "../scrapers/crawl/product-checks";
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
@@ -23,7 +24,7 @@ import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
-import { MAX_NAMED_GROUPS } from "../lib/grupos";
+import { currentSince, MAX_NAMED_GROUPS, STALE_AFTER_DAYS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
 import { correctedSize, implausiblePodSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
 import {
@@ -292,6 +293,7 @@ export async function verifyMatching(): Promise<number> {
   failures += verifySplitKinds();
   failures += verifyFoodTree();
   failures += verifyComparisonGroups();
+  failures += verifyStaleProducts();
 
   await cleanup();
   return failures;
@@ -1823,5 +1825,22 @@ function verifyComparisonGroups(): number {
   check("two chains are enough to show a group", shownGroups(groups).length === 3 && MIN_CHAINS === 2);
   check("the main group is plain before labelled", mainGroup(groups)?.title === "Peito e bifes");
   check("a kind with no sub-kinds is titled by its own name", comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.title === "Banana");
+  return failures - before;
+}
+
+/** Products the crawls stopped seeing: out of the comparisons, and delisted at Pingo Doce. */
+function verifyStaleProducts(): number {
+  const before = failures;
+  console.log("\n  products the crawls stopped seeing");
+  const latest = new Date("2026-10-03T16:00:00Z");
+  check("a product seen in its chain's latest crawl is current", new Date("2026-10-03T12:00:00Z") >= currentSince(latest));
+  check("one last seen in August is not", new Date("2026-08-31T12:00:00Z") < currentSince(latest));
+  check("the window is measured from the chain's own latest crawl, not today", STALE_AFTER_DAYS === 14 &&
+    currentSince(latest).getTime() === latest.getTime() - 14 * 86_400_000);
+  const held = Array.from({ length: 100 }, (_, i) => `p${i}`);
+  const listed = new Set(held.slice(0, 97));
+  check("products missing from the store's list are found", missingFromList(held, listed).missing.join() === "p97,p98,p99");
+  check("a few missing is believable", missingFromList(held, listed).believable);
+  check("a fifth of the range vanishing overnight is not", !missingFromList(held, new Set(held.slice(0, 80))).believable);
   return failures - before;
 }

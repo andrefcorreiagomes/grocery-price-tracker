@@ -3,7 +3,13 @@ import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import type { PingoDoceProductUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { stopTrackingLeftOut } from "../scrapers/crawl/product-checks";
+import {
+  DEAD_NIGHTS_BEFORE_DELISTING,
+  MAX_SHARE_MISSING,
+  missingFromList,
+  recordDead,
+  stopTrackingLeftOut,
+} from "../scrapers/crawl/product-checks";
 import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
 import type { SearchHit } from "../scrapers/search/types";
 import { keepInCatalogue } from "../lib/catalogue-filter";
@@ -163,6 +169,29 @@ async function main() {
   if (stoppedByName > 0) {
     console.log(`\n${stoppedByName} held mixed-aisle product(s) not recognised as food; no longer tracked`);
   }
+
+  // A product Pingo Doce stops selling leaves its sitemap and is simply never
+  // fetched again, so it used to stay "on sale" forever with its last price -
+  // 180 of them on 18 October 2026, some priced in August. Now a product the
+  // sitemap no longer lists, or whose page says it is gone, counts a dead
+  // night; three in a row and it is delisted, as at the other two chains.
+  // Unless an implausible share vanished at once, which means a broken list.
+  const held = (
+    await prisma.catalogueProduct.findMany({
+      where: { store: "PINGO_DOCE", delistedAt: null },
+      select: { storeProductId: true },
+    })
+  ).map((r) => r.storeProductId);
+  const heldSet = new Set(held);
+  const absent = missingFromList(held, sitemap.allIds);
+  const pageSaysGone = crawl.dead.map((d) => d.storeProductId).filter((id) => heldSet.has(id));
+  const deadTonight = [...new Set([...(absent.believable ? absent.missing : []), ...pageSaysGone])];
+  const { delisted } = await recordDead("PINGO_DOCE", deadTonight, new Date());
+  console.log(
+    `\nno longer listed: ${absent.missing.length} held product(s) missing from the sitemap` +
+      (absent.believable ? "" : ` - more than ${MAX_SHARE_MISSING * 100}% of the range, so the list is not believed tonight`) +
+      `; ${pageSaysGone.length} page(s) said gone; ${delisted.length} delisted after ${DEAD_NIGHTS_BEFORE_DELISTING} nights`
+  );
 
   console.log("\nby department:");
   for (const r of crawl.results.sort((a, b) => b.products.length - a.products.length)) {

@@ -21,10 +21,33 @@ import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type Tr
  * database.
  */
 
+/**
+ * How long after its chain's latest crawl a product still counts as on sale.
+ *
+ * A product the crawls have stopped seeing keeps the price it had when last
+ * seen, and that price can be months old: on 18 October 2026, 180 Pingo Doce
+ * products had not been seen since August, among them three melons priced from
+ * before the per-kilo fix at EUR 0.34 a kilo - the "cheapest melon" on the
+ * site. Measured from each chain's own latest crawl rather than from today, so
+ * a fortnight without crawling empties nothing.
+ */
+export const STALE_AFTER_DAYS = 14;
+
+/** The oldest sighting that still counts as current, given a chain's latest crawl. */
+export function currentSince(latestCrawl: Date): Date {
+  return new Date(latestCrawl.getTime() - STALE_AFTER_DAYS * 86_400_000);
+}
+
+/** A database filter keeping only products seen recently by their own chain's crawls. */
+async function currentOnly() {
+  const fresh = await getFreshness();
+  return { OR: fresh.map((f) => ({ store: f.store, lastSeenAt: { gte: currentSince(f.lastSeenAt) } })) };
+}
+
 /** Rows of one food type, with their place in the tree. */
 async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
   return prisma.catalogueProduct.findMany({
-    where: { foodType: foodTypeId, delistedAt: null },
+    where: { foodType: foodTypeId, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, subKind: true, labels: true,
@@ -106,7 +129,7 @@ export interface IndexEntry {
  */
 export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
   const rows = await prisma.catalogueProduct.findMany({
-    where: { foodType: { not: null }, delistedAt: null },
+    where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, foodType: true, subKind: true, labels: true,
@@ -203,8 +226,9 @@ export async function getNamedGroups(
   measuredIn: MeasureUnit
 ): Promise<NamedGroups> {
   // Which catalogue rows of this food type belong to a group.
+  const current = await currentOnly();
   const rows = await prisma.catalogueProduct.findMany({
-    where: { foodType: foodTypeId, delistedAt: null },
+    where: { foodType: foodTypeId, delistedAt: null, ...current },
     select: {
       id: true, storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true,
@@ -235,7 +259,7 @@ export async function getNamedGroups(
   // alone reaches about 340 today, and groups only grow.
   for (let i = 0; i < otherIds.length; i += 500) {
     const others = await prisma.catalogueProduct.findMany({
-      where: { id: { in: otherIds.slice(i, i + 500) } },
+      where: { id: { in: otherIds.slice(i, i + 500) }, delistedAt: null, ...current },
       select: {
         id: true, storeProductId: true, store: true, name: true, brand: true,
         price: true, packageSize: true, unit: true,
