@@ -1098,7 +1098,10 @@ function verifyFoodTypes(): number {
   check("and a cod head on the general fish shelf is not 'other fish' either",
     classifyFoodType("BACALHAU CABEÇA KG", "AUCHAN", "produtos-frescos/peixaria/peixe-fresco") === null);
   is("Lombos de Bacalhau Graúdo Continente", "CONTINENTE", codShelf, "bacalhau");
-  is("LOMBOS RIBERALVES 4M CURA UNIDOSE MSC 240G", "AUCHAN", "congelados/peixe/bacalhau-e-paloco", "bacalhau");
+  // Undecided since pollock got a kind of its own (20 October 2026): this shelf
+  // now names two foods. Three pollock products on it were filed as cod before.
+  is("LOMBOS RIBERALVES 4M CURA UNIDOSE MSC 240G", "AUCHAN", "congelados/peixe/bacalhau-e-paloco", null);
+  is("PALOCO RIBERALVES PACIFICO DESFIADO MSC 400G", "AUCHAN", "congelados/peixe/bacalhau-e-paloco", "paloco");
   const smoked = "Frescos/Charcutaria/Bacon e Fumados";
   check("a smoked ham hock on the bacon shelf is not bacon",
     classifyFoodType("Pernil Fumado Primor", "CONTINENTE", smoked) !== "bacon");
@@ -1191,6 +1194,54 @@ function verifyFoodTypes(): number {
     "roast pork in beer sauce is not beer");
   // The scan must not override an exclude: pure de batata is not a potato.
   is("Puré de Batata Flocos Continente", "CONTINENTE", "Mercearia", null);
+
+  // The hand check of a 408-product sample, 20 October 2026: each mistake it
+  // found, and each everyday food it found without a kind.
+  console.log("\n  food types: the hand check of 20 October 2026");
+  const jams = "Mercearia/Compotas Mel e Cremes de Barrar/Compotas e Doces";
+  is("Doce de Abóbora com Amêndoa", "PINGO_DOCE", jams, null);
+  is("Mel de Rosmaninho", "PINGO_DOCE", jams, "mel");
+  is("Coelhos de Chocolate", "PINGO_DOCE", "Páscoa/Chocolates e Bombons", "chocolate");
+  is("Azeite de Dende Integral Kidendê", "CONTINENTE", "Mercearia/Azeite, Óleo e Vinagre/Azeite", null);
+  is("Milho para Pipocas Continente", "CONTINENTE", "Mercearia/Batatas Fritas e Aperitivos/Pipocas", "pipoca");
+  is("Grão Vasco Dão Vinho Tinto", "CONTINENTE", "Bebidas e Garrafeira/Vinhos/Vinho Tinto", "vinho");
+  is("LEITE REINA CREME COM BOLACHA 4X125G", "AUCHAN", "alimentação/produtos-lácteos/gelatinas-e-sobremesas/sobremesas-tradicionais", null);
+  // cut words on prepared-food shelves
+  is("PEITO FRANGO IZIDORO FATIAS FINAS 120G+30G", "AUCHAN", "produtos-frescos/charcutaria/fiambre-de-peru-e-frango", null);
+  is("PATANISCAS DE BACALHAU RIBERALVES FORNO (5 UNID) 300G", "AUCHAN", "congelados/refeições-rápidas/salgados-e-petiscos", "refeicao");
+  is("CALDEIRADA BACALHAU RIBERALVES MSC 700G", "AUCHAN", "congelados/peixe/preparados-de-peixe", null);
+  is("Pernas de Frango Assado", "PINGO_DOCE", "Take Away/Frango Assado e Churrasco", null);
+  is("Pedaços de Ananás Cobertos com Chocolate Branco e Coco", "PINGO_DOCE", "Congelados/Gelados e Sobremesas/Gelados Barra Sandwich e Bites", "gelado");
+  is("MIX PROTEÍNAS VEGETAIS SHINE BANANA BIO 250G", "AUCHAN", "biológicos-e-alternativas/biológicos/biológicos-alternativas-vegetais/tofu-e-proteínas-vegetais", "tofu");
+  is("Foie Gras de Pato Continente Seleção", "CONTINENTE", "Mercearia/Conservas/Patês", null);
+  // ...but the raw cuts and smoked salmon are untouched
+  is("Bifinhos do Lombo de Porco Finíssimos Continente", "CONTINENTE", "Talho/Porco", "porco");
+  is("Lombo de Salmão Fumado Noruega Ubago", "CONTINENTE", "Frescos/Charcutaria/Salmão Fumado", "salmao");
+  // shelves that hold "and other things"
+  is("MARMELO KG", "AUCHAN", "produtos-frescos/fruta/banana-e-frutos-tropicais", null);
+  is("TORRESMOS TI MARIA 60G", "AUCHAN", "alimentação/mercearia/batatas-fritas-e-aperitivos-snacks/aperitivos,-snacks-e-pipocas", null);
+  is("CREME LIÉGEOIS AUCHAN CHOCOLATE E NATA 4X115G", "AUCHAN", "alimentação/produtos-lácteos/gelatinas-e-sobremesas/sobremesas-tradicionais", null);
+  is("Foie Gras de Pato Capdevila", "CONTINENTE", "Charcutaria e Queijos/Tábuas e Aperitivos", null);
+  is("Snack de Chocolate Twix Pack 3", "PINGO_DOCE", "Bolachas, Cereais e Guloseimas/Chocolates e Guloseimas/Snacks de Chocolate", "chocolate");
+  is("SNACK CHOCOLATE KINDER BUENO WHITE 2X5 195 G", "AUCHAN", "alimentação/mercearia/chocolates-e-achocolatados/bombons-e-snacks", "chocolate");
+  // everyday foods that had no kind
+  const grains = "Mercearia/Arroz, Massa e Farinha/Couscous, Quinoa, Bulgur e Outros";
+  is("Couscous Milaneza", "CONTINENTE", grains, "cuscuz");
+  is("Mistura Express para Couscous Margão", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Especiarias e Ervas Aromáticas", null);
+  is("Cominhos Moídos", "PINGO_DOCE", "Mercearia/Temperos e Molhos/Especiarias e Ervas Aromaticas", "cominho");
+  is("Oregãos Secos", "PINGO_DOCE", "Frutas e Vegetais/Ervas Aromaticas Frescas", "oregao");
+  is("QUIABOS KG", "AUCHAN", "produtos-frescos/legumes/mais-legumes", "quiabo");
+  is("Paloco do Pacífico Desfiado Congelado", "PINGO_DOCE", "Peixaria/Bacalhau/Bacalhau Congelado", "paloco");
+  is("Filetes de Anchova em Azeite", "PINGO_DOCE", "Mercearia/Conservas/Sardinhas e Outros Peixes", "anchova");
+  is("Fuet Extra Continente", "CONTINENTE", "Charcutaria e Queijos/Enchidos/Fuet", "fuet");
+  is("PÃO RALADO AUCHAN 240G", "AUCHAN", "alimentação/mercearia/tostas-e-pão-embalado/tostas,-mini-tostas-e-gressinos", "pao-ralado");
+  is("Leite Condensado Magro", "PINGO_DOCE", "Mercearia/Sobremesas/Leite Condensado e de Coco", "leite-condensado");
+  is("Leite de Coco para Culinária", "PINGO_DOCE", "Mercearia/Sobremesas/Leite Condensado e de Coco", "leite-coco");
+  // a coconut yoghurt, decided by its yoghurt shelf - not coconut milk
+  is("LEITE COCO FERMENTADO MIMOSA LIQUIDO MORANGO 4X151ML", "AUCHAN", "alimentação/produtos-lácteos/iogurtes/soja-e-vegetais", "iogurte");
+  is("ARANDOS SECOS AUCHAN 150 G", "AUCHAN", "produtos-frescos/fruta/frutos-secos-e-sementes", "arando");
+  is("Batatas Pré-Fritas Palitos", "PINGO_DOCE", "Congelados/Refeicoes e Salgados/Batatas e Pure", "batata-pre-frita");
+  is("Batata para Fritar Embalada", "PINGO_DOCE", "Frutas e Vegetais/Vegetais/Batatas", null);
 
   console.log("\n  food types: sections and honesty");
   check(
@@ -1607,7 +1658,8 @@ function verifyRealFoodList(): number {
 
   check(
     "a shelf two levels up does not decide: Pingo Doce's fuet is not cheese",
-    c("Fuet Extra", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Outros Enchidos e Fumeiro") === null
+    c("Fuet Extra", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Outros Enchidos e Fumeiro") !== "queijo" &&
+      c("Lombo Fatiado Curado", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Outros Enchidos e Fumeiro") === null
   );
   check(
     "an avocado on the grapes shelf is an avocado",
@@ -1633,7 +1685,8 @@ function verifyRealFoodList(): number {
   check(
     "chocolate milk and coconut milk are not milk",
     c("Leite Achocolatado", "PINGO_DOCE", "Leite e Bebidas Vegetais/Leite") === null &&
-      c("Leite de Coco Ayam", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Leite Condensado e Leite de Coco") === null
+      // a kind of its own since 20 October 2026
+      c("Leite de Coco Ayam", "CONTINENTE", "Mercearia/Açúcar e Sobremesas/Leite Condensado e Leite de Coco") === "leite-coco"
   );
   check(
     "walnut kernels reach walnuts through the plural",
@@ -1726,7 +1779,8 @@ function verifySplitKinds(): number {
   check("but breaded CHICKEN is not a fish fillet", c("Panado de Frango", "PINGO_DOCE", "Talho/Aves") !== "filete-panado");
   check(
     "the packing is not the food",
-    c("Filetes de Anchova em Óleo") === null && c("Filetes Recheados com Tomate e Mozzarella") === null
+    // anchovies have been a kind since 20 October 2026; the point is that it is not oil
+    c("Filetes de Anchova em Óleo") === "anchova" && c("Filetes Recheados com Tomate e Mozzarella") === null
   );
   check(
     "everyday sauces have kinds of their own",

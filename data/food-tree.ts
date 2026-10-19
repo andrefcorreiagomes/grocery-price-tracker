@@ -44,7 +44,8 @@ export const CATEGORIES: Category[] = [
   { id: "legumes", label: "Legumes e verduras", kinds: [
     "batata", "batata-doce", "cebola", "alho", "alho-frances", "tomate", "pepino", "pimento", "cenoura",
     "abobora", "beterraba", "couve", "brocolo", "grelo", "espinafre", "curgete", "beringela", "feijao-verde",
-    "ervilha", "cogumelo", "milho", "azeitona", "alface", "rucula", "agriao", "salada-folhas",
+    "ervilha", "cogumelo", "milho", "azeitona", "alface", "rucula", "agriao", "salada-folhas", "quiabo",
+    "batata-pre-frita",
   ] },
   { id: "carne", label: "Carne", kinds: [
     "frango", "peru", "pato", "porco", "vitela", "vaca", "borrego", "cabrito", "coelho", "carne-picada",
@@ -55,22 +56,23 @@ export const CATEGORIES: Category[] = [
     "bacalhau", "salmao", "pescada", "atum", "sardinha", "cavala",
     "dourada", "robalo", "carapau", "corvina", "tamboril", "perca", "truta", "linguado", "peixe-espada", "pargo",
     "garoupa", "raia", "red-fish", "safio", "maruca", "pregado", "besugo", "faneca", "sargo", "filete-panado",
-    "douradinho", "camarao", "ameijoa", "mexilhao", "lula", "polvo", "pota", "choco", "sapateira", "berbigao",
+    "douradinho", "paloco", "anchova", "camarao", "ameijoa", "mexilhao", "lula", "polvo", "pota", "choco", "sapateira", "berbigao",
     "delicias-do-mar", "caracol",
   ] },
   { id: "charcutaria", label: "Charcutaria", kinds: [
     "fiambre", "presunto", "chourico", "salsicha", "mortadela", "bacon", "paio", "salame", "alheira",
-    "farinheira", "linguica", "salpicao", "morcela", "pate",
+    "farinheira", "linguica", "salpicao", "morcela", "pate", "fuet",
   ] },
   { id: "laticinios", label: "Laticínios e ovos", kinds: [
     "leite", "iogurte", "bifidus", "kefir", "queijo", "requeijao", "manteiga", "nata", "ovo", "bebida-vegetal", "vegurte",
+    "leite-condensado", "leite-coco",
   ] },
-  { id: "padaria", label: "Padaria", kinds: ["pao", "tortilha"] },
-  { id: "cereais", label: "Arroz, massa e cereais", kinds: ["arroz", "massa", "quinoa", "bulgur", "aveia", "cereais", "farinha"] },
+  { id: "padaria", label: "Padaria", kinds: ["pao", "tortilha", "pao-ralado"] },
+  { id: "cereais", label: "Arroz, massa e cereais", kinds: ["arroz", "massa", "quinoa", "bulgur", "aveia", "cereais", "farinha", "cuscuz"] },
   { id: "leguminosas", label: "Leguminosas", kinds: ["feijao", "grao", "lentilha", "tremoco", "tofu"] },
   { id: "azeite", label: "Azeite, óleo e vinagre", kinds: ["azeite", "oleo", "vinagre"] },
   { id: "temperos", label: "Temperos e especiarias", kinds: [
-    "sal", "acucar", "pimenta", "piri-piri-seco", "caril", "canela", "fermento", "caldo",
+    "sal", "acucar", "pimenta", "cominho", "oregao", "piri-piri-seco", "caril", "canela", "fermento", "caldo",
     // Fresh herbs, mainly used for seasoning: moved here from vegetables by the
     // user's decision.
     "coentros", "salsa", "hortela", "manjericao", "gengibre",
@@ -81,7 +83,7 @@ export const CATEGORIES: Category[] = [
   ] },
   { id: "frutos-secos", label: "Frutos secos e sementes", kinds: [
     "amendoim", "amendoa", "caju", "noz", "avela", "pinhao", "castanha", "pistacio", "chia", "girassol", "sesamo",
-    "semente-abobora", "linhaca", "canhamo",
+    "semente-abobora", "linhaca", "canhamo", "arando",
   ] },
   { id: "refeicoes", label: "Refeições prontas e salgados", kinds: [
     "pizza", "lasanha", "refeicao", "sopa", "salada-pronta", "quiche", "empada", "rissol", "croquete",

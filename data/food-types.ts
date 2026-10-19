@@ -105,7 +105,9 @@ export const CUT_WORDS: readonly string[] = [
   "cauda", "cabeca", "cara", "mao", "pata", "lingua", "figado", "moela",
   "miudo", "toucinho", "painho", "tentaculo", "ova", "boca", "dobrada",
   // "Miolo de Camarão" - the shelled meat of a shellfish. 134 products.
-  "miolo", "rillette", "foie", "copita",
+  // Not "foie": foie gras is a pâté, and "Foie Gras de Pato" was filed as
+  // duck meat. 20 October 2026.
+  "miolo", "rillette", "copita",
   // cut formats
   "bife", "bifinho", "tira", "tranche", "medalhao", "escalope", "rodela",
   "cubo", "pedaco", "porcao", "metade", "quarto", "suprema", "atado",
@@ -163,6 +165,12 @@ export const FOOD_TYPES: readonly FoodType[] = [
     require: /\bdoce\b/i, exclude: /frit|chips|pure/i },
   { id: "batata", label: "Batata", nameOnly: true, unit: "kg", heads: ["batata"],
     exclude: /\bdoce\b|frit|palha|chips|pure|rosti|noisette|smile|snack|\bflocos?\b/i },
+  // Frozen chips, not crisps: "Batatas Pré-Fritas Palitos". "Batata para Fritar"
+  // is raw potato and stays out (no "pré-frita", not frozen). 20 October 2026.
+  { id: "batata-pre-frita", label: "Batata pré-frita congelada", nameOnly: true, unit: "kg", heads: ["batata"],
+    require: /pr[eé].?frit|\bcongelad/i, exclude: /\bdoce\b|chips|snack|palha|pure/i },
+  // Okra. 20 October 2026.
+  { id: "quiabo", label: "Quiabo", unit: "kg", heads: ["quiabo"] },
   { id: "tomate", label: "Tomate", unit: "kg", heads: ["tomate"] },
   { id: "cogumelo", label: "Cogumelo", nameOnly: true, unit: "kg", heads: ["cogumelo"] },
   // Leek is "alho francês": a different vegetable sharing garlic's head word,
@@ -247,7 +255,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
 
   // --- Talho ---------------------------------------------------------------
   // The animals: a CUT_WORD resolves to one of these, so they must exist.
-  { id: "frango", label: "Frango", unit: "kg", heads: ["frango", "galinha"] },
+  // Roast chicken from the take-away counter is a cooked dish, not raw chicken;
+  // "Frango para Assar" is raw and says "assar", not "assado". 20 October 2026.
+  { id: "frango", label: "Frango", unit: "kg", heads: ["frango", "galinha"], exclude: /\bassad[oa]s?\b/i },
   { id: "peru", label: "Peru", unit: "kg", heads: ["peru"] },
   // Auchan shelves quail under "pato-e-mais-aves" (duck and other birds), and
   // a shelf naming one food decides - so five quail products became duck,
@@ -267,7 +277,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Lamb and kid goat are different meats (decided 18 October 2026).
   { id: "borrego", label: "Borrego", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"], exclude: /cabrito/i },
   { id: "cabrito", label: "Cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"], require: /cabrito/i },
-  { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"] },
+  // "Coelhos de Chocolate" are Easter sweets. 20 October 2026.
+  { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"], exclude: /chocolate/i },
   { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"] },
   // Charcutaria: these name an animal but ARE the food type - see CUT_WORDS.
   { id: "salsicha", label: "Salsicha", nameOnly: true, unit: "kg", heads: ["salsicha", "salsichao"] },
@@ -291,6 +302,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"] },
   { id: "paio", label: "Paio", unit: "kg", heads: ["paio"] },
   { id: "salame", label: "Salame", unit: "kg", heads: ["salame"] },
+  // Catalan cured sausage, at all three chains. 20 October 2026.
+  { id: "fuet", label: "Fuet", unit: "kg", heads: ["fuet"] },
   { id: "alheira", label: "Alheira", unit: "kg", heads: ["alheira"] },
   { id: "farinheira", label: "Farinheira", unit: "kg", heads: ["farinheira"] },
   { id: "linguica", label: "Linguiça", unit: "kg", heads: ["linguica"] },
@@ -350,6 +363,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "red-fish", label: "Red fish (cantarilho)", unit: "kg", heads: ["red", "cantarilho"], require: /red ?fish|cantarilho/i, exclude: /\bcabecas?\b/i },
   { id: "safio", label: "Safio (congro)", unit: "kg", heads: ["safio", "congro"], exclude: /\bcabecas?\b/i },
   { id: "maruca", label: "Maruca", unit: "kg", heads: ["maruca"], exclude: /\bcabecas?\b/i },
+  // Alaska pollock: "paloco" at Continente and Pingo Doce, "escamudo" at Auchan.
+  // Fish fingers made of it head on "douradinho" first. 20 October 2026.
+  { id: "paloco", label: "Paloco (escamudo)", unit: "kg", heads: ["paloco", "escamudo"] },
+  { id: "anchova", label: "Anchova", unit: "kg", heads: ["anchova", "anchoa"] },
   { id: "pregado", label: "Pregado", unit: "kg", heads: ["pregado"], exclude: /\bcabecas?\b/i },
   { id: "besugo", label: "Besugo", unit: "kg", heads: ["besugo"], exclude: /\bcabecas?\b/i },
   { id: "faneca", label: "Faneca", unit: "kg", heads: ["faneca"], exclude: /\bcabecas?\b/i },
@@ -390,9 +407,15 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // milk "Bebida de Leite", hence the second head. Not flavoured milk drinks,
   // coffee drinks, condensed or powdered milk, or coconut "milk" (all came in
   // through shelves or the name). 17 October 2026.
+  // Condensed and coconut milk head on "leite" and milk excludes both, so they
+  // had no kind at all. 20 October 2026.
+  { id: "leite-condensado", label: "Leite condensado", nameOnly: true, unit: "kg", heads: ["leite"], require: /condensad/i },
+  { id: "leite-coco", label: "Leite de coco", nameOnly: true, unit: "l", heads: ["leite"], require: /\bcoco\b|coconut/i,
+    // "Leite Coco Fermentado" is a coconut yoghurt.
+    exclude: /fermentad/i },
   { id: "leite", label: "Leite", nameOnly: true, unit: "l", heads: ["leite", "bebida"], require: /\bleite\b/i,
     // "Leite Creme" is a custard dessert. 18 October 2026.
-    exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|leite creme|protei|crescimento|infantil|fermentad/i },
+    exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|leite creme|\bcreme\b|protei|crescimento|infantil|fermentad/i },
   { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"] },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
@@ -485,7 +508,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "arroz", label: "Arroz", unit: "kg", heads: ["arroz"], exclude: /arroz doce|\bflocos?\b|nestum/i },
   { id: "gelatina", label: "Gelatina", hidden: "sweets", unit: "kg", heads: ["gelatina"] },
   { id: "farinha", label: "Farinha", nameOnly: true, unit: "kg", heads: ["farinha"] },
-  { id: "azeite", label: "Azeite", unit: "l", heads: ["azeite"] },
+  // "Azeite de Dendê" is palm oil, not olive oil. 20 October 2026.
+  { id: "azeite", label: "Azeite", unit: "l", heads: ["azeite"], exclude: /dende/i },
   { id: "nectar", label: "Néctar", hidden: "drinks", unit: "l", heads: ["nectar"] },
   // Green beans are a fresh vegetable, not dried beans, and share the head word.
   { id: "feijao-verde", label: "Feijão verde", unit: "kg", heads: ["feijao"], require: /feijao verde/i },
@@ -518,10 +542,15 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // aisle brings 7 of them in through a path that says nothing about what they
   // are. The only systematic contaminant of the 494 food products there.
   { id: "oleo", label: "Óleo", unit: "l", heads: ["oleo"] },
-  { id: "mel", label: "Mel", hidden: "sweets", unit: "kg", heads: ["mel"], exclude: /\bflocos?\b/i },
+  // Name only: shelves like "Compotas, Mel e Cremes de Barrar" name honey as
+  // their only food, and filed 338 jams and spreads as honey. 20 October 2026.
+  { id: "mel", label: "Mel", hidden: "sweets", nameOnly: true, unit: "kg", heads: ["mel"], exclude: /\bflocos?\b/i },
   // "Flor de Sal" (salt flakes) heads on "flor". 17 October 2026.
   { id: "sal", label: "Sal", nameOnly: true, unit: "kg", heads: ["sal", "flor", "moinho", "escama"], require: /\bsal\b/i, exclude: /bicarbonato/i },
   { id: "pimenta", label: "Pimenta", nameOnly: true, unit: "kg", heads: ["pimenta"] },
+  // Dried spices with no kind until 20 October 2026.
+  { id: "cominho", label: "Cominhos", nameOnly: true, unit: "kg", heads: ["cominho"] },
+  { id: "oregao", label: "Orégãos", nameOnly: true, unit: "kg", heads: ["oregao"] },
   { id: "ketchup", label: "Ketchup", unit: "kg", heads: ["ketchup"] },
   { id: "pipoca", label: "Pipoca", hidden: "sweets", unit: "kg", heads: ["pipoca"] },
   // "Semente" used to be one kind, where chia and sunflower were compared as
@@ -531,12 +560,15 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "girassol", label: "Sementes de girassol", unit: "kg", heads: ["semente", "pipa", "girassol"], require: /girassol/i, exclude: /\boleo\b|\bpao\b|barra|bolacha/i },
   { id: "sesamo", label: "Sementes de sésamo", unit: "kg", heads: ["semente", "sesamo"], require: /sesamo/i, exclude: /\boleo\b|\bpao\b|barra|bolacha|tahini|pasta/i },
   { id: "semente-abobora", label: "Sementes de abóbora", unit: "kg", heads: ["semente", "pevide"], require: /sementes? de abobora|sementes abobora|pevides?/i },
+  // Dried cranberries. 20 October 2026.
+  { id: "arando", label: "Arandos", unit: "kg", heads: ["arando", "cranberry"], exclude: /chocolate|frutos secos/i },
   { id: "linhaca", label: "Linhaça", unit: "kg", heads: ["semente", "linhaca"], require: /linhaca/i, exclude: /\bpao\b|barra|bolacha|\boleo\b/i },
   { id: "canhamo", label: "Sementes de cânhamo", unit: "kg", heads: ["semente", "canhamo"], require: /canhamo/i, exclude: /\boleo\b|proteina|bebida/i },
   { id: "amendoim", label: "Amendoim", unit: "kg", heads: ["amendoim"] },
   { id: "mostarda", label: "Mostarda", unit: "kg", heads: ["mostarda"] },
   // Sweetcorn, not cornflakes, which the read past "flocos" would otherwise reach.
-  { id: "milho", label: "Milho", unit: "kg", heads: ["milho"], exclude: /\bflocos?\b/i },
+  // "Milho para Pipocas" is popcorn kernels, not sweetcorn. 20 October 2026.
+  { id: "milho", label: "Milho", unit: "kg", heads: ["milho"], exclude: /\bflocos?\b|pipoca/i },
   // The three chains sell the same flatbreads as "tortilhas" and "wraps".
   // A filled wrap ("Wrap de Atum") is a sandwich, not the flatbread.
   { id: "tortilha", label: "Tortilha e wrap", unit: "kg", heads: ["tortilha", "wrap"],
@@ -558,6 +590,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pistacio", label: "Pistácio", unit: "kg", heads: ["pistacio", "pistachio"] },
   { id: "adocante", label: "Adoçante", hidden: "sweets", unit: "kg", heads: ["adocante"] },
   { id: "quinoa", label: "Quinoa", unit: "kg", heads: ["quinoa"] },
+  // Plain couscous, not the ready bowls and salads made with it. 20 October 2026.
+  { id: "cuscuz", label: "Cuscuz", unit: "kg", heads: ["couscou", "cuscuz"],
+    exclude: /bowl|vegetais|legumes|frango|salada|refeic|para cou?scou?s|marroquin|mediterr/i },
   // Plain oats - flakes, bran, whole - not oat biscuits, drinks, granola or a
   // Nestum mix that contains some. 17 October 2026.
   { id: "aveia", label: "Aveia", nameOnly: true, unit: "kg", heads: ["aveia"],
@@ -572,7 +607,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "caril", label: "Caril", unit: "kg", heads: ["caril", "curry"], require: /\b(caril|curry)\b/i, exclude: /\b(caril|curry) (thai |indiano )?(de|com)\b|refeic|\bpasta\b|tikka|masala|\bmolho\b/i },
   { id: "marmelada", label: "Marmelada", hidden: "sweets", unit: "kg", heads: ["marmelada"] },
   { id: "lentilha", label: "Lentilha", unit: "kg", heads: ["lentilha"] },
-  { id: "grao", label: "Grão", unit: "kg", heads: ["grao"] },
+  // "Grão Vasco" is a Dão wine. 20 October 2026.
+  { id: "grao", label: "Grão", unit: "kg", heads: ["grao"], exclude: /vinho/i },
   { id: "tremoco", label: "Tremoço", unit: "kg", heads: ["tremoco"] },
   // Everything here is a powder, sold by weight. The 13 products recorded by
   // volume were not yeast at all - vanilla essence and food colouring, which
@@ -586,6 +622,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "canela", label: "Canela", unit: "kg", heads: ["canela"], exclude: /\bde gato\b/i },
 
   // --- Padaria e pastelaria ------------------------------------------------
+  // Breadcrumbs: "Pão Ralado" heads on pão, so it is listed first. 20 October 2026.
+  { id: "pao-ralado", label: "Pão ralado", unit: "kg", heads: ["pao", "panko"], require: /\bralado\b|panko/i },
   { id: "pao", label: "Pão", unit: "kg", heads: ["pao", "baguete", "broa"],
     // Nachos, taco shells and crackers sit on the "pão, tostas e snacks" shelves.
     exclude: /pao ralado|pao de lo|nacho|cracker|\btaco|\bsnacks?\b/i },

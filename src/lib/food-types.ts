@@ -27,7 +27,21 @@ const STOPWORDS = new Set([
 const CUT_SET = new Set(CUT_WORDS);
 
 /** Words after which the read past a cut word stops: packing and fillings. */
-const SCAN_STOPS = new Set(["azeite", "oleo", "recheado", "escabeche"]);
+const SCAN_STOPS = new Set(["azeite", "oleo", "recheado", "escabeche", "proteina"]);
+
+/**
+ * Shelves of PREPARED food: cold cuts, ready meals, savoury snacks, take-away.
+ * A cut word there does not lead to the raw animal - "Peito de Frango Fatias
+ * Finas" on a cold-cuts shelf is chicken ham, "Caldeirada de Bacalhau" on a
+ * ready-meals shelf is a fish stew, "Pataniscas" are fritters. The hand check
+ * of 20 October 2026 found 10 of 102 cut-word decisions wrong, nearly all of
+ * them this. Read on the product's own shelf and the one above, as in step 3.
+ */
+const PREPARED_SHELF =
+  /charcutaria|fiambre|refeic|refeicoes|salgados|petiscos|take.away|gastronomia|preparados.de.peixe|frango assado/;
+
+/** Coated or dipped: "Pedaços de Ananás Cobertos com Chocolate" is a dessert. */
+const COATED = /\bcobert[oa]s?\b|\bpanad[oa]s?\b/;
 
 /** Head word to the type that claims it. Several types can share a head. */
 const BY_HEAD = new Map<string, FoodType[]>();
@@ -95,7 +109,27 @@ function resolve(head: string, name: string, fromShelf = false): FoodType | null
 }
 
 /** Shelf words meaning "and others": the shelf holds more than the food it names. */
-const OPEN_SHELF = /\b(especialidades|outros|outras|mais|diversos|diversas|variados)\b/;
+// Snacks, appetisers, desserts, tropical fruit and flavoured drinks are open
+// sets too: the hand check of 20 October 2026 found pork scratchings on a
+// "snacks e pipocas" shelf filed as popcorn, a quince on "banana e frutos
+// tropicais" filed as banana, and a crème liégeois on "gelatinas e
+// sobremesas" filed as jelly. "Snacks de Chocolate" is not open - it says
+// what the snacks are - so "snacks" counts only when no "de" follows.
+const OPEN_SHELF =
+  /\b(especialidades|outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?|tropica(?:l|is)|aromatizad[oa]s?)\b|\bsnacks?\b(?![\s-]+de\b)/;
+
+/**
+ * Does this shelf name an open set? One exception, from the data: Auchan's
+ * "bombons-e-snacks" holds chocolate bars and boxes of chocolates (Kit Kat,
+ * Kinder, Lindt - 204 products), so "snacks" beside "bombons" is not open.
+ */
+function isOpenShelf(segment: string): boolean {
+  const s = stripAccents(segment).toLowerCase();
+  if (/\bbombo/.test(s) && !/\b(especialidades|outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?)\b/.test(s)) {
+    return false;
+  }
+  return OPEN_SHELF.test(s);
+}
 
 /** Words of a category path, accent-free and split on punctuation and hyphens. */
 function categoryTokens(segment: string): string[] {
@@ -140,7 +174,26 @@ export function classifyFoodType(
   store: string,
   categoryPath: string | null
 ): string | null {
-  if (!isFoodSection(store, categoryPath)) return null;
+  return explainFoodType(name, store, categoryPath).id;
+}
+
+/**
+ * Which of the three steps decided - the head noun, a word read past a cut, or
+ * the shelf - or why nothing did. The same decision as classifyFoodType; the
+ * step is what a certainty score starts from, since the three are not equally
+ * trustworthy.
+ */
+export type FoodTypeStep = "head" | "cut" | "shelf";
+export type FoodTypeExplanation =
+  | { id: string; step: FoodTypeStep }
+  | { id: null; step: null; why: "not a food section" | "shelf names several foods" | "open shelf" | "nothing recognised" };
+
+export function explainFoodType(
+  name: string,
+  store: string,
+  categoryPath: string | null
+): FoodTypeExplanation {
+  if (!isFoodSection(store, categoryPath)) return { id: null, step: null, why: "not a food section" };
 
   const tokens = nameTokensForType(name, store);
   const plain = stripAccents(name).toLowerCase();
@@ -148,7 +201,7 @@ export function classifyFoodType(
   // 1. the head noun is itself a food type
   if (tokens.length > 0) {
     const direct = resolve(tokens[0], plain);
-    if (direct) return direct.id;
+    if (direct) return { id: direct.id, step: "head" };
   }
 
   // 2. the head is a CUT or a kernel: read past it to what it is a cut OF.
@@ -157,14 +210,18 @@ export function classifyFoodType(
   // "Bebida Vegetal de Aveia sem Açúcar" as `acucar` (the name says WITHOUT
   // sugar), "Cookie Double Chocolate" as `chocolate`, and "Chausson de Maçã" as
   // `maca`. A cut word is a promise that what follows is the actual food.
-  if (CUT_SET.has(tokens[0])) {
+  const nearShelf = stripAccents((categoryPath ?? "").split(/[/>]/).slice(-2).join(" ")).toLowerCase();
+  // Smoked salmon sits among the cold cuts but is still salmon - "Lombo de
+  // Salmão Fumado" - and its "fumado" label keeps it apart from fresh salmon.
+  const prepared = PREPARED_SHELF.test(nearShelf) && !/salmao fumado/.test(nearShelf);
+  if (CUT_SET.has(tokens[0]) && !prepared && !COATED.test(plain)) {
     for (const token of tokens.slice(1)) {
       // What follows these is the packing or the filling, not the food:
       // "Filetes de Anchova em Óleo" is not cooking oil, "Filetes Recheados
       // com Tomate" is not tomato. 17 October 2026.
       if (SCAN_STOPS.has(token)) break;
       const later = resolve(token, plain);
-      if (later) return later.id;
+      if (later) return { id: later.id, step: "cut" };
       // Past "molho" come the sauce's ingredients, not the product: "Pernil
       // Assado com Molho de Cerveja" is roast pork, not beer.
       if (token === "molho") break;
@@ -205,16 +262,41 @@ export function classifyFoodType(
     const foods = new Map<string, string>(); // claimants -> the word that names them
     for (const token of categoryTokens(segment)) {
       const claimants = BY_HEAD.get(token);
-      if (claimants) foods.set(claimants.map((t) => t.id).join(","), token);
+      if (!claimants) continue;
+      // Words whose claimants overlap name one food: "pão" is claimed by both
+      // pão and pão ralado, "broa" by pão alone, and "Pão do Dia e Broa" is one
+      // bread shelf, not two foods. 20 October 2026.
+      const ids = claimants.map((t) => t.id);
+      const same = [...foods.keys()].find((k) => k.split(",").some((id) => ids.includes(id)));
+      if (same) {
+        const merged = [...new Set([...same.split(","), ...ids])].join(",");
+        const word = foods.get(same)!;
+        foods.delete(same);
+        foods.set(merged, word);
+      } else {
+        foods.set(ids.join(","), token);
+      }
     }
-    if (foods.size > 1) return null;
+    if (foods.size > 1) return { id: null, step: null, why: "shelf names several foods" };
+    // An "and others" shelf naming no food at all stops here too, rather than
+    // handing over to the shelf above: foie gras and a charcuterie board on
+    // "Charcutaria e Queijos/Tábuas e Aperitivos" were filed as cheese through
+    // the parent. 20 October 2026.
+    if (foods.size === 0 && isOpenShelf(segment)) {
+      return { id: null, step: null, why: "open shelf" };
+    }
     // A shelf that says "and others" names an open set, which is several foods
     // too: Pingo Doce's "Salmão Fumado e Especialidades" filed hummus, tzatziki
     // and a pork platter as salmão, and Auchan's "pato-e-mais-aves" filed quail
     // as duck.
-    if (foods.size === 1 && OPEN_SHELF.test(stripAccents(segment).toLowerCase())) return null;
-    if (foods.size === 1) return resolve([...foods.values()][0], plain, true)?.id ?? null;
+    if (foods.size === 1 && isOpenShelf(segment)) {
+      return { id: null, step: null, why: "open shelf" };
+    }
+    if (foods.size === 1) {
+      const id = resolve([...foods.values()][0], plain, true)?.id ?? null;
+      return id ? { id, step: "shelf" } : { id: null, step: null, why: "nothing recognised" };
+    }
   }
 
-  return null;
+  return { id: null, step: null, why: "nothing recognised" };
 }
