@@ -1,5 +1,13 @@
 import { parseCategoryPath } from "../scrapers/continente";
 import { addressToStore } from "../scrapers/crawl/continente-products";
+import {
+  CONTINENTE_FOOD_SECTIONS,
+  CONTINENTE_SECTION_SLUGS,
+  auditCategorySlugs,
+  parseCategoryPaths,
+  parseCategorySlugs,
+  withoutSupermercado,
+} from "../scrapers/crawl/continente-categories";
 import { NON_FOOD_LIMIT, isNonFoodCatastrophe } from "../scrapers/crawl/reidentification";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 
@@ -83,6 +91,42 @@ export function verifyContinentePages(): number {
   check(
     "hygiene is not food",
     !keepInCatalogue("CONTINENTE", "Higiene e Cuidado Pessoal/Cabelo", "Champô").keep
+  );
+
+  // --- the category sitemap and the section counts --------------------------
+  const sitemap = [
+    "https://www.continente.pt/",
+    "https://www.continente.pt/supermercado/",
+    "https://www.continente.pt/supermercado/mercearia/",
+    "https://www.continente.pt/supermercado/mercearia/conservas/",
+    "https://www.continente.pt/beleza/cabelo/",
+    "https://www.continente.pt/garrafeira/",
+  ]
+    .map((u) => `<loc>${u}</loc>`)
+    .join("");
+  check(
+    "the category sitemap drops \"supermercado\" as the page reader does",
+    parseCategoryPaths(sitemap).join() === "mercearia,mercearia/conservas,beleza/cabelo,garrafeira",
+    parseCategoryPaths(sitemap).join()
+  );
+  check("and its top sections are read the same way", parseCategorySlugs(sitemap).join() === "mercearia,garrafeira");
+  check(
+    "every top section the test run of 19 October found is decided",
+    auditCategorySlugs(["beleza", "cultura-e-lazer", "destaques", "garrafeira", "folhetos-pesquisa", "sugestoes-continente", "mercearia", "peixaria"]).length === 0
+  );
+  check("\"supermercado\" is taken off only at the front", withoutSupermercado("mercearia/supermercado") === "mercearia/supermercado");
+  check(
+    "every section counted against the store is a food section of ours",
+    [...CONTINENTE_SECTION_SLUGS.keys()].every((label) => CONTINENTE_FOOD_SECTIONS.has(label))
+  );
+  check(
+    "and every food section of the new layout is counted",
+    ["Padaria e Pastelaria", "Peixaria", "Talho", "Frutas e Legumes", "Charcutaria e Queijos", "Refeições Práticas",
+      "Mercearia", "Bebidas e Garrafeira", "Laticínios e Ovos", "Congelados"].every((l) => CONTINENTE_SECTION_SLUGS.has(l))
+  );
+  check(
+    "each count is read from a page under supermercado/",
+    [...CONTINENTE_SECTION_SLUGS.values()].every((slug) => slug.startsWith("supermercado/"))
   );
 
   // --- the "not food" safety limit ---------------------------------------

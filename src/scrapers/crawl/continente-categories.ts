@@ -32,21 +32,43 @@ export const CONTINENTE_FOOD_CATEGORIES: CrawlCategory[] = [
 ];
 
 /**
- * Each food section's landing-page slug, which is NOT its cgid (`mercearia`
- * against `mercearias`, `laticinios-e-ovos` against `laticinios`).
+ * Each food section's landing page, by the section's name as the products
+ * spell it - the name the report groups our catalogue by. The address is NOT
+ * the cgid (`mercearia` against `mercearias`).
  *
  * Landing pages are allowed by robots.txt and publish `data-total-count`, so
  * the compliant crawler can still check its catalogue against the store's own
- * numbers - six requests - even though it never touches a listing grid.
+ * numbers - one request each - even though it never touches a listing grid.
+ *
+ * Continente's layout of 18 October 2026: every food section sits under
+ * "supermercado/", "Frescos" is gone (its shelves are sections of their own)
+ * and "Bio e Saudável" was split up. Only the food part of "Suplementos e
+ * Nutrição" is counted, because only that part is in our catalogue.
  */
 export const CONTINENTE_SECTION_SLUGS: ReadonlyMap<string, string> = new Map([
-  ["Frescos", "frescos"],
-  ["Laticínios e Ovos", "laticinios-e-ovos"],
-  ["Congelados", "congelados"],
-  ["Mercearia", "mercearia"],
-  ["Bebidas e Garrafeira", "bebidas-e-garrafeira"],
-  ["Bio e Saudável", "bio-e-saudavel"],
+  ["Mercearia", "supermercado/mercearia"],
+  ["Bebidas e Garrafeira", "supermercado/bebidas-e-garrafeira"],
+  ["Laticínios e Ovos", "supermercado/laticinios-e-ovos"],
+  ["Congelados", "supermercado/congelados"],
+  ["Padaria e Pastelaria", "supermercado/padaria-e-pastelaria"],
+  ["Peixaria", "supermercado/peixaria"],
+  ["Talho", "supermercado/talho"],
+  ["Frutas e Legumes", "supermercado/frutas-e-legumes"],
+  ["Charcutaria e Queijos", "supermercado/charcutaria-e-queijos"],
+  ["Refeições Práticas", "supermercado/refeicoes-praticas"],
+  ["Suplementos e Nutrição", "supermercado/suplementos-e-nutricao/alimentacao-desportiva"],
 ]);
+
+/**
+ * A category address with Continente's "supermercado" level taken off the
+ * front: "supermercado/mercearia/conservas" gives "mercearia/conservas", and
+ * "supermercado" alone gives "". The same level the page reader drops
+ * (parseCategoryPath in src/scrapers/continente.ts), so the section watch and
+ * the products speak of the same sections.
+ */
+export function withoutSupermercado(path: string): string {
+  return path.replace(/^supermercado(\/|$)/, "");
+}
 
 /** Read `data-total-count` off each food section's landing page. */
 export async function fetchPublishedCounts(): Promise<Map<string, number>> {
@@ -235,7 +257,7 @@ export const CONTINENTE_FOOD_SECTIONS: ReadonlySet<string> = new Set(
 export function parseCategorySlugs(xml: string): string[] {
   const slugs = new Set<string>();
   for (const match of xml.matchAll(/<loc>https:\/\/www\.continente\.pt\/([^<]+)<\/loc>/g)) {
-    const path = match[1].replace(/\/$/, "");
+    const path = withoutSupermercado(match[1].replace(/\/$/, ""));
     if (path && !path.includes("/")) slugs.add(path);
   }
   return [...slugs];
@@ -253,7 +275,7 @@ export async function discoverCategorySlugs(): Promise<string[]> {
 export function parseCategoryPaths(xml: string): string[] {
   const paths = new Set<string>();
   for (const match of xml.matchAll(/<loc>https:\/\/www\.continente\.pt\/([^<?#]+)/g)) {
-    const path = match[1].replace(/\/+$/, "");
+    const path = withoutSupermercado(match[1].replace(/\/+$/, ""));
     if (path) paths.add(path);
   }
   return [...paths];

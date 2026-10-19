@@ -77,6 +77,18 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       "Suplementos e Nutrição": "food",
       "Higiene e Cuidado Pessoal": "non-food",
       "Consumíveis": "non-food",
+      // New top sections outside "Supermercado", first seen by the test run of
+      // 19 October 2026. Beauty and culture are named in the site menu, with
+      // sub-sections that are all non-food (perfume, hair, books, toys, ...).
+      Beleza: "non-food",
+      "Cultura e Lazer": "non-food",
+      // Not in the menu and their contents not yet seen, so a product filed here
+      // is kept only if its name is recognised as food: a wine shop, two
+      // promotional shelves and the flyer search.
+      Garrafeira: "mixed",
+      Destaques: "mixed",
+      "Sugestões Continente": "mixed",
+      "Folhetos Pesquisa": "mixed",
 
       Limpeza: "non-food",
       // Holds baby food too; baby food is its own piece of work.
