@@ -1,7 +1,8 @@
 import * as cheerio from "cheerio";
-import { extractLdJsonBlocks, fetchHtml } from "./http";
+import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
 import { detached, finiteOrNull, type ScrapeResult } from "./types";
+import { sectionKey } from "../lib/store-sections";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -11,7 +12,8 @@ interface SchemaProduct {
 }
 
 export async function scrapeContinente(url: string): Promise<ScrapeResult> {
-  return parseContinentePage(await fetchHtml(url), url);
+  const page = await fetchPage(url);
+  return { ...parseContinentePage(page.html, url), finalUrl: page.url };
 }
 
 /** Reading a page, apart from fetching it, so it can be checked on a saved one. */
@@ -103,14 +105,28 @@ function parsePromotion(html: string, price: number): Pick<
  * from a product page and rows built from a grid are indistinguishable
  * downstream. The JSON is HTML-escaped in the page source, hence the unescape -
  * the same trap as the pre-discount price below.
+ *
+ * On 18 October 2026 Continente put one new top level, "Supermercado", in front
+ * of every food shelf, and pages now name up to four levels:
+ * "Supermercado/Laticínios e Ovos/Iogurtes e Outros Lácteos/Gregos". Reading
+ * only three lost the most specific shelf, and the unknown top name made every
+ * product look like a non-food one - the night's crawl kept almost nothing.
+ * So all four levels are read and the leading "Supermercado" is dropped: the
+ * path is then the one we already held for every section that only moved down
+ * a level (Mercearia, Laticínios e Ovos, Congelados, Bebidas e Garrafeira).
+ * The old "Frescos" level is gone; its shelves (Talho, Peixaria, ...) are top
+ * sections now, listed in data/store-sections.ts.
  */
-function parseCategoryPath(html: string): string | null {
+export function parseCategoryPath(html: string): string | null {
   const source = html.replace(/&quot;/g, '"');
   const parts: string[] = [];
-  for (const key of ["item_category", "item_category2", "item_category3"]) {
-    const match = source.match(new RegExp(`"${key}"\s*:\s*"([^"]*)"`));
+  for (const key of ["item_category", "item_category2", "item_category3", "item_category4"]) {
+    // `\\s`, not `\s`: inside a template string `\s` is just the letter "s",
+    // which only ever worked because Continente writes no space after the colon.
+    const match = source.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`));
     if (match?.[1]) parts.push(decodeEntities(match[1]));
   }
+  if (parts.length > 1 && sectionKey(parts[0]) === "supermercado") parts.shift();
   // detached for the same reason as `ean`, and it matters more here: this one
   // is cut from `source`, a SECOND full-size copy of the page.
   return parts.length > 0 ? detached(parts.join("/")) : null;

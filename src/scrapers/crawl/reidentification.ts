@@ -62,6 +62,40 @@ export function churnCatastropheReason(input: {
   );
 }
 
+// --- Guard 1b: products that suddenly read as non-food --------------------
+
+/**
+ * Above this share of refreshed products reading as non-food, the reading is
+ * broken, not the products. A normal night is far below it: 141 of 17,264
+ * (0.8%) on 3 October 2026. On 18 October Continente renamed its top shelves,
+ * every page's shelf became one our section list did not know, and nearly
+ * every product read as non-food - with no limit, the end of that run would
+ * have stopped tracking almost the whole Continente catalogue at once.
+ */
+export const NON_FOOD_LIMIT = 0.05;
+
+/**
+ * Did an implausible share of the products we track read as non-food this
+ * run? Unlike the churn guard this applies to a `--limit` slice too: the slice
+ * is products we hold as food, so a high share means the same there, and the
+ * cost of a false alarm is only that nothing is marked this run.
+ */
+export function isNonFoodCatastrophe(input: { nonFood: number; attempted: number }): boolean {
+  const { nonFood, attempted } = input;
+  return attempted > 0 && nonFood / attempted > NON_FOOD_LIMIT;
+}
+
+/** A phrased reason for the report, or null when there is no catastrophe. */
+export function nonFoodCatastropheReason(input: { nonFood: number; attempted: number }): string | null {
+  if (!isNonFoodCatastrophe(input)) return null;
+  const pct = ((100 * input.nonFood) / input.attempted).toFixed(0);
+  return (
+    `${pct}% of the products refreshed (${input.nonFood.toLocaleString()} of ${input.attempted.toLocaleString()}) ` +
+    `read as non-food this run - the store changed its shelves or the page reader broke, not the products. ` +
+    `Nothing was marked: no product stopped being tracked or advanced toward removal. This run is not trusted.`
+  );
+}
+
 // --- Guard 3 and the parser-regression brakes ----------------------------
 
 /**

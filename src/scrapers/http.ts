@@ -255,6 +255,18 @@ function retryAfterMs(res: RawResponse, attempt: number): number {
 }
 
 export async function fetchHtml(url: string): Promise<string> {
+  return (await fetchPage(url)).html;
+}
+
+/**
+ * `fetchHtml`, also saying which address finally answered. A store that moves
+ * a product to a new address answers the old one with a redirect, which is
+ * followed - at the cost of a second request every night until the new
+ * address is the one stored. Continente moved many products on 18 October 2026
+ * (dropping a repeated brand word: "...-mimosa-mimosa-7477269.html" became
+ * "...-mimosa-7477269.html"), so its crawler stores the final address.
+ */
+export async function fetchPage(url: string): Promise<{ html: string; url: string }> {
   const host = hostOf(url);
   // Also checked here, for any script that reaches a store without calling it first.
   const agent = isLocal(host) ? CRAWLER_NAME : requireCrawlerContact();
@@ -284,7 +296,7 @@ export async function fetchHtml(url: string): Promise<string> {
       entry.bytes += res.body.length;
       entry.wireBytes += res.wireBytes;
       entry.fetchMs += Date.now() - startedAt;
-      return res.body;
+      return { html: res.body, url: res.url };
     }
 
     // A failed response still moved bytes, and a night of 404s is not free.

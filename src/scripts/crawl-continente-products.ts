@@ -100,7 +100,7 @@ async function main() {
   const crawl = await fetchProducts(slice, {
     isFood: (path, name) => keepInCatalogue("CONTINENTE", path, name).keep,
     onProgress: (p) =>
-      console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} products`),
+      console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} food products`),
   });
 
   // Which products are new to us, captured before saving - afterwards they are

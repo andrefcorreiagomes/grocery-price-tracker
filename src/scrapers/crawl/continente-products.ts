@@ -94,6 +94,17 @@ export interface ProductCrawlResult {
  * `tábua1`). Taking the last hyphen-separated segment and decoding it handles
  * all three, and matches the id the listing tiles report for the same products.
  */
+/**
+ * The address to store for a product after fetching it: where it now answers,
+ * when Continente has moved it, so the next crawl goes straight there instead
+ * of through a redirect. Only when the id in it is unchanged - Continente's
+ * moves of 18 October 2026 changed only the words before the id; a redirect
+ * to some other product's page is not this product's new address.
+ */
+export function addressToStore(target: ProductTarget, finalUrl: string | undefined): string {
+  return finalUrl && productIdFromUrl(finalUrl) === target.storeProductId ? finalUrl : target.url;
+}
+
 export function productIdFromUrl(url: string): string | null {
   const tail = url.match(/-([^-/]+)\.html$/)?.[1];
   if (!tail) return null;
@@ -263,6 +274,8 @@ export async function fetchProducts(
   const batchSize = opts.batchSize ?? 500;
   let pending: SearchHit[] = [];
   let fetched = 0;
+  /** food products kept so far - the number that went to zero on 18 October */
+  let kept = 0;
 
   const flush = async () => {
     if (pending.length === 0 || !opts.onBatch) return;
@@ -271,6 +284,17 @@ export async function fetchProducts(
   };
 
   for (const [i, target] of targets.entries()) {
+    // Reported every 100 pages whatever those pages gave. Until 19 October 2026
+    // this was reported only after a page that yielded a FOOD product, so on the
+    // night every product read as non-food the log simply went quiet for an
+    // hour, which looked like a stall rather than what it was.
+    if (i > 0 && i % 100 === 0) {
+      opts.onProgress?.({
+        category: { cgid: "produtos", label: "product pages" },
+        page: i,
+        collected: kept,
+      });
+    }
     let product;
     try {
       product = await scrapeContinente(target.url);
@@ -307,7 +331,7 @@ export async function fetchProducts(
       price: product.price,
       brand: product.brand || "Continente",
       category: product.categoryPath ?? "",
-      url: target.url,
+      url: addressToStore(target, product.finalUrl),
       // The point of paying a request per product: the page carries what no
       // listing tile does. Set even when null, because here null means "this
       // page has no barcode", not "this source could not know".
@@ -324,16 +348,10 @@ export async function fetchProducts(
     list.push(hit);
     bySection.set(section, list);
     pending.push(hit);
+    kept++;
 
     if (pending.length >= batchSize) await flush();
 
-    if ((i + 1) % 100 === 0) {
-      opts.onProgress?.({
-        category: { cgid: "produtos", label: "product pages" },
-        page: i + 1,
-        collected: fetched,
-      });
-    }
   }
 
   await flush();

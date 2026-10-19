@@ -59,6 +59,25 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       "Bebidas e Garrafeira": "food",
       "Bio e Saudável": "food",
 
+      // Continente's layout from 18 October 2026, read from its site menu. Every
+      // food shelf now sits under "Supermercado", which the page reader drops
+      // (parseCategoryPath, src/scrapers/continente.ts). The "Frescos" level is
+      // gone and its shelves are top sections; Frutas + Legumes and Charcutaria
+      // + Queijos were merged; "Bio e Saudável" was split up, its sports food
+      // moving to "Suplementos e Nutrição". The old names above stay until no
+      // stored product carries them.
+      "Padaria e Pastelaria": "food",
+      Peixaria: "food",
+      Talho: "food",
+      "Frutas e Legumes": "food",
+      "Charcutaria e Queijos": "food",
+      "Refeições Práticas": "food",
+      // Food only in "Alimentação Desportiva" (protein bars, spreads, oats);
+      // the rest is skipped below.
+      "Suplementos e Nutrição": "food",
+      "Higiene e Cuidado Pessoal": "non-food",
+      "Consumíveis": "non-food",
+
       Limpeza: "non-food",
       // Holds baby food too; baby food is its own piece of work.
       Bebé: "non-food",
@@ -92,6 +111,10 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       // 70 products, 5 with a food type; whey powders. The rest of Nutrição
       // Desportiva - protein bars, peanut butter, oats - is food and stays.
       { path: "Bio e Saudável/Nutrição Desportiva/Energia e Proteína", why: "protein powders" },
+      // The same three kinds of product on Continente's layout of 18 October 2026.
+      { path: "Suplementos e Nutrição/Suplementos Alimentares", why: "supplements and vitamins" },
+      { path: "Suplementos e Nutrição/Performance Desportiva", why: "protein powders, creatine, energy gels" },
+      { path: "Suplementos e Nutrição/Controlo de Peso", why: "weight-control products" },
     ],
   },
 

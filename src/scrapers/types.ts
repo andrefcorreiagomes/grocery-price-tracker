@@ -1,4 +1,10 @@
 export interface ScrapeResult {
+  /**
+   * The address that finally answered, after redirects. Set only by readers
+   * that know it (Continente's), so a crawler can store a product's new
+   * address instead of paying for the redirect every night.
+   */
+  finalUrl?: string;
   name: string;
   brand: string | null;
   /**

@@ -18,6 +18,7 @@ import { verifyProductCheckTotals } from "./verify-productcheck-totals";
 import { verifyReidentification } from "./verify-reidentification";
 import { verifyAuchanNightly } from "./verify-auchan-nightly";
 import { verifyMatching } from "./verify-matching";
+import { verifyContinentePages } from "./verify-continente-pages";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -326,6 +327,9 @@ async function main() {
 
   console.log("\n15. matching (clustering guards, decisions, retirement)");
   failures += await verifyMatching();
+
+  console.log("\n16. Continente pages (layout of 18 October 2026, the non-food limit, moved addresses)");
+  failures += verifyContinentePages();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

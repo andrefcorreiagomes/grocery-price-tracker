@@ -37,6 +37,7 @@ import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/c
 import {
   archiveIdentitySwaps,
   churnCatastropheReason,
+  nonFoodCatastropheReason,
   isBarcodeSwapStorm,
   parserRegressionReasons,
   reconcileByBarcode,
@@ -304,20 +305,30 @@ async function main() {
     isFood,
     onBatch: (batch) => saveGrouped(writer, batch),
     onProgress: (p) =>
-      console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} products`),
+      console.log(`  ${p.page.toLocaleString()} pages, ${p.collected.toLocaleString()} food products`),
   });
 
   // Guard 1: if an implausible fraction of the catalogue failed at once, this
   // is a mass re-numbering or a site fault, not turnover. Freeze delisting -
   // advance nothing toward removal - so an unattended schedule cannot wipe the
   // catalogue over three such nights. The reason is added to the report below.
-  const catastrophe = churnCatastropheReason({
+  const churnCatastrophe = churnCatastropheReason({
     dead: refresh.dead.length,
     attempted: queue.length,
     complete,
   });
+  // Guard 1b: the same freeze when an implausible share of products we hold as
+  // food suddenly reads as non-food - the store renamed its shelves (as on 18
+  // October 2026) or the page reader broke. Without it, recordRecategorised
+  // below would stop tracking every one of them in a single night.
+  const nonFoodCatastrophe = nonFoodCatastropheReason({
+    nonFood: refresh.nonFood.length,
+    attempted: queue.length,
+  });
+  const catastrophe = churnCatastrophe ?? nonFoodCatastrophe;
 
   let delisted: string[] = [];
+  if (churnCatastrophe && nonFoodCatastrophe) console.log(`  !! ${nonFoodCatastrophe}`);
   if (catastrophe) {
     console.log(`  !! ${catastrophe}`);
     // Clock only: no deadCount, no delistedAt.
@@ -362,15 +373,23 @@ async function main() {
   }
 
   // ---------------------------------------------------------------- phase 3
+  // When products we know to be food read as non-food, the food test is broken
+  // tonight, and phase 3 is that same test applied to products we have never
+  // seen: every verdict it wrote would be wrong, and would take weeks of
+  // re-checks to undo. So it is skipped, saving its requests too.
+  if (nonFoodCatastrophe) console.log("\nphase 3: skipped - the food test is not trustworthy tonight (see above)");
   const fromBacklog =
-    sitemapTrusted && budget > 0 ? unexamined.slice(0, budget) : [];
+    !nonFoodCatastrophe && sitemapTrusted && budget > 0 ? unexamined.slice(0, budget) : [];
 
   // The re-check trickle: verdicts and delistings old enough to be worth asking
   // again. Counted separately from the backlog, because they are not progress
   // through it - subtracting them would make the catalogue look closer to
   // complete than it is.
-  const recheckDelisted = await staleDelisted(STORE, RECHECK_PER_NIGHT, seenAt);
-  const recheckChecks = await staleChecks(STORE, RECHECK_PER_NIGHT, seenAt);
+  // A --limit test slice re-checks no more than its own size: uncapped, a
+  // "20-product" test also re-checked up to 600 verdicts, ten minutes of requests.
+  const recheckCount = limit === undefined ? RECHECK_PER_NIGHT : Math.min(RECHECK_PER_NIGHT, limit);
+  const recheckDelisted = nonFoodCatastrophe ? [] : await staleDelisted(STORE, recheckCount, seenAt);
+  const recheckChecks = nonFoodCatastrophe ? [] : await staleChecks(STORE, recheckCount, seenAt);
   const rechecked = recheckDelisted.length + recheckChecks.length;
 
   const examineTargets: ProductTarget[] = [...fromBacklog, ...recheckDelisted, ...recheckChecks];
@@ -683,11 +702,11 @@ async function main() {
     report = escalate(report, "FAIL", reason);
   }
 
-  if (catastrophe) {
+  for (const reason of [nonFoodCatastrophe, churnCatastrophe]) {
     // The strongest signal in the report: the run is not to be trusted, and it
     // is a FAIL rather than a WARN because acting on it (delisting) would be
     // destructive. The freeze already happened; this is the alarm.
-    report = escalate(report, "FAIL", catastrophe);
+    if (reason) report = escalate(report, "FAIL", reason);
   }
 
   if (checkChange.shrank) {

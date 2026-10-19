@@ -42,6 +42,8 @@ export interface RawResponse {
   body: string;
   /** bytes received on the wire, compressed, including any redirect hops */
   wireBytes: number;
+  /** the address that finally answered, after following any redirects */
+  url: string;
 }
 
 function decompress(buffer: Buffer, encoding: string | undefined): Buffer {
@@ -133,6 +135,7 @@ export async function rawGet(
       headers: res.headers,
       body: decode(decoded, res.headers["content-type"]),
       wireBytes,
+      url: current,
     };
   }
 
