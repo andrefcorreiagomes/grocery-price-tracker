@@ -44,6 +44,8 @@ function sitemapIndexUrl(): string {
 export interface ProductTarget {
   storeProductId: string;
   url: string;
+  /** The shelf we hold for it, used when its page names none. */
+  categoryPath?: string | null;
 }
 
 /** A page that told us the product is gone. */
@@ -103,6 +105,11 @@ export interface ProductCrawlResult {
  */
 export function addressToStore(target: ProductTarget, finalUrl: string | undefined): string {
   return finalUrl && productIdFromUrl(finalUrl) === target.storeProductId ? finalUrl : target.url;
+}
+
+/** The shelf a fetched product is judged by: its page's, else the one we hold. */
+export function shelfOf(pageShelf: string | null, target: ProductTarget): string | null {
+  return pageShelf ?? target.categoryPath ?? null;
 }
 
 export function productIdFromUrl(url: string): string | null {
@@ -314,23 +321,40 @@ export async function fetchProducts(
     }
 
     fetched++;
-    if (!opts.isFood(product.categoryPath, product.name)) {
-      nonFood.push({
+
+    // A page with a price but no shelf at all says nothing about whether the
+    // product is food. Seen on 19 October 2026: Continente left some products
+    // (its own chicken wings, thighs, giblets...) off every shelf of its new
+    // layout, and reading "no shelf" as "unknown section, so not food" stopped
+    // tracking them. The shelf we already hold stands in when there is one; a
+    // product we know nothing about is "could not tell", asked again next time.
+    const shelf = shelfOf(product.categoryPath, target);
+    if (shelf === null) {
+      unreachable.push({
         storeProductId: target.storeProductId,
         url: target.url,
-        name: product.name,
-        categoryPath: product.categoryPath,
+        reason: "the page names no shelf",
       });
       continue;
     }
 
-    const section = topSection(product.categoryPath);
+    if (!opts.isFood(shelf, product.name)) {
+      nonFood.push({
+        storeProductId: target.storeProductId,
+        url: target.url,
+        name: product.name,
+        categoryPath: shelf,
+      });
+      continue;
+    }
+
+    const section = topSection(shelf);
     const hit: SearchHit = {
       id: target.storeProductId,
       name: product.name,
       price: product.price,
       brand: product.brand || "Continente",
-      category: product.categoryPath ?? "",
+      category: shelf,
       url: addressToStore(target, product.finalUrl),
       // The point of paying a request per product: the page carries what no
       // listing tile does. Set even when null, because here null means "this

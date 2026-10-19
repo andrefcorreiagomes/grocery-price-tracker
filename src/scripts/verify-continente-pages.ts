@@ -1,5 +1,5 @@
 import { parseCategoryPath } from "../scrapers/continente";
-import { addressToStore } from "../scrapers/crawl/continente-products";
+import { addressToStore, shelfOf } from "../scrapers/crawl/continente-products";
 import {
   CONTINENTE_FOOD_SECTIONS,
   CONTINENTE_SECTION_SLUGS,
@@ -136,6 +136,21 @@ export function verifyContinentePages(): number {
   check("exactly 5% does not trip it", !isNonFoodCatastrophe({ nonFood: 50, attempted: 1_000 }));
   check("a 20-product test run with 2 non-food trips it", isNonFoodCatastrophe({ nonFood: 2, attempted: 20 }));
   check("nothing attempted trips nothing", !isNonFoodCatastrophe({ nonFood: 0, attempted: 0 }));
+
+  // --- a page with a price but no shelf -------------------------------------
+  // The analytics block of "Asas de Frango Continente", saved 20 October 2026:
+  // a price, a brand, and no shelf at all.
+  const wings =
+    `${q}item_name${q}:${q}Asas de Frango Continente${q},${q}item_id${q}:${q}7069744${q},` +
+    `${q}retek_category${q}:${q}11 | 11 | 1104 | 2 | 1${q},${q}item_brand${q}:${q}Continente${q},` +
+    `${q}item_list_id${q}:${q}col-produtos${q}`;
+  check("a page that names no shelf gives none", parseCategoryPath(wings) === null);
+  const held = { storeProductId: "7069744", url: "x", categoryPath: "Frescos/Talho/Frango e Peru" };
+  check("then the shelf we hold stands in", shelfOf(null, held) === "Frescos/Talho/Frango e Peru");
+  check("so a tracked chicken product stays food", keepInCatalogue("CONTINENTE", shelfOf(null, held), "Asas de Frango").keep);
+  check("a product we hold nothing for has no shelf - \"could not tell\", not \"not food\"", shelfOf(null, { storeProductId: "1", url: "x" }) === null);
+  check("the page's own shelf wins when it has one", shelfOf("Talho/Frango", held) === "Talho/Frango");
+  check("Continente's wine shop is a food section", keepInCatalogue("CONTINENTE", "Garrafeira/Bebidas Espirituosas", "Gold Rush").keep);
 
   // --- moved addresses -------------------------------------------------------
   const target = {

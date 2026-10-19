@@ -287,7 +287,8 @@ async function main() {
   // what we want.
   const queue = await prisma.catalogueProduct.findMany({
     where: { store: STORE, delistedAt: null },
-    select: { storeProductId: true, url: true },
+    // categoryPath stands in when a page names no shelf (see fetchProducts).
+    select: { storeProductId: true, url: true, categoryPath: true },
     // `lastSeenAt` breaks the tie, which matters on the first run after this
     // was added: every row has a null lastCheckedAt, and without it a limited
     // run would take an arbitrary slice rather than the stalest one.

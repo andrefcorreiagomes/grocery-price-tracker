@@ -82,10 +82,14 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       // sub-sections that are all non-food (perfume, hair, books, toys, ...).
       Beleza: "non-food",
       "Cultura e Lazer": "non-food",
+      // Continente's wine shop. "mixed" at first; the full crawl of 19 October
+      // 2026 found only wine and spirits there (a whisky and a rum among them,
+      // whose names the classifier does not recognise), the same goods as
+      // "Bebidas e Garrafeira", so it is decided the same way.
+      Garrafeira: "food",
       // Not in the menu and their contents not yet seen, so a product filed here
-      // is kept only if its name is recognised as food: a wine shop, two
-      // promotional shelves and the flyer search.
-      Garrafeira: "mixed",
+      // is kept only if its name is recognised as food: two promotional shelves
+      // and the flyer search.
       Destaques: "mixed",
       "Sugestões Continente": "mixed",
       "Folhetos Pesquisa": "mixed",
