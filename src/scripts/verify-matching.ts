@@ -1243,6 +1243,33 @@ function verifyFoodTypes(): number {
   is("Batatas Pré-Fritas Palitos", "PINGO_DOCE", "Congelados/Refeicoes e Salgados/Batatas e Pure", "batata-pre-frita");
   is("Batata para Fritar Embalada", "PINGO_DOCE", "Frutas e Vegetais/Vegetais/Batatas", null);
 
+  // The hand check of a second, fresh sample, 20 October 2026.
+  console.log("\n  food types: the second hand check, 20 October 2026");
+  const nuts = "Mercearia/Batatas Fritas Snacks e Frutos Secos/Frutos Secos e Desidratados";
+  is("Mistura Cajus, Avelãs e Amendoins Torrados", "PINGO_DOCE", nuts, null);
+  is("Mix de Frutos Secos Torrados sem Sal", "PINGO_DOCE", nuts, null);
+  is("Mix Framboesa e Mirtilo Continente", "CONTINENTE", "Frutas e Legumes/Frutas/Morango e Frutos Vermelhos", null);
+  is("Mix Tomate Cherry", "PINGO_DOCE", "Frutas e Vegetais/Vegetais/Tomates Pepinos e Pimentos", "tomate");
+  is("Mistura de Pimentas em Grão em Saqueta Margão", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Especiarias e Ervas Aromáticas", "pimenta");
+  is("Mix Salsichas Frescas de Porco Sabor Lusitano Continente", "CONTINENTE", "Talho/Pronto a Cozinhar", "salsicha");
+  is("Entrecosto de Porco com Molho Barbecue Slow Cooked", "PINGO_DOCE", "Talho/Porco", null);
+  is("Lombo de Porco Preto Fatiado Continente Seleção", "CONTINENTE", "Charcutaria e Queijos/Enchidos/Paio", "paio");
+  is("Cubos de Fiambre", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Fiambre Mortadela e Chouricao", "fiambre");
+  is("Feijoada de Cogumelos Brasil", "PINGO_DOCE", "Mercearia/Conservas/Refeicoes Enlatadas", "refeicao");
+  is("TIRAS NATURE ADDICTS FRUTA MORANGO 35G", "AUCHAN", "alimentação/mercearia/batatas-fritas-e-aperitivos-snacks/aperitivos,-snacks-e-pipocas", null);
+  is("BIFES CEM PORCENTO SOJA MOLHO TOMATE 25OG", "AUCHAN", "biológicos-e-alternativas/alimentação-vegetariana", null);
+  is("MOLHO KIKKOMAN SOJA 1L", "AUCHAN", "alimentação/sabores-do-mundo/cozinha-asiática/molhos-e-temperos", "molho-soja");
+  is("Massa de Alho", "PINGO_DOCE", "Mercearia/Temperos e Molhos/Outros Molhos e Temperos", null);
+  // tomato paste is neither fresh tomato nor pulp: no kind yet
+  is("TOMATE DUPLO CONCENTRADO MUTTI TUBO 130G", "AUCHAN", "alimentação/mercearia/polpas,-caldos-e-temperos/polpa-tomate", null);
+  is("PÃO LÓ OVAR IGP 500 GR", "AUCHAN", "produtos-frescos/pastelaria/bolos-embalados", "bolo");
+  is("Cebola Frita Crocante", "PINGO_DOCE", "Mercearia/Temperos e Molhos/Especiarias e Ervas Aromaticas", null);
+  is("AMEIXA D? ELVAS FRASCO 500G", "AUCHAN", "alimentação/mercearia/cremes,-compotas-e-mel/compotas", null);
+  is("Paio York Fatiado", "PINGO_DOCE", "Charcutaria e Queijos/Charcutaria/Outros Enchidos e Fumeiro", null);
+  is("Petinga em Azeite Alva", "CONTINENTE", "Mercearia/Conservas/Sardinha, Cavala, Lulas", "sardinha");
+  is("Gengibre Moído em Frasco Margão", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Especiarias e Ervas Aromáticas", "gengibre-po");
+  is("Gengibre Continente", "CONTINENTE", "Frutas e Legumes/Legumes", "gengibre");
+
   console.log("\n  food types: sections and honesty");
   check(
     "a matching head in a NON-food section is rejected",

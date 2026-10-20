@@ -8,6 +8,7 @@ import { explainFoodType, nameTokensForType, FOOD_TYPE_BY_ID } from "../lib/food
  *
  *   npm run measure:classifier                 # report into reports/classifier-<date>/
  *   npm run measure:classifier -- <folder>     # or into a folder of your choice
+ *   npm run measure:classifier -- <folder> <n> # and draw the sample with seed n
  *
  * Written on 20 October 2026, when the classifier was first measured: a hand
  * check of a 408-product sample found about 5% of name-decided, 10% of
@@ -54,6 +55,20 @@ async function main() {
   say(`  of the ${withKind.length} with a kind, ${withKind.filter((x) => FOOD_TYPE_BY_ID.get(x.e.id!)?.hidden).length} are in kinds hidden from the site`);
   const stale = all.filter((x) => (x.e.id ?? null) !== (x.foodType ?? null));
   say(`  stored kind differs from today's rules: ${stale.length} (npm run classify:food writes today's)`);
+  // What a rule change would do, before classify:food writes it: every product
+  // that would change kind, grouped by old -> new, largest group first.
+  const moves = new Map<string, string[]>();
+  for (const x of stale) {
+    const key = `${x.foodType ?? "-"} -> ${x.e.id ?? "-"}`;
+    moves.set(key, [...(moves.get(key) ?? []), `${x.store.slice(0, 2)} ${x.name} | ${x.categoryPath ?? ""}`]);
+  }
+  writeFileSync(
+    path.join(outDir, "changes.txt"),
+    [...moves]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([k, l]) => `${String(l.length).padStart(5)}  ${k}\n${l.map((s) => `         ${s}`).join("\n")}`)
+      .join("\n\n")
+  );
 
   // --- B ---------------------------------------------------------------------
   const noKind = all.filter((x) => !x.e.id && why(x) !== "not a food section");
@@ -102,7 +117,9 @@ async function main() {
   writeFileSync(path.join(outDir, "barcode-disagreements.txt"), differing.join("\n"));
 
   // --- D ---------------------------------------------------------------------
-  let seed = 20261020;
+  // A different seed draws a different sample: needed once a sample has been
+  // studied to make rules from, since it then flatters the classifier.
+  let seed = Number(process.argv[3] ?? 20261020);
   const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   const shuffled = <T,>(a: T[]) => {
     const b = [...a];

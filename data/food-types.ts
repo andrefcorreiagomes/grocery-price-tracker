@@ -171,7 +171,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     require: /pr[eé].?frit|\bcongelad/i, exclude: /\bdoce\b|chips|snack|palha|pure/i },
   // Okra. 20 October 2026.
   { id: "quiabo", label: "Quiabo", unit: "kg", heads: ["quiabo"] },
-  { id: "tomate", label: "Tomate", unit: "kg", heads: ["tomate"] },
+  // Not tomato paste in a tube or tin: "Tomate Duplo Concentrado". 20 October 2026.
+  { id: "tomate", label: "Tomate", unit: "kg", heads: ["tomate"], exclude: /concentrad/i },
   { id: "cogumelo", label: "Cogumelo", nameOnly: true, unit: "kg", heads: ["cogumelo"] },
   // Leek is "alho francês": a different vegetable sharing garlic's head word,
   // so it is listed first and claims the names that say "francês".
@@ -180,11 +181,13 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "couve", label: "Couve", unit: "kg", heads: ["couve"] },
   { id: "maca", label: "Maçã", unit: "kg", heads: ["maca"] },
   { id: "ervilha", label: "Ervilha", unit: "kg", heads: ["ervilha"] },
-  { id: "cebola", label: "Cebola", unit: "kg", heads: ["cebola"] },
+  // Not "Cebola Frita Crocante", a topping. 20 October 2026.
+  { id: "cebola", label: "Cebola", unit: "kg", heads: ["cebola"], exclude: /\bfrita\b|crocante/i },
   { id: "pera", label: "Pera", unit: "kg", heads: ["pera"] },
   { id: "pimento", label: "Pimento", unit: "kg", heads: ["pimento"] },
   { id: "melao", label: "Melão", unit: "kg", heads: ["melao"] },
-  { id: "ameixa", label: "Ameixa", unit: "kg", heads: ["ameixa"] },
+  // Not "Ameixa d'Elvas", plums candied in syrup. 20 October 2026.
+  { id: "ameixa", label: "Ameixa", unit: "kg", heads: ["ameixa"], exclude: /elvas|\bcalda\b/i },
   { id: "uva", label: "Uva", nameOnly: true, unit: "kg", heads: ["uva"] },
   { id: "mirtilo", label: "Mirtilo", unit: "kg", heads: ["mirtilo"] },
   { id: "pessego", label: "Pêssego", unit: "kg", heads: ["pessego"] },
@@ -250,6 +253,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "hortela", label: "Hortelã", unit: "kg", heads: ["hortela"],
     exclude: /\bcha\b|infus|rebucad|pastilha|chocolate|licor|\bxarope\b|pimenta/i },
   { id: "manjericao", label: "Manjericão", unit: "kg", heads: ["manjericao"], exclude: /\bmolho\b|pesto|\bseco\b|desidrat/i },
+  // Ground ginger is a dried spice, many times the price per kilo of the fresh
+  // root, so a kind of its own. 20 October 2026.
+  { id: "gengibre-po", label: "Gengibre em pó", nameOnly: true, unit: "kg", heads: ["gengibre"],
+    require: /\bmoido\b|\bem po\b/i, exclude: /\bcha\b|infus|bebida|biscoit|bolacha|rebucad|\bdoce\b|\bcom\b/i },
   { id: "gengibre", label: "Gengibre", unit: "kg", heads: ["gengibre"],
     exclude: /\bcha\b|infus|\bshot\b|bebida|ginger|biscoit|bolacha|rebucad|cerveja|\bem po\b|\bmoido\b|cristaliz|\bdoce\b/i },
 
@@ -300,7 +307,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "almondega", label: "Almôndega", unit: "kg", heads: ["almondega"] },
   { id: "mortadela", label: "Mortadela", unit: "kg", heads: ["mortadela"] },
   { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"] },
-  { id: "paio", label: "Paio", unit: "kg", heads: ["paio"] },
+  // "Paio York" is a cooked ham, not the smoked sausage. 20 October 2026.
+  { id: "paio", label: "Paio", unit: "kg", heads: ["paio"], exclude: /\byork\b/i },
   { id: "salame", label: "Salame", unit: "kg", heads: ["salame"] },
   // Catalan cured sausage, at all three chains. 20 October 2026.
   { id: "fuet", label: "Fuet", unit: "kg", heads: ["fuet"] },
@@ -327,7 +335,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // as salmon heads. Decided by hand, 17 October 2026.
   { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b/i },
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
-  { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha"] },
+  // "Petinga" is young sardine, sold tinned like sardines. 20 October 2026.
+  { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha", "petinga"] },
   // Heads are sold for stock and soup, not as salmon to eat: three Auchan
   // salmon heads at EUR 1.89-1.99/kg were the cheapest "salmon" in the country.
   // Decided by hand, 4 October 2026.
@@ -446,7 +455,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // all three chains; the rest have no kind. Sold by weight or by volume, as
   // the stores record them. `com molho` is a dish that comes with a sauce.
   // 17 October 2026.
-  { id: "molho-soja", label: "Molho de soja", unit: "either", heads: ["molho", "shoyu"], require: /\bsoja\b|shoyu/i, exclude: /\bcom molho\b/i },
+  { id: "molho-soja", label: "Molho de soja", unit: "either", heads: ["molho", "shoyu"],
+    // Not soy steaks in tomato sauce ("Bifes Cem Porcento Soja Molho Tomate"),
+    // nor miso or fermented soy beans. Auchan writes "MOLHO KIKKOMAN SOJA", so
+    // the words need not be next to each other. 20 October 2026.
+    require: /\bsoja\b|shoyu/i, exclude: /\bcom molho\b|\bbifes?\b|tomate|\bmiso\b|fermentad/i },
   // The sauce and the dried chilli are different products (EUR 2.26 against
   // about EUR 31 a kilo), and the unit cannot tell them apart: Pingo Doce
   // records its sauce by weight. So each must say what it is - "molho", or
@@ -466,7 +479,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // their own. 18 October 2026.
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli", "ravioli", "tortellini"],
     // Tofu, seitan and potato starch share Auchan's fresh-pasta shelves.
-    exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
+    // "Massa de Alho" and "Massa de Pimentão" are seasoning pastes. 20 October 2026.
+    exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|massa de (alho|pimentao|piment|malagueta|tomate)|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
   // Sweets that are not chocolate, which reach here through the shelf rather
   // than the name: "Chocolates e Guloseimas" holds both, and a name like
   // "Rebuçados de Mentol" has no head of its own, so the category answered.
@@ -626,7 +640,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pao-ralado", label: "Pão ralado", unit: "kg", heads: ["pao", "panko"], require: /\bralado\b|panko/i },
   { id: "pao", label: "Pão", unit: "kg", heads: ["pao", "baguete", "broa"],
     // Nachos, taco shells and crackers sit on the "pão, tostas e snacks" shelves.
-    exclude: /pao ralado|pao de lo|nacho|cracker|\btaco|\bsnacks?\b/i },
+    // "Pão Ló de Ovar" is a sponge cake too, written without "de". 20 October 2026.
+    exclude: /pao ralado|pao (de )?lo\b|nacho|cracker|\btaco|\bsnacks?\b/i },
   { id: "bolo", label: "Bolo", hidden: "sweets", unit: "kg", heads: ["bolo", "torta", "madalena"] },
   { id: "croissant", label: "Croissant", hidden: "sweets", unit: "kg", heads: ["croissant"] },
   // Split: a baked apple tart is sold by weight and a frozen ice-cream tart by

@@ -1,4 +1,5 @@
 import { CUT_WORDS, FOOD_TYPES, type FoodType } from "../../data/food-types";
+import { CATEGORIES } from "../../data/food-tree";
 import { isFoodSection } from "./store-sections";
 import { HOUSE_LABELS } from "./candidates";
 import { normalizeName, stripAccents } from "./matching";
@@ -42,6 +43,27 @@ const PREPARED_SHELF =
 
 /** Coated or dipped: "Pedaços de Ananás Cobertos com Chocolate" is a dessert. */
 const COATED = /\bcobert[oa]s?\b|\bpanad[oa]s?\b/;
+
+/**
+ * Cooking words: "Entrecosto de Porco com Molho Barbecue Slow Cooked" is a
+ * cooked dish, not raw pork. "Para assar" and "para fritar" (raw, for roasting
+ * or frying) do not match, and neither does "grelhada": "Grelhada Mista de
+ * Porco" is a raw mixed-grill pack. 20 October 2026.
+ */
+const COOKED = /slow.?cook|\bcozinhad[oa]s?\b|\bassad[oa]s?\b|\bfrit[oa]s?\b|\bconfitad[oa]s?\b/;
+
+/** The cut words that name a mixture rather than a part of one food. */
+const MIX_WORDS = new Set(["mix", "mistura"]);
+
+/**
+ * What a cut word may still lead to on a prepared-food shelf: the cold cuts and
+ * ready meals themselves - the "Charcutaria" and "Refeições prontas" categories
+ * of the food tree. "Cubos de Fiambre" is fiambre; "Feijoada de Cogumelos" on a
+ * ready-meals shelf is not mushrooms.
+ */
+const PREPARED_KINDS = new Set(
+  CATEGORIES.filter((c) => c.id === "charcutaria" || c.id === "refeicoes").flatMap((c) => c.kinds)
+);
 
 /** Head word to the type that claims it. Several types can share a head. */
 const BY_HEAD = new Map<string, FoodType[]>();
@@ -186,7 +208,7 @@ export function classifyFoodType(
 export type FoodTypeStep = "head" | "cut" | "shelf";
 export type FoodTypeExplanation =
   | { id: string; step: FoodTypeStep }
-  | { id: null; step: null; why: "not a food section" | "shelf names several foods" | "open shelf" | "nothing recognised" };
+  | { id: null; step: null; why: "not a food section" | "shelf names several foods" | "open shelf" | "a mix of several foods" | "prepared or cooked" | "nothing recognised" };
 
 export function explainFoodType(
   name: string,
@@ -210,22 +232,58 @@ export function explainFoodType(
   // "Bebida Vegetal de Aveia sem Açúcar" as `acucar` (the name says WITHOUT
   // sugar), "Cookie Double Chocolate" as `chocolate`, and "Chausson de Maçã" as
   // `maca`. A cut word is a promise that what follows is the actual food.
-  const nearShelf = stripAccents((categoryPath ?? "").split(/[/>]/).slice(-2).join(" ")).toLowerCase();
-  // Smoked salmon sits among the cold cuts but is still salmon - "Lombo de
-  // Salmão Fumado" - and its "fumado" label keeps it apart from fresh salmon.
-  const prepared = PREPARED_SHELF.test(nearShelf) && !/salmao fumado/.test(nearShelf);
-  if (CUT_SET.has(tokens[0]) && !prepared && !COATED.test(plain)) {
+  const shelf = stripAccents(categoryPath ?? "").toLowerCase();
+  const leaf = shelf.split(/[/>]/).pop() ?? "";
+  // Cold cuts, ready meals and cooked dishes are not the raw meat or fish their
+  // name starts from. Read on the whole path: "Charcutaria e Queijos/Enchidos/
+  // Paio" puts the cold-cuts word three levels up. Smoked salmon sits among the
+  // cold cuts but is still salmon, kept apart by its "fumado" label.
+  const prepared =
+    (PREPARED_SHELF.test(shelf) && !/salmao fumado/.test(shelf)) || COOKED.test(plain);
+  // On a snack shelf a cut word leads nowhere real: "Tiras de Fruta Morango"
+  // is a fruit-leather snack, not strawberries.
+  const snackShelf = /\bsnacks?\b|aperitivo/.test(leaf) && !/snacks? de\b/.test(leaf);
+  // "Mix de Frutos Secos sem Sal" is not salt: a word after "sem" (without) is
+  // never the food. "sem" itself is a stopword, so it is read off the name.
+  const without = new Set([...plain.matchAll(/\bsem ([a-z]+)/g)].map((m) => foldPlural(m[1])));
+  // A mix lists its foods with "e" or commas: "Mix Framboesa e Mirtilo". Without
+  // a list it names one food, described: "Mistura de Pimentas em Grão" is
+  // pepper (not chickpeas, "grão"), "Mix Salsichas Frescas de Porco" sausages.
+  const isMix = MIX_WORDS.has(tokens[0]) && /,|\be\b/.test(plain);
+  let refused = false;
+  if (CUT_SET.has(tokens[0]) && !snackShelf && !COATED.test(plain)) {
+    const found = new Set<string>();
     for (const token of tokens.slice(1)) {
       // What follows these is the packing or the filling, not the food:
       // "Filetes de Anchova em Óleo" is not cooking oil, "Filetes Recheados
       // com Tomate" is not tomato. 17 October 2026.
       if (SCAN_STOPS.has(token)) break;
-      const later = resolve(token, plain);
-      if (later) return { id: later.id, step: "cut" };
-      // Past "molho" come the sauce's ingredients, not the product: "Pernil
-      // Assado com Molho de Cerveja" is roast pork, not beer.
+      if (without.has(token)) continue;
+      // From "molho" on comes the sauce the product is in, not the product:
+      // "Pernil Assado com Molho de Cerveja" is not beer, and "Bifes de Soja
+      // Molho Tomate" is not tomato sauce.
       if (token === "molho") break;
+      const later = resolve(token, plain);
+      if (later) {
+        // On a prepared shelf, or with a cooking word, only a cold cut or a
+        // ready meal is this product. The shelf may still decide, but only a
+        // cold cut or a ready meal (step 3): cured loin on the "Paio" shelf is
+        // paio, cod fritters on a snacks shelf a ready meal, and slow-cooked
+        // ribs on "Talho/Porco" are not raw pork.
+        if (prepared && !PREPARED_KINDS.has(later.id)) {
+          refused = true;
+          break;
+        }
+        if (!isMix) return { id: later.id, step: "cut" };
+        found.add(later.id);
+      }
     }
+    // A mix is one food only when everything it names is the same food: "Mix
+    // Tomate Cherry" is tomato, "Mistura de Cajus, Avelãs e Amendoins" is not
+    // cashews. The hand check of a fresh sample, 20 October 2026, found half
+    // the cut-word mistakes were mixes taking their first ingredient.
+    if (isMix && found.size === 1) return { id: [...found][0], step: "cut" };
+    if (isMix && found.size > 1) return { id: null, step: null, why: "a mix of several foods" };
   }
 
   // 3. the store's own category says so. Read LEAF FIRST, because the leaf is
@@ -294,6 +352,7 @@ export function explainFoodType(
     }
     if (foods.size === 1) {
       const id = resolve([...foods.values()][0], plain, true)?.id ?? null;
+      if (id && refused && !PREPARED_KINDS.has(id)) return { id: null, step: null, why: "prepared or cooked" };
       return id ? { id, step: "shelf" } : { id: null, step: null, why: "nothing recognised" };
     }
   }

@@ -72,7 +72,7 @@ export const CATEGORIES: Category[] = [
   { id: "leguminosas", label: "Leguminosas", kinds: ["feijao", "grao", "lentilha", "tremoco", "tofu"] },
   { id: "azeite", label: "Azeite, óleo e vinagre", kinds: ["azeite", "oleo", "vinagre"] },
   { id: "temperos", label: "Temperos e especiarias", kinds: [
-    "sal", "acucar", "pimenta", "cominho", "oregao", "piri-piri-seco", "caril", "canela", "fermento", "caldo",
+    "sal", "acucar", "pimenta", "cominho", "oregao", "gengibre-po", "piri-piri-seco", "caril", "canela", "fermento", "caldo",
     // Fresh herbs, mainly used for seasoning: moved here from vegetables by the
     // user's decision.
     "coentros", "salsa", "hortela", "manjericao", "gengibre",
