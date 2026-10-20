@@ -49,6 +49,21 @@ export function verifyKindReviews(): number {
   check("a confirmed group keeps its kind, marked as reviewed", ribs.id === "porco" && ribs.reviewed?.by === "group");
   const elsewhere = decideKind({ store: "PINGO_DOCE", storeProductId: "test-3", name: "Bifanas de Porco", categoryPath: "Talho/Novo" });
   check("a group does not reach another shelf", elsewhere.reviewed === null);
+  const shakes = decideKind({
+    store: "PINGO_DOCE", storeProductId: "test-4", name: "Milkshake de Chocolate",
+    categoryPath: "Iogurtes e Sobremesas/Iogurtes/Iogurtes Liquidos​",
+  });
+  check("a group corrected to no kind has none (milkshakes were yoghurt)", shakes.id === null && shakes.e.id === "iogurte");
+  const soup = decideKind({
+    store: "CONTINENTE", storeProductId: "test-5", name: "Creme de Cogumelos Continente",
+    categoryPath: "Mercearia/Molhos, Temperos e Sal/Preparados de Sopas",
+  });
+  check("instant soup powder is not ready soup", soup.id === "sopa-instantanea", String(soup.id));
+  const cereal = decideKind({
+    store: "AUCHAN", storeProductId: "test-6", name: "BEBIDA SOLÚVEL DELTA CEREAIS MEL 200G",
+    categoryPath: "alimentação/mercearia/café,-chá-e-infusão/café-saco,-solúvel-e-cevadas",
+  });
+  check("a cereal drink is not coffee", cereal.id === "bebida-cereais", String(cereal.id));
   const index = new Map();
   check("anything reviewed counts as certain",
     certaintyOf({ store: "CONTINENTE", storeProductId: "test-2", name: "Bifanas de Porco Continente", categoryPath: "Talho/Porco", eanNormalized: null }, index).level === "high");

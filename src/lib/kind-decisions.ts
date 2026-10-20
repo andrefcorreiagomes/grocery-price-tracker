@@ -40,7 +40,9 @@ export function decideKind(p: KindProduct): KindDecision {
   if (own) return { id: own.kind, e, reviewed: { by: "product", batch: own.batch } };
   if (e.id && e.step) {
     const group = groups.get([p.store, shelfKey(p.categoryPath), e.id, e.step].join("\t"));
-    if (group) return { id: group.becomes ?? e.id, e, reviewed: { by: "group", batch: group.batch } };
+    // `becomes: null` is a decision too - the group has no kind - so only an
+    // absent `becomes` keeps the classifier's answer.
+    if (group) return { id: group.becomes === undefined ? e.id : group.becomes, e, reviewed: { by: "group", batch: group.batch } };
   }
   return { id: e.id, e, reviewed: null };
 }

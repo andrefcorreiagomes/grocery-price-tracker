@@ -21,6 +21,11 @@
  * 1,148 products, approved by the user as proposed. With it came the kind
  * "tosta", and two rules in src/lib/food-types.ts and data/food-types.ts:
  * "Mini" is never the food, and Yofu, Sojagurte and Cocogurte are Vegurte.
+ *
+ * Batch 2, 20 October 2026: the next 30 groups, 432 products, approved by the
+ * user as proposed, with two kinds assigned only here for now ("bebida-cereais",
+ * "sopa-instantanea") and cured pork loins counted as paio. Recorded with
+ * \`npm run review:batch -- record\`.
  */
 
 export interface ReviewedGroup {
@@ -32,8 +37,8 @@ export interface ReviewedGroup {
   kind: string;
   /** how the classifier decided it */
   step: "head" | "cut" | "shelf";
-  /** the kind the whole group should have instead, when it was wrong */
-  becomes?: string;
+  /** the kind the whole group should have instead, when it was wrong; null for no kind */
+  becomes?: string | null;
 }
 
 export interface ReviewedProduct {
@@ -109,6 +114,66 @@ export const REVIEWED_GROUPS: ReviewedGroup[] = [
   { batch: 1, store: "AUCHAN", shelf: "iogurtes/defesa-e-colesterol", kind: "iogurte", step: "shelf" },
   // 30. Cereal flakes, bran and whole grains: right. Two are not.
   { batch: 1, store: "AUCHAN", shelf: "cereais-e-barras/flocos-cereais", kind: "cereais", step: "shelf" },
+  // 2.1. Dry pasta, soup pasta, lasagne sheets and gnocchi: right. Three are konjac noodles with no wheat, sold as a low-carbohydrate substitute.
+  { batch: 2, store: "CONTINENTE", shelf: "Arroz, Massa e Farinha/Massa", kind: "massa", step: "shelf" },
+  // 2.2. All 18 are fresh bread rolls and loaves baked in store.
+  { batch: 2, store: "AUCHAN", shelf: "padaria/pão-fresco-e-broa", kind: "pao", step: "shelf" },
+  // 2.3. All 17 are raw veal cuts, including stroganoff strips and stew meat.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Vitela Vitelao e Bovino/Vitela e Vitelao​", kind: "vitela", step: "cut" },
+  // 2.4. All 17 are salmon fillets, loins and steaks, fresh and frozen.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Peixe/Atum e Salmao​", kind: "salmao", step: "cut" },
+  // 2.5. Fresh and frozen ready meals: right. One is a dessert.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Refeicoes e Salgados/Comida Fresca   Refeicoes Congeladas", kind: "refeicao", step: "shelf" },
+  // 2.6. All 17 are frozen salmon.
+  { batch: 2, store: "CONTINENTE", shelf: "Peixe Congelado/Salmão", kind: "salmao", step: "cut" },
+  // 2.7. All 17 are tinned tuna fillets.
+  { batch: 2, store: "CONTINENTE", shelf: "Conservas/Atum", kind: "atum", step: "cut" },
+  // 2.8. All 16 are raw turkey.
+  { batch: 2, store: "CONTINENTE", shelf: "Talho/Peru", kind: "peru", step: "cut" },
+  // 2.9. All 16 are almonds, plain, roasted, sliced or ground; flavoured ones are still almonds.
+  { batch: 2, store: "AUCHAN", shelf: "fruta/frutos-secos-e-sementes", kind: "amendoa", step: "cut" },
+  // 2.10. All 16 are fresh pasta, filled pasta and gnocchi.
+  { batch: 2, store: "AUCHAN", shelf: "gastronomia/massas-frescas", kind: "massa", step: "shelf" },
+  // 2.11. All 16 are oat flakes.
+  { batch: 2, store: "AUCHAN", shelf: "cereais-e-barras/flocos-cereais", kind: "aveia", step: "cut" },
+  // 2.12. All 15 are Nestum cereal flakes.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Cereais Barras e Bolsas de Fruta/Cereais Infantis e Juvenis", kind: "cereais", step: "shelf" },
+  // 2.13. All 15 are oat flakes.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Cereais Barras e Bolsas de Fruta/Cereais Linha e Fibra", kind: "aveia", step: "cut" },
+  // 2.14. All 15 are raw turkey, including giblets.
+  { batch: 2, store: "AUCHAN", shelf: "talho/peru", kind: "peru", step: "cut" },
+  // 2.15. All 14 are shelled prawns.
+  { batch: 2, store: "CONTINENTE", shelf: "Marisco Congelado/Miolos de Marisco", kind: "camarao", step: "cut" },
+  // 2.16. All 14 are cereal flakes.
+  { batch: 2, store: "AUCHAN", shelf: "cereais-e-barras/flocos-cereais", kind: "cereais", step: "cut" },
+  // 2.17. None of these is plain coffee. Eight are barley, chicory and cereal drinks, a coffee substitute sold at all three chains: proposed as a new kind. Six ...
+  { batch: 2, store: "AUCHAN", shelf: "café,-chá-e-infusão/café-saco,-solúvel-e-cevadas", kind: "cafe", step: "shelf", becomes: "bebida-cereais" },
+  // 2.18. All 13 are frozen salt cod.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Bacalhau/Bacalhau Congelado", kind: "bacalhau", step: "cut" },
+  // 2.19. All 13 are raw chicken, including liver and gizzards.
+  { batch: 2, store: "CONTINENTE", shelf: "Continente/Peixaria e Talho", kind: "frango", step: "cut" },
+  // 2.20. Fresh pasta, plain and filled: right. Three are ready dishes.
+  { batch: 2, store: "CONTINENTE", shelf: "Refeições Práticas/Massas", kind: "massa", step: "shelf" },
+  // 2.21. All 13 are shelled prawns.
+  { batch: 2, store: "AUCHAN", shelf: "marisco-e-moluscos/camarão-e-miolo-de-camarão", kind: "camarao", step: "cut" },
+  // 2.22. Raw veal: right. Three are minced-meat preparations, which have their own kind, and three are stuffed meat rolls.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Vitela Vitelao e Bovino/Vitela e Vitelao​", kind: "vitela", step: "shelf" },
+  // 2.23. Not one is yoghurt: these are milkshakes, protein shakes and meal-replacement drinks. They get no kind.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Iogurtes/Iogurtes Liquidos​", kind: "iogurte", step: "shelf", becomes: null },
+  // 2.24. Frozen ready meals: right. Two are not meals.
+  { batch: 2, store: "PINGO_DOCE", shelf: "Refeicoes e Salgados/Refeicoes Congeladas", kind: "refeicao", step: "shelf" },
+  // 2.25. Raw beef cuts: right. Three are minced beef and one is a stuffed meat roll.
+  { batch: 2, store: "CONTINENTE", shelf: "Talho/Novilho, Vitela e Vitelão", kind: "vaca", step: "shelf" },
+  // 2.26. All 12 are raw pork, mostly offal and less common cuts.
+  { batch: 2, store: "CONTINENTE", shelf: "Talho/Porco", kind: "porco", step: "shelf" },
+  // 2.27. Paio and cured pork loins (copita, painho, coppa), which Continente shelves together: right. Three are mixed tapas packs.
+  { batch: 2, store: "CONTINENTE", shelf: "Enchidos/Paio", kind: "paio", step: "shelf" },
+  // 2.28. Soup powders and sachets (Knorr, Quick Soup), not ready soup: proposed as a new kind. One is a ramen soup concentrate, which gets no kind.
+  { batch: 2, store: "CONTINENTE", shelf: "Molhos, Temperos e Sal/Preparados de Sopas", kind: "sopa", step: "shelf", becomes: "sopa-instantanea" },
+  // 2.29. Tinned ready meals: right. Two are not meals.
+  { batch: 2, store: "CONTINENTE", shelf: "Conservas/Refeições", kind: "refeicao", step: "shelf" },
+  // 2.30. All 12 are raw pork, mostly offal and roasting cuts.
+  { batch: 2, store: "AUCHAN", shelf: "talho/porco", kind: "porco", step: "shelf" },
 ];
 
 export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
@@ -188,4 +253,35 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 1, store: "CONTINENTE", id: "8109684", name: "Crocante Cordon Bleu Vegan Valsoia", kind: null, why: "a vegan cordon bleu" },
   { batch: 1, store: "AUCHAN", id: "1096295", name: "LEVEDURA SALUTEM CERVEJA EM PÓ 150G", kind: null, why: "brewer's yeast" },
   { batch: 1, store: "AUCHAN", id: "2932599", name: "AVEIA CEM PORCENTO MAIS PROTEICA INSTANTÂNEA 500G", kind: "aveia", why: "instant oats are oat flakes" },
+  { batch: 2, store: "CONTINENTE", id: "8623380", name: "Tagliatelle Zero Carbs Keto Chef", kind: null, why: "konjac (shirataki) noodles, not pasta" },
+  { batch: 2, store: "CONTINENTE", id: "7802846", name: "Shirataki Udon Miyata", kind: null, why: "konjac (shirataki) noodles, not pasta" },
+  { batch: 2, store: "CONTINENTE", id: "7802824", name: "Shirataki Esparguete Miyata", kind: null, why: "konjac (shirataki) noodles, not pasta" },
+  { batch: 2, store: "PINGO_DOCE", id: "1002962", name: "Marquise de Chocolate da Avó Ninhas", kind: null, why: "a chocolate dessert" },
+  { batch: 2, store: "AUCHAN", id: "627592", name: "CAPPUCINO NESCAFÉ 10X14G", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "AUCHAN", id: "2155515", name: "CAPPUCCINO NESCAFÉ CARAMELO 136G", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "AUCHAN", id: "3290840", name: "CAPPUCCINO AUCHAN 250G", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "AUCHAN", id: "573459", name: "CAPPUCCINO NESCAFÉ INTENSO 10X12.5G", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "AUCHAN", id: "613119", name: "SOLUVEIS NESCAFÉ CAPPUCCINO DESCAFEINADO 10UN", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "AUCHAN", id: "2704554", name: "CAPPUCCINO DELTA 10X14G", kind: null, why: "instant cappuccino mixes" },
+  { batch: 2, store: "CONTINENTE", id: "7722654", name: "Canelloni Espinafres e Ricotta Continente", kind: "refeicao", why: "a cannelloni dish, a pasta kit with sauce, a risotto" },
+  { batch: 2, store: "CONTINENTE", id: "8485351", name: "Kit Pappardelle com Ragú Toscano Rana", kind: "refeicao", why: "a cannelloni dish, a pasta kit with sauce, a risotto" },
+  { batch: 2, store: "CONTINENTE", id: "8503805", name: "Risotto de Cogumelos Argarl", kind: "refeicao", why: "a cannelloni dish, a pasta kit with sauce, a risotto" },
+  { batch: 2, store: "PINGO_DOCE", id: "622075", name: "Preparado de Carne Picada de Vitelão", kind: "carne-picada", why: "minced veal" },
+  { batch: 2, store: "PINGO_DOCE", id: "253998", name: "Preparado de Carne Picada de Vitela", kind: "carne-picada", why: "minced veal" },
+  { batch: 2, store: "PINGO_DOCE", id: "907821", name: "Preparado de Carne Picada de Vitelão Embalado", kind: "carne-picada", why: "minced veal" },
+  { batch: 2, store: "PINGO_DOCE", id: "856758", name: "Rolo de Carne de Vitelão com Farinheira e Espinafres", kind: null, why: "stuffed meat rolls" },
+  { batch: 2, store: "PINGO_DOCE", id: "622065", name: "Rolo de Carne de Vitelão com Queijo e Fiambre", kind: null, why: "stuffed meat rolls" },
+  { batch: 2, store: "PINGO_DOCE", id: "699577", name: "Rolo de Carne de Vitelão Folhado com Queijo", kind: null, why: "stuffed meat rolls" },
+  { batch: 2, store: "PINGO_DOCE", id: "918759", name: "Burgers de Proteína Vegetal", kind: null, why: "plant-based burgers" },
+  { batch: 2, store: "PINGO_DOCE", id: "874748", name: "Preparado de Marisco Congelado", kind: null, why: "a raw seafood mix" },
+  { batch: 2, store: "CONTINENTE", id: "7430620", name: "Preparado de Carne Picada de Bovino Continente", kind: "carne-picada", why: "minced beef" },
+  { batch: 2, store: "CONTINENTE", id: "7723930", name: "Preparado de Carne Picada de Bovino Angus Continente Seleção", kind: "carne-picada", why: "minced beef" },
+  { batch: 2, store: "CONTINENTE", id: "5603614", name: "Preparado de Carne Picada de Bovino Carnalentejana DOP Continente", kind: "carne-picada", why: "minced beef" },
+  { batch: 2, store: "CONTINENTE", id: "7298016", name: "Rolo de Carne de Novilho com Queijo e Fiambre Continente Seleção", kind: null, why: "a stuffed meat roll" },
+  { batch: 2, store: "CONTINENTE", id: "5130196", name: "Tapas de Salpicão e Paio Continente", kind: null, why: "tapas assortments" },
+  { batch: 2, store: "CONTINENTE", id: "8513272", name: "Tapas de Lombo e Cachaço Casa do Monte", kind: null, why: "tapas assortments" },
+  { batch: 2, store: "CONTINENTE", id: "8914825", name: "Tapas Paio do Lombo e Paio Continente", kind: null, why: "tapas assortments" },
+  { batch: 2, store: "CONTINENTE", id: "7825881", name: "Base Concentrada Sopa Ramen Kikkoman", kind: null, why: "a ramen soup concentrate" },
+  { batch: 2, store: "CONTINENTE", id: "8667541", name: "Mandioquinha Cozida no Vapor Vapza", kind: null, why: "cooked cassava" },
+  { batch: 2, store: "CONTINENTE", id: "8623213", name: "Peito de Frango ao Natural Continente Equilíbrio", kind: null, why: "tinned chicken breast" },
 ];

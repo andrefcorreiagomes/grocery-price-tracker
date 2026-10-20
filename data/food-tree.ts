@@ -86,10 +86,10 @@ export const CATEGORIES: Category[] = [
     "semente-abobora", "linhaca", "canhamo", "arando",
   ] },
   { id: "refeicoes", label: "Refeições prontas e salgados", kinds: [
-    "pizza", "lasanha", "refeicao", "sopa", "salada-pronta", "quiche", "empada", "rissol", "croquete",
+    "pizza", "lasanha", "refeicao", "sopa", "sopa-instantanea", "salada-pronta", "quiche", "empada", "rissol", "croquete",
     "pastel-bacalhau", "folhado", "sande",
   ] },
-  { id: "cafe", label: "Café, chá e água", kinds: ["cafe", "cafe-capsula", "cha", "infusao", "agua"] },
+  { id: "cafe", label: "Café, chá e água", kinds: ["cafe", "cafe-capsula", "bebida-cereais", "cha", "infusao", "agua"] },
 ];
 
 /** Where the set-aside kinds go when they come back. */

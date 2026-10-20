@@ -544,6 +544,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pate", label: "Paté", nameOnly: true, unit: "kg", heads: ["pate"] },
   // "Canja"/"Canjinha" is chicken broth: a soup, not chicken. 20 October 2026.
   { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja", "canjinha"] },
+  // Soup powders and sachets: a packet of powder cannot be compared per kilo
+  // with ready soup. No heads yet - their names ("Creme de Marisco Knorr")
+  // read like ready soups - so only review assigns it (data/kind-reviews.ts).
+  // Approved in review batch 2, 20 October 2026.
+  { id: "sopa-instantanea", label: "Sopas instantâneas", unit: "kg", heads: [] },
   // Stock, not "Caldo Verde", which is a soup. 17 October 2026.
   { id: "caldo", label: "Caldo", nameOnly: true, unit: "kg", heads: ["caldo"], exclude: /caldo verde/i },
   // "Tempero" (seasoning mixes) and "Pasta" (pastes: curry next to olive next
@@ -733,6 +738,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "cafe-capsula", label: "Café em cápsulas", unit: "un", heads: ["cafe", "capsula", "pastilha"],
     require: new RegExp(`(?=.*(?:capsul|pastilha|\\bpods?\\b|nespresso|dolce gusto|tassimo|\\bnsp\\b|\\bdg\\b|delta q|compativ))(?=.*(?:${COFFEE_WORDS}))`, "i"),
     exclude: COFFEE_EXCLUDE },
+  // Barley, chicory and cereal drinks (Pensal, Bolero, Delta Cereais), a
+  // coffee substitute sold at all three chains. No heads yet - "Bebida",
+  // "Mistura" and "Solúvel" lead many other names - so only review assigns it
+  // (data/kind-reviews.ts). Approved in review batch 2, 20 October 2026.
+  { id: "bebida-cereais", label: "Bebidas de cereais (cevada e chicória)", unit: "kg", heads: [] },
   { id: "cafe", label: "Café", unit: "kg", heads: ["cafe", "capsula", "pastilha"],
     require: new RegExp(COFFEE_WORDS, "i"), exclude: COFFEE_EXCLUDE },
   { id: "sumo", label: "Sumo", hidden: "drinks", unit: "l", heads: ["sumo"] },
