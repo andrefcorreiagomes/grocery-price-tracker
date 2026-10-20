@@ -19,6 +19,7 @@ import { verifyReidentification } from "./verify-reidentification";
 import { verifyAuchanNightly } from "./verify-auchan-nightly";
 import { verifyMatching } from "./verify-matching";
 import { verifyContinentePages } from "./verify-continente-pages";
+import { verifyKindReviews } from "./verify-kind-reviews";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -330,6 +331,9 @@ async function main() {
 
   console.log("\n16. Continente pages (layout of 18 October 2026, the non-food limit, moved addresses)");
   failures += verifyContinentePages();
+
+  console.log("\n17. kinds decided in review (data/kind-reviews.ts) and the rules that came with them");
+  failures += verifyKindReviews();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

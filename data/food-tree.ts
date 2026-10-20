@@ -67,7 +67,7 @@ export const CATEGORIES: Category[] = [
     "leite", "iogurte", "bifidus", "kefir", "queijo", "requeijao", "manteiga", "nata", "ovo", "bebida-vegetal", "vegurte",
     "leite-condensado", "leite-coco",
   ] },
-  { id: "padaria", label: "Padaria", kinds: ["pao", "tortilha", "pao-ralado"] },
+  { id: "padaria", label: "Padaria", kinds: ["pao", "tortilha", "pao-ralado", "tosta"] },
   { id: "cereais", label: "Arroz, massa e cereais", kinds: ["arroz", "massa", "quinoa", "bulgur", "aveia", "cereais", "farinha", "cuscuz"] },
   { id: "leguminosas", label: "Leguminosas", kinds: ["feijao", "grao", "lentilha", "tremoco", "tofu"] },
   { id: "azeite", label: "Azeite, óleo e vinagre", kinds: ["azeite", "oleo", "vinagre"] },

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "../lib/db";
 import { barcodeIndex, certaintyOf } from "../lib/kind-certainty";
+import { shelfKey } from "../lib/kind-decisions";
 import { FOOD_TYPE_BY_ID } from "../lib/food-types";
 
 /**
@@ -50,8 +51,8 @@ async function main() {
   // A group is one decision to check: the same store, shelf, kind and step.
   const groups = new Map<string, typeof review>();
   for (const x of review) {
-    const shelf = (x.categoryPath ?? "(none)").split("/").slice(-2).join("/");
-    const key = [x.store, shelf, x.c.e.id ?? "-", x.c.e.step ?? "barcode"].join("\t");
+    // The same key data/kind-reviews.ts records a reviewed group under.
+    const key = [x.store, shelfKey(x.categoryPath), x.c.d.e.id ?? "-", x.c.d.e.step ?? "barcode"].join("\t");
     groups.set(key, [...(groups.get(key) ?? []), x]);
   }
   const sorted = [...groups].sort((a, b) => b[1].length - a[1].length);

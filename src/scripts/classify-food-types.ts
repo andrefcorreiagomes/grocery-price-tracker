@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { STORE_ORDER } from "../lib/stores";
-import { classifyFoodType, isFoodSection } from "../lib/food-types";
+import { isFoodSection } from "../lib/food-types";
+import { decideKind } from "../lib/kind-decisions";
 import { FOOD_TYPES } from "../../data/food-types";
 import { SUB_KINDS } from "../../data/food-tree";
 import { labelsOf, subKindOf } from "../lib/food-tree";
@@ -30,7 +31,7 @@ async function main() {
 
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null },
-    select: { id: true, store: true, name: true, categoryPath: true, packageSize: true, unit: true, price: true },
+    select: { id: true, store: true, storeProductId: true, name: true, categoryPath: true, packageSize: true, unit: true, price: true },
   });
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
   console.log(
@@ -49,7 +50,9 @@ async function main() {
   const unmatchedHeads = new Map<string, number>();
 
   for (const r of food) {
-    const type = classifyFoodType(r.name, r.store, r.categoryPath);
+    // The classifier's answer as review corrected or confirmed it
+    // (data/kind-reviews.ts).
+    const type = decideKind(r).id;
     if (!type) {
       unmatched++;
       const head = r.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
@@ -93,7 +96,7 @@ async function main() {
     } else {
       console.log(`  labelled ${row.labelled}, unit-price comparable ${row.sized}`);
       for (const s of STORES) console.log(`    ${s.padEnd(12)} ${row.byStore.get(s) ?? 0}`);
-      const members = food.filter((r) => classifyFoodType(r.name, r.store, r.categoryPath) === only);
+      const members = food.filter((r) => decideKind(r).id === only);
       console.log("  cheapest per store (by unit price where known):");
       for (const s of STORES) {
         const mine = members.filter((m) => m.store === s && m.price !== null);

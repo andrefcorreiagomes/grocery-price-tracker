@@ -436,7 +436,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"], exclude: /amendoim|amendoa|caju|avela|pistacio|cacau/i },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
-  { id: "vegurte", label: "Vegurte", unit: "kg", heads: ["vegurte", "vegegurte"] },
+  // Plant-based yoghurts go by brand names too: Alpro's "Yofu", Sojasun's
+  // "Sojagurte", the "Cocogurte" of several makers. Approved in review batch 1,
+  // 20 October 2026 - they were filed as dairy yoghurt.
+  { id: "vegurte", label: "Vegurte", unit: "kg", heads: ["vegurte", "vegegurte", "yofu", "sojagurte", "cocogurte"] },
   { id: "nata", label: "Natas", nameOnly: true, unit: "l", heads: ["nata"] },
   // Split: shell eggs are sold by weight, pasteurised egg white by volume, and
   // both are genuinely egg. What is NOT egg is a chocolate Kinder egg or "ovos
@@ -646,6 +649,15 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "canela", label: "Canela", unit: "kg", heads: ["canela"], exclude: /\bde gato\b/i },
 
   // --- Padaria e pastelaria ------------------------------------------------
+  // Toasts, mini-toasts, crispbread and breadsticks: not bread, and not biscuits.
+  // Auchan filed them as bread and Pingo Doce as biscuits, so the same product
+  // was never compared. Approved in review batch 1, 20 October 2026. Not
+  // croutons, nor a "Tosta Mista" (a toasted ham-and-cheese sandwich).
+  { id: "tosta", label: "Tostas e gressinos", unit: "kg",
+    // Not "bruschetta" by name: Ponti's is a tomato topping in a jar. The
+    // bruschetta toasts on Auchan's toast shelf are toasts through the shelf.
+    heads: ["tosta", "gressino", "grissino", "grissini", "crostini", "tarallini", "taralli", "biscottina", "regana"],
+    exclude: /crouton|\bmista\b/i },
   // Breadcrumbs: "Pão Ralado" heads on pão, so it is listed first. 20 October 2026.
   { id: "pao-ralado", label: "Pão ralado", unit: "kg", heads: ["pao", "panko"], require: /\bralado\b|panko/i },
   { id: "pao", label: "Pão", unit: "kg", heads: ["pao", "baguete", "broa"],

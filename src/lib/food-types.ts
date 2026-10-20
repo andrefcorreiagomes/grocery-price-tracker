@@ -23,6 +23,9 @@ const STOPWORDS = new Set([
   "bio", "biologico", "biologica", "selecao", "seleccao", "especial", "nacional",
   "fresco", "fresca", "embalada", "embalado", "granel", "pack", "kg", "gr", "un",
   "congelado", "congelada", "ultracongelado", "ultracongelada",
+  // "Mini Rissóis de Carne" are rissóis: a size is never the food. Approved in
+  // review batch 1, 20 October 2026.
+  "mini",
 ]);
 
 const CUT_SET = new Set(CUT_WORDS);

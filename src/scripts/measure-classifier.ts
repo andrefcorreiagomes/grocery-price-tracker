@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "../lib/db";
 import { explainFoodType, nameTokensForType, FOOD_TYPE_BY_ID } from "../lib/food-types";
+import { decideKind } from "../lib/kind-decisions";
 
 /**
  * How well does the kind-of-food classifier do? Read-only: it changes nothing.
@@ -53,13 +54,15 @@ async function main() {
   say(["all".padEnd(36), ...per.map((n) => String(n).padStart(11)), String(all.length).padStart(8)].join(""));
   const withKind = all.filter((x) => x.e.id);
   say(`  of the ${withKind.length} with a kind, ${withKind.filter((x) => FOOD_TYPE_BY_ID.get(x.e.id!)?.hidden).length} are in kinds hidden from the site`);
-  const stale = all.filter((x) => (x.e.id ?? null) !== (x.foodType ?? null));
+  // What classify:food would store: the classifier as review corrected it.
+  const decided = (x: (typeof all)[number]) => decideKind(x).id;
+  const stale = all.filter((x) => (decided(x) ?? null) !== (x.foodType ?? null));
   say(`  stored kind differs from today's rules: ${stale.length} (npm run classify:food writes today's)`);
   // What a rule change would do, before classify:food writes it: every product
   // that would change kind, grouped by old -> new, largest group first.
   const moves = new Map<string, string[]>();
   for (const x of stale) {
-    const key = `${x.foodType ?? "-"} -> ${x.e.id ?? "-"}`;
+    const key = `${x.foodType ?? "-"} -> ${decided(x) ?? "-"}`;
     moves.set(key, [...(moves.get(key) ?? []), `${x.store.slice(0, 2)} ${x.name} | ${x.categoryPath ?? ""}`]);
   }
   writeFileSync(
