@@ -103,7 +103,7 @@ async function list(out: string, n: number) {
 }
 
 const STORE_NAME: Record<string, string> = { CONTINENTE: "Continente", PINGO_DOCE: "Pingo Doce", AUCHAN: "Auchan" };
-const STEP: Record<string, string> = { shelf: "by its shelf", cut: "past a cut word", head: "by its name" };
+const STEP: Record<string, string> = { shelf: "by its shelf", cut: "past a cut word", head: "by its name", barcode: "with no kind, though its barcode has one at another chain," };
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function page(groups: Group[], d: Decisions, out: string) {
@@ -240,15 +240,26 @@ function record(groups: Group[], d: Decisions) {
   const productLines: string[] = [];
   for (const g of groups) {
     const gd = d.groups[String(g.num)];
-    const becomes = gd.verdict === "correct" ? `, becomes: ${kindOrNull(gd.to!)}` : "";
     const why = gd.why.replace(/\s+/g, " ");
+    const names = new Map(g.products.map((p) => [p.id, p.name]));
+    const product = (id: string, kind: string, reason: string) =>
+      `  { batch: ${d.batch}, store: ${q(g.store)}, id: ${q(id)}, name: ${q(names.get(id)!)}, kind: ${kindOrNull(kind)}, why: ${q(reason)} },`;
+    if (g.kind === "-") {
+      // A group the classifier gave no kind (in review through a barcode)
+      // cannot be matched as a group, so each product is recorded on its own.
+      const exception = new Map<string, [string, string]>();
+      for (const [ids, to, why2] of gd.exceptions ?? []) for (const id of ids) exception.set(id, [to, why2]);
+      for (const p of g.products) {
+        const [to, reason] = exception.get(p.id) ?? [gd.verdict === "correct" ? gd.to! : "-", why];
+        productLines.push(product(p.id, to, reason));
+      }
+      continue;
+    }
+    const becomes = gd.verdict === "correct" ? `, becomes: ${kindOrNull(gd.to!)}` : "";
     groupLines.push(`  // ${d.batch}.${g.num}. ${why.length > 150 ? why.slice(0, 150) + "..." : why}
   { batch: ${d.batch}, store: ${q(g.store)}, shelf: ${q(g.shelf)}, kind: ${q(g.kind)}, step: ${q(g.step)}${becomes} },`);
-    const names = new Map(g.products.map((p) => [p.id, p.name]));
     for (const [ids, to, why2] of gd.exceptions ?? []) {
-      for (const id of ids) {
-        productLines.push(`  { batch: ${d.batch}, store: ${q(g.store)}, id: ${q(id)}, name: ${q(names.get(id)!)}, kind: ${kindOrNull(to)}, why: ${q(why2)} },`);
-      }
+      for (const id of ids) productLines.push(product(id, to, why2));
     }
   }
   const file = "data/kind-reviews.ts";

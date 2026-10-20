@@ -82,7 +82,7 @@ export const CATEGORIES: Category[] = [
     "molho-tomate", "polpa-tomate",
   ] },
   { id: "frutos-secos", label: "Frutos secos e sementes", kinds: [
-    "amendoim", "amendoa", "caju", "noz", "avela", "pinhao", "castanha", "pistacio", "chia", "girassol", "sesamo",
+    "amendoim", "amendoa", "caju", "noz", "noz-peca", "avela", "pinhao", "castanha", "pistacio", "chia", "girassol", "sesamo",
     "semente-abobora", "linhaca", "canhamo", "arando",
   ] },
   { id: "refeicoes", label: "Refeições prontas e salgados", kinds: [

@@ -26,6 +26,10 @@
  * user as proposed, with two kinds assigned only here for now ("bebida-cereais",
  * "sopa-instantanea") and cured pork loins counted as paio. Recorded with
  * \`npm run review:batch -- record\`.
+ *
+ * Batch 3, 20 October 2026: 30 groups, 290 products, approved as proposed,
+ * with the kind "noz-peca" (pecans) as a rule. Its liqueur group had no kind,
+ * so its nine products are recorded one by one.
  */
 
 export interface ReviewedGroup {
@@ -174,6 +178,64 @@ export const REVIEWED_GROUPS: ReviewedGroup[] = [
   { batch: 2, store: "CONTINENTE", shelf: "Conservas/Refeições", kind: "refeicao", step: "shelf" },
   // 2.30. All 12 are raw pork, mostly offal and roasting cuts.
   { batch: 2, store: "AUCHAN", shelf: "talho/porco", kind: "porco", step: "shelf" },
+  // 3.1. All 12 are corn flakes and muesli.
+  { batch: 3, store: "AUCHAN", shelf: "cereais-e-barras/corn-flakes-e-muesli", kind: "cereais", step: "shelf" },
+  // 3.2. All 11 are raw lamb.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Talho/Borrego Cabrito e Coelho​", kind: "borrego", step: "cut" },
+  // 3.3. All 11 are ready soups: gazpacho, vegetable creams, caldo verde.
+  { batch: 3, store: "CONTINENTE", shelf: "Refeições Práticas/Sopas", kind: "sopa", step: "shelf" },
+  // 3.4. All 11 are small sheep's cheeses (merendeiras).
+  { batch: 3, store: "CONTINENTE", shelf: "Queijo Curado/Ovelha", kind: "queijo", step: "shelf" },
+  // 3.5. All 11 are tinned mackerel fillets.
+  { batch: 3, store: "CONTINENTE", shelf: "Conservas/Sardinha, Cavala, Lulas", kind: "cavala", step: "cut" },
+  // 3.6. All 11 are fresh salmon.
+  { batch: 3, store: "AUCHAN", shelf: "peixaria/peixe-fresco", kind: "salmao", step: "cut" },
+  // 3.7. All 11 are breakfast cereals, granola and muesli, several with added protein.
+  { batch: 3, store: "AUCHAN", shelf: "preparação-de-refeições/cereais-de-pequeno-almoço", kind: "cereais", step: "shelf" },
+  // 3.8. All 10 are raw Angus beef.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Vitela Vitelao e Bovino/Angus", kind: "vaca", step: "cut" },
+  // 3.9. All 10 are shelled prawns.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Marisco/Marisco Congelado", kind: "camarao", step: "cut" },
+  // 3.10. All 10 are tinned tuna fillets.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Conservas/Atum", kind: "atum", step: "cut" },
+  // 3.11. All 10 are tinned mackerel fillets.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Conservas/Sardinhas e Outros Peixes", kind: "cavala", step: "cut" },
+  // 3.12. Oat preparations, protein granola and muesli: right as cereal. Three are not cereal.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Nutricao Desportiva/Cereais e Preparados", kind: "cereais", step: "shelf" },
+  // 3.13. Plant-based meat substitutes (Heura, Garden Gourmet, soy steaks), which have no kind, as decided in earlier batches. The falafel and a vegetable chill...
+  { batch: 3, store: "CONTINENTE", shelf: "Refeições Práticas/Vegetariano", kind: "refeicao", step: "shelf", becomes: null },
+  // 3.14. None is plain coffee: instant cappuccino and mocha mixes, and two liquid espresso concentrates. They get no kind, as the cappuccino mixes did in batch...
+  { batch: 3, store: "CONTINENTE", shelf: "Café, Chá e Solúveis/Café Solúvel", kind: "cafe", step: "shelf", becomes: null },
+  // 3.15. Raw chicken, including necks, hearts and chicken for cabidela: right. Two are breaded.
+  { batch: 3, store: "AUCHAN", shelf: "talho/frango-e-galinha", kind: "frango", step: "shelf" },
+  // 3.16. All 10 are dry long pasta: spaghetti, aletria, meada.
+  { batch: 3, store: "AUCHAN", shelf: "arroz-e-massa/esparguete,-aletria-e-meadas", kind: "massa", step: "shelf" },
+  // 3.17. None is plain coffee: instant cappuccino, galão and mocha mixes. They get no kind, as in batch 2.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Café, Chá e Achocolatados/Cafe Soluvel e Descafeinado", kind: "cafe", step: "shelf", becomes: null },
+  // 3.18. All 9 are breakfast cereals and flakes.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Cereais Barras e Bolsas de Fruta/Cereais Linha e Fibra", kind: "cereais", step: "shelf" },
+  // 3.19. Walnuts: right. Two are pecans, proposed as a kind of their own.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Batatas Fritas Snacks e Frutos Secos/Frutos Secos e Desidratados", kind: "noz", step: "cut" },
+  // 3.20. All 9 are raw lamb.
+  { batch: 3, store: "CONTINENTE", shelf: "Talho/Cabrito e Borrego", kind: "borrego", step: "cut" },
+  // 3.21. Ready pasta dishes, a risotto and mac and cheese, not plain pasta: filed as Ready meal.
+  { batch: 3, store: "CONTINENTE", shelf: "Refeições/Massas e Gnocchis", kind: "massa", step: "shelf", becomes: "refeicao" },
+  // 3.23. All 9 are cheese boards of Portuguese cheeses.
+  { batch: 3, store: "AUCHAN", shelf: "queijaria/queijos-portugueses", kind: "queijo", step: "shelf" },
+  // 3.24. Ready soups in cartons and bottles: right. Six are soup powders and sachets, which became a kind of their own in batch 2.
+  { batch: 3, store: "AUCHAN", shelf: "refeições,-sopas-e-puré/sopas-em-pó-e-pré-preparadas", kind: "sopa", step: "shelf" },
+  // 3.25. All 9 are dry pasta, including pasta made from peas, chickpeas and rice.
+  { batch: 3, store: "AUCHAN", shelf: "massa,-arroz,-quinoa-e-puré/massa", kind: "massa", step: "shelf" },
+  // 3.26. All 9 are frozen raw pork.
+  { batch: 3, store: "AUCHAN", shelf: "carne/porco", kind: "porco", step: "cut" },
+  // 3.27. Raw pork (skewers, trotters, fondue): right. Two are prepared.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Talho/Porco", kind: "porco", step: "shelf" },
+  // 3.28. All 8 are bread rolls.
+  { batch: 3, store: "PINGO_DOCE", shelf: "Pao da Nossa Padaria/Pao Pequeno", kind: "pao", step: "shelf" },
+  // 3.29. Walnuts: right. Two are pecans.
+  { batch: 3, store: "CONTINENTE", shelf: "Frutos Secos/Nozes", kind: "noz", step: "cut" },
+  // 3.30. All 8 are raw chicken.
+  { batch: 3, store: "CONTINENTE", shelf: "Talho/Frango e Peru", kind: "frango", step: "cut" },
 ];
 
 export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
@@ -284,4 +346,32 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 2, store: "CONTINENTE", id: "7825881", name: "Base Concentrada Sopa Ramen Kikkoman", kind: null, why: "a ramen soup concentrate" },
   { batch: 2, store: "CONTINENTE", id: "8667541", name: "Mandioquinha Cozida no Vapor Vapza", kind: null, why: "cooked cassava" },
   { batch: 2, store: "CONTINENTE", id: "8623213", name: "Peito de Frango ao Natural Continente Equilíbrio", kind: null, why: "tinned chicken breast" },
+  { batch: 3, store: "PINGO_DOCE", id: "928239", name: "Proteína de Ervilha Vegan Sabor a Chocolate", kind: null, why: "plant protein powders" },
+  { batch: 3, store: "PINGO_DOCE", id: "987739", name: "Proteína Vegan Choco", kind: null, why: "plant protein powders" },
+  { batch: 3, store: "PINGO_DOCE", id: "991424", name: "Preparado para Panquecas Pepitas de Chocolate", kind: null, why: "a pancake mix" },
+  { batch: 3, store: "CONTINENTE", id: "7253922", name: "Falafel de Proteína Vegetal Garden Gourmet", kind: "refeicao", why: "a falafel and a vegetable chilli" },
+  { batch: 3, store: "CONTINENTE", id: "6244386", name: "Chilli Vegetal Veg In", kind: "refeicao", why: "a falafel and a vegetable chilli" },
+  { batch: 3, store: "AUCHAN", id: "3792419", name: "PANADOS FRANGO LUSIAVES 300G", kind: "nugget", why: "breaded chicken pieces" },
+  { batch: 3, store: "AUCHAN", id: "1111398", name: "PANADO DE PERÚ KG", kind: null, why: "breaded turkey" },
+  { batch: 3, store: "PINGO_DOCE", id: "985690", name: "Miolo Noz Pecan", kind: "noz-peca", why: "pecans" },
+  { batch: 3, store: "PINGO_DOCE", id: "875747", name: "Miolo de Noz Pecan", kind: "noz-peca", why: "pecans" },
+  { batch: 3, store: "CONTINENTE", id: "7678539", name: "Carolans Salted Caramel Licor", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "2050134", name: "Carolans Licor de Whisky", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "2050858", name: "Albergaria Licor de Anis Escarchado", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "7827115", name: "Amarguinha Creme Licor", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "8637818", name: "Baileys Licor Chocolate", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "8171685", name: "Macieira Cream Licor", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "7769781", name: "Cantares de Portugal Licor de Pastel de Nata", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "8627229", name: "Macieira Cream Chocolate e Pistachio Licor", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "CONTINENTE", id: "7404727", name: "Albergaria Licor Ponche", kind: "licor", why: "All 9 are liqueurs, which the classifier left without a kind because their names start with a brand. Liqueur is a kind already (hidden from the site with the other drinks); recorded one by one, since a group without a kind cannot be matched as a group." },
+  { batch: 3, store: "AUCHAN", id: "3830967", name: "CREME DE MARISCO AUCHAN 72G", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "AUCHAN", id: "3853595", name: "CREME BROCULOS GOURMET KNORR 50GR", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "AUCHAN", id: "3853588", name: "CREME DE ABOBORA GOURMET KNORR 50GR", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "AUCHAN", id: "4013588", name: "QUICK SOUP KNORR COGUMELOS 54GR", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "AUCHAN", id: "4013589", name: "QUICK SOUP KNORR ESPARGOS 39GR", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "AUCHAN", id: "4013585", name: "QUICK SOUP KNORR TOMATE 60GR", kind: "sopa-instantanea", why: "soup powders and sachets" },
+  { batch: 3, store: "PINGO_DOCE", id: "922108", name: "Rolo de Carne de Porco com Queijo e Fiambre", kind: null, why: "a stuffed meat roll" },
+  { batch: 3, store: "PINGO_DOCE", id: "697446", name: "Bifinhos do Lombo de Porco Panados", kind: "refeicao", why: "breaded pork cutlets" },
+  { batch: 3, store: "CONTINENTE", id: "8119457", name: "Miolo de Noz Pecan Continente", kind: "noz-peca", why: "pecans" },
+  { batch: 3, store: "CONTINENTE", id: "8630646", name: "Miolo de Noz Pecan Frutorra", kind: "noz-peca", why: "pecans" },
 ];

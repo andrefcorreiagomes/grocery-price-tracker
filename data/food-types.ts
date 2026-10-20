@@ -614,6 +614,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "amendoa", label: "Amêndoa", unit: "kg", heads: ["amendoa", "amendoas"], exclude: /chocolate|\bcobert|acucar|tipo frances|\blisas? cores\b|drageia|confeit|biscoito|\bbolos?\b/i },
   // Nuts are usually sold as "Miolo de Noz", "Miolo de Avelã" - the head is
   // `miolo` (the kernel), so they are only reachable by scanning past it.
+  // Pecans are a different nut from walnuts and cost more; all three chains
+  // sell them. Listed first so "Miolo de Noz Pecan" is a pecan. Not pecan ice
+  // cream or cakes, which head on their own words. Approved in review batch 3,
+  // 20 October 2026.
+  { id: "noz-peca", label: "Noz-pecã", unit: "kg", heads: ["noz", "nozes", "noze"], require: /pecan|\bpeca\b/i },
   { id: "noz", label: "Noz", unit: "kg", heads: ["noz", "nozes", "noze"] },
   // Chocolate-coated hazelnuts are sweets, as with almonds above.
   { id: "avela", label: "Avelã", unit: "kg", heads: ["avela"], exclude: /chocolate|\bcobert|acucar/i },
