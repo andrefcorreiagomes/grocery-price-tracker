@@ -121,7 +121,7 @@ export const CUT_WORDS: readonly string[] = [
   "mix", "mistura",
   // preparations that name their meat
   "strogonoff", "jardineira", "caldeirada", "feijoada", "bifana", "rojao",
-  "patanisca", "canjinha", "moqueca", "carpaccio", "tataki", "roti", "tartaro",
+  "patanisca", "moqueca", "carpaccio", "tataki", "roti", "tartaro",
   "grelhada", "panado", "panadinho", "empanada", "cordon",
 ];
 
@@ -211,7 +211,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     require: /\b(atum|massa|russa|frango|camarao|marisco|polvo|bacalhau|salmao|grao|feijao|quinoa|cuscuz|bulgur|arroz|batata|ovos?|proteina|caesar|cesar|queijo|presunto|lentilhas?|delicias|sapateira|gambas?)\b/i,
     exclude: /\bfruta|ananas|abacaxi|melao|melancia|morango/i },
   { id: "salada-folhas", label: "Salada em saco", nameOnly: true, unit: "kg", heads: ["salada"],
-    exclude: /\bfruta|ananas|abacaxi|melao|melancia|morango|\bsandes\b|\bwrap\b|semente/i },
+    // ...nor a herb mix for salads ("Mistura Ervas Saladas"). 20 October 2026.
+    exclude: /\bfruta|ananas|abacaxi|melao|melancia|morango|\bsandes\b|\bwrap\b|semente|\bervas\b|tempero/i },
   // Everyday fruit, vegetables and herbs that had no kind of their own, so
   // they were left out or - worse - taken by a shelf naming a neighbour:
   // avocados as grapes, lemons as oranges, courgettes as beans. Counted on
@@ -286,7 +287,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "cabrito", label: "Cabrito", unit: "kg", heads: ["borrego", "cordeiro", "cabrito"], require: /cabrito/i },
   // "Coelhos de Chocolate" are Easter sweets. 20 October 2026.
   { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"], exclude: /chocolate/i },
-  { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"] },
+  // Not a seasoning "para carne" ("Mix Salicórnia p/ Carne"). 20 October 2026.
+  { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"], exclude: /\bp(ara|\/) carne|tempero|salicornia|\bervas\b/i },
   // Charcutaria: these name an animal but ARE the food type - see CUT_WORDS.
   { id: "salsicha", label: "Salsicha", nameOnly: true, unit: "kg", heads: ["salsicha", "salsichao"] },
   { id: "fiambre", label: "Fiambre", unit: "kg", heads: ["fiambre"] },
@@ -382,6 +384,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "sargo", label: "Sargo", unit: "kg", heads: ["sargo"], exclude: /\bcabecas?\b/i },
   // Cooked crab, whole. Not the filling or the claws, sold for other uses.
   { id: "sapateira", label: "Sapateira", unit: "kg", heads: ["sapateira"], exclude: /recheio|\bbocas?\b|\bpatas?\b/i },
+  // Lobster and European lobster were filed as crab through the shelf "Sapateira
+  // e Lagosta". Two kinds: different animals at different prices. Not the
+  // "Lagosta" vinho verde, nor lobster-shaped surimi. 20 October 2026.
+  { id: "lagosta", label: "Lagosta", unit: "kg", heads: ["lagosta"], exclude: /vinho|delicias|surimi|forma de/i },
+  { id: "lavagante", label: "Lavagante", unit: "kg", heads: ["lavagante"] },
   { id: "berbigao", label: "Berbigão", unit: "kg", heads: ["berbigao"] },
   { id: "delicias-do-mar", label: "Delícias do mar", unit: "kg", heads: ["delicia"], require: /delicias? do mar/i },
   { id: "caracol", label: "Caracóis", unit: "kg", heads: ["caracol", "caracoi", "caracoleta"], exclude: /canela|frutas|chocolate|folhad|massa|creme/i },
@@ -425,7 +432,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "leite", label: "Leite", nameOnly: true, unit: "l", heads: ["leite", "bebida"], require: /\bleite\b/i,
     // "Leite Creme" is a custard dessert. 18 October 2026.
     exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|leite creme|\bcreme\b|protei|crescimento|infantil|fermentad/i },
-  { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"] },
+  // Not peanut or other nut butters. 20 October 2026.
+  { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"], exclude: /amendoim|amendoa|caju|avela|pistacio|cacau/i },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
   { id: "vegurte", label: "Vegurte", unit: "kg", heads: ["vegurte", "vegegurte"] },
@@ -528,9 +536,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Green beans are a fresh vegetable, not dried beans, and share the head word.
   { id: "feijao-verde", label: "Feijão verde", unit: "kg", heads: ["feijao"], require: /feijao verde/i },
   { id: "feijao", label: "Feijão", nameOnly: true, unit: "kg", heads: ["feijao"], exclude: /feijao verde/i },
-  { id: "vinagre", label: "Vinagre", unit: "l", heads: ["vinagre"] },
+  // Not balsamic glaze ("Creme Balsâmico"), a thick reduction. 20 October 2026.
+  { id: "vinagre", label: "Vinagre", unit: "l", heads: ["vinagre"], exclude: /\bcreme\b|glace|reducao/i },
   { id: "pate", label: "Paté", nameOnly: true, unit: "kg", heads: ["pate"] },
-  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa"] },
+  // "Canja"/"Canjinha" is chicken broth: a soup, not chicken. 20 October 2026.
+  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja", "canjinha"] },
   // Stock, not "Caldo Verde", which is a soup. 17 October 2026.
   { id: "caldo", label: "Caldo", nameOnly: true, unit: "kg", heads: ["caldo"], exclude: /caldo verde/i },
   // "Tempero" (seasoning mixes) and "Pasta" (pastes: curry next to olive next
@@ -666,7 +676,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"],
     exclude: /maca|chocolate|goiabada|\bcreme\b|\bdoce\b|\bnata\b|frutos|canela|twists?|feuilletine|manteiga/i },
   { id: "rissol", label: "Rissol", unit: "kg", heads: ["rissoi", "rissol"] },
-  { id: "panqueca", label: "Panqueca", hidden: "sweets", unit: "kg", heads: ["panqueca"] },
+  // Not the mixes for making them. 20 October 2026.
+  { id: "panqueca", label: "Panqueca", hidden: "sweets", unit: "kg", heads: ["panqueca"], exclude: /\bmix\b|mistura|preparado/i },
   // "Empanada de Atum" is a pie, not tuna: the word used to be read past as a cut.
   { id: "empada", label: "Empada", unit: "kg", heads: ["empada", "empadao", "empanada"] },
   { id: "croquete", label: "Croquete", unit: "kg", heads: ["croquete", "croqueta"] },
@@ -689,7 +700,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Breakfast cereals, not cereal BARS (a snack, set aside with the sweets) or
   // protein powders sold on the sports-nutrition cereal shelf. 17 October 2026.
   { id: "cereais", label: "Cereais", unit: "kg", heads: ["cereal"],
-    exclude: /\bbarr(a|as|inha|inhas|ita|itas)\b|whey|\bproteina\b.*\bpo\b|clara de ovo|\bbolsas?\b/i },
+    // ...nor a roasted cereal drink, "Mistura Torrada Moída de Cereais", nor
+    // energy balls. 20 October 2026.
+    exclude: /\bbarr(a|as|inha|inhas|ita|itas)\b|whey|\bproteina\b.*\bpo\b|clara de ovo|\bbolsas?\b|torrad[ao] moid|\bbebida|energetic|tiras de fruta/i },
   { id: "cha", label: "Chá", unit: "kg", heads: ["cha"] },
   // Capsules and pods ("cápsulas", "pastilhas") are coffee only when the name
   // shows it: a coffee word, or a coffee-machine system or brand. Not on the

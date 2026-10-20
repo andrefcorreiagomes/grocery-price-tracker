@@ -57,7 +57,7 @@ export const CATEGORIES: Category[] = [
     "dourada", "robalo", "carapau", "corvina", "tamboril", "perca", "truta", "linguado", "peixe-espada", "pargo",
     "garoupa", "raia", "red-fish", "safio", "maruca", "pregado", "besugo", "faneca", "sargo", "filete-panado",
     "douradinho", "paloco", "anchova", "camarao", "ameijoa", "mexilhao", "lula", "polvo", "pota", "choco", "sapateira", "berbigao",
-    "delicias-do-mar", "caracol",
+    "delicias-do-mar", "caracol", "lagosta", "lavagante",
   ] },
   { id: "charcutaria", label: "Charcutaria", kinds: [
     "fiambre", "presunto", "chourico", "salsicha", "mortadela", "bacon", "paio", "salame", "alheira",

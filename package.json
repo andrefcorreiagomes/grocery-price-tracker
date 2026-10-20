@@ -25,7 +25,8 @@
     "backfill:sizes": "tsx src/scripts/backfill-sizes.ts",
     "validate:comparisons": "tsx src/scripts/validate-comparisons.ts",
     "verify:nightly": "tsx --expose-gc src/scripts/verify-nightly.ts",
-    "measure:classifier": "tsx src/scripts/measure-classifier.ts"
+    "measure:classifier": "tsx src/scripts/measure-classifier.ts",
+    "review:kinds": "tsx src/scripts/review-kinds.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.10.0",

@@ -55,6 +55,9 @@ const COOKED = /slow.?cook|\bcozinhad[oa]s?\b|\bassad[oa]s?\b|\bfrit[oa]s?\b|\bc
 /** The cut words that name a mixture rather than a part of one food. */
 const MIX_WORDS = new Set(["mix", "mistura"]);
 
+/** General words that make a mix a mixture: "Mix Frutas", "Mistura Ervas". */
+const GENERIC_MIX = new Set(["fruta", "fruto", "legume", "erva", "cereal", "especiaria", "tempero", "pequeno", "salada"]);
+
 /**
  * What a cut word may still lead to on a prepared-food shelf: the cold cuts and
  * ready meals themselves - the "Charcutaria" and "Refeições prontas" categories
@@ -242,7 +245,8 @@ export function explainFoodType(
     (PREPARED_SHELF.test(shelf) && !/salmao fumado/.test(shelf)) || COOKED.test(plain);
   // On a snack shelf a cut word leads nowhere real: "Tiras de Fruta Morango"
   // is a fruit-leather snack, not strawberries.
-  const snackShelf = /\bsnacks?\b|aperitivo/.test(leaf) && !/snacks? de\b/.test(leaf);
+  const snackShelf =
+    (/\bsnacks?\b|aperitivo/.test(leaf) && !/snacks? de\b/.test(leaf)) || /\btiras de fruta\b/.test(plain);
   // "Mix de Frutos Secos sem Sal" is not salt: a word after "sem" (without) is
   // never the food. "sem" itself is a stopword, so it is read off the name.
   const without = new Set([...plain.matchAll(/\bsem ([a-z]+)/g)].map((m) => foldPlural(m[1])));
@@ -250,7 +254,14 @@ export function explainFoodType(
   // a list it names one food, described: "Mistura de Pimentas em Grão" is
   // pepper (not chickpeas, "grão"), "Mix Salsichas Frescas de Porco" sausages.
   const isMix = MIX_WORDS.has(tokens[0]) && /,|\be\b/.test(plain);
-  let refused = false;
+  // A cooking word refuses raw kinds whichever step would give them: "Piano de
+  // Bovino Slow Cooked" on a beef shelf is not raw beef. 20 October 2026.
+  let refused = COOKED.test(plain);
+  // "Mix Frutas ...", "Mix Pequeno Almoço ...": a mix named by a general word
+  // is a mixture whatever follows, list or not.
+  if (MIX_WORDS.has(tokens[0]) && GENERIC_MIX.has(tokens[1] ?? "")) {
+    return { id: null, step: null, why: "a mix of several foods" };
+  }
   if (CUT_SET.has(tokens[0]) && !snackShelf && !COATED.test(plain)) {
     const found = new Set<string>();
     for (const token of tokens.slice(1)) {

@@ -131,6 +131,8 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       { path: "Suplementos e Nutrição/Suplementos Alimentares", why: "supplements and vitamins" },
       { path: "Suplementos e Nutrição/Performance Desportiva", why: "protein powders, creatine, energy gels" },
       { path: "Suplementos e Nutrição/Controlo de Peso", why: "weight-control products" },
+      // 2 products, both gift boxes for bottles. 20 October 2026.
+      { path: "Bebidas e Garrafeira/Vinhos/Acessórios de Vinho", why: "wine accessories, not wine" },
     ],
   },
 

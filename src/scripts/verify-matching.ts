@@ -1270,6 +1270,28 @@ function verifyFoodTypes(): number {
   is("Gengibre Moído em Frasco Margão", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Especiarias e Ervas Aromáticas", "gengibre-po");
   is("Gengibre Continente", "CONTINENTE", "Frutas e Legumes/Legumes", "gengibre");
 
+  // The third hand check, 20 October 2026.
+  console.log("\n  food types: the third hand check, 20 October 2026");
+  const crabs = "Peixaria/Marisco Congelado/Sapateira e Lagosta";
+  is("Lagosta Congelada", "CONTINENTE", crabs, "lagosta");
+  is("LAVAGANTE GRANDE 600/800 CONGELADO KG", "AUCHAN", "congelados/marisco-e-moluscos/sapateira,-lagosta-e-caranguejo", "lavagante");
+  is("Lagosta Vinho Verde Branco", "CONTINENTE", "Bebidas e Garrafeira/Vinhos/Vinho Branco", "vinho");
+  is("Carabineiro de Moçambique Congelado", "CONTINENTE", crabs, null);
+  is("Caixa Madeira 1 Garrafa", "CONTINENTE", "Bebidas e Garrafeira/Vinhos/Acessórios de Vinho", null);
+  is("Piano de Bovino com Sal e Pimenta Slow Cooked", "PINGO_DOCE", "Talho/Vitela Vitelao e Bovino/Novilho e Bovino", null);
+  is("CREME BALSÂMICO CRISTAL FRUTOS VERMELHOS 250ML", "AUCHAN", "alimentação/mercearia/azeite,-óleo-e-vinagre/vinagre", null);
+  is("Manteiga de Amendoim Cremosa", "PINGO_DOCE", "Mercearia/Compotas Mel e Cremes de Barrar/Cremes de Barrar", null);
+  is("Manteiga com Sal Primor", "CONTINENTE", "Laticínios e Ovos/Manteigas e Cremes/Manteigas", "manteiga");
+  is("MISTURA ERVAS SALADAS MARGÃO SAQUETA 30G", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos/ervas-e-misturas", null);
+  is("MIX SALICORNIA QAMPO P/ CARNE 50 G", "AUCHAN", "alimentação/mercearia/sal,-ervas-e-temperos/ervas-e-misturas", null);
+  is("TIRAS DE FRUTA BOB SNAIL MAÇÃ E MORANGO 84 G", "AUCHAN", "alimentação/mercearia/cereais-e-barras/barras-cereais", null);
+  is("MIX FRUTAS AGROAGUIAR BANANA AÇAÍFRT VERMELHOS 300G", "AUCHAN", "congelados/legumes-e-fruta/fruta", null);
+  is("MIX PEQUENO ALMOÇO SHINE KIDS MAÇÃ BIO 300G", "AUCHAN", "biológicos-e-alternativas/biológicos/biológicos-mercearia/cereais-e-pequeno-almoço", null);
+  is("Canjinha de Frango do Campo Continente Seleção", "CONTINENTE", "Marcas/Marcas Continente/Continente Seleção", "sopa");
+  is("Mix para Panquecas Proteicas", "PINGO_DOCE", "Mercearia/Farinha Fermento e Acucar/Farinha Fermento e Pao Ralado", null);
+  is("Mistura Torrada Moída de Cereais Peninsular", "PINGO_DOCE", "Café, Chá e Achocolatados/Bebidas de Cereais", null);
+  is("Grelhada Mista de Porco Continente", "CONTINENTE", "Talho/Porco", "porco");
+
   console.log("\n  food types: sections and honesty");
   check(
     "a matching head in a NON-food section is rejected",
