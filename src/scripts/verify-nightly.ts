@@ -20,6 +20,7 @@ import { verifyAuchanNightly } from "./verify-auchan-nightly";
 import { verifyMatching } from "./verify-matching";
 import { verifyContinentePages } from "./verify-continente-pages";
 import { verifyKindReviews } from "./verify-kind-reviews";
+import { checkGold } from "./kind-gold";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -334,6 +335,12 @@ async function main() {
 
   console.log("\n17. kinds decided in review (data/kind-reviews.ts) and the rules that came with them");
   failures += verifyKindReviews();
+
+  // Reads the real catalogue: products whose kind was verified, by review or
+  // by hand, must keep it whatever rule changes (data/kind-gold*.json).
+  console.log("\n18. verified kinds are kept");
+  const gold = await checkGold();
+  check(`${gold.checked} verified products keep their kind`, gold.broken.length === 0, gold.broken.slice(0, 5).join(" | "));
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

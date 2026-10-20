@@ -38,6 +38,8 @@ interface Decisions {
   batch: number;
   newKinds?: Record<string, string>;
   proposals?: string[];
+  /** every group not listed in `groups` was read and is right as it is */
+  defaultConfirm?: boolean;
   groups: Record<string, GroupDecision>;
 }
 interface Group {
@@ -244,9 +246,13 @@ function record(groups: Group[], d: Decisions) {
     const names = new Map(g.products.map((p) => [p.id, p.name]));
     const product = (id: string, kind: string, reason: string) =>
       `  { batch: ${d.batch}, store: ${q(g.store)}, id: ${q(id)}, name: ${q(names.get(id)!)}, kind: ${kindOrNull(kind)}, why: ${q(reason)} },`;
-    if (g.kind === "-") {
+    if (g.kind === "-" || g.step === "head") {
       // A group the classifier gave no kind (in review through a barcode)
       // cannot be matched as a group, so each product is recorded on its own.
+      // Nor can a group decided by the head noun: its products were in review
+      // only through a barcode, and as a group it would reach every product
+      // the head noun decides on that shelf - the first time, 85 noodles
+      // nobody had reviewed (20 October 2026).
       const exception = new Map<string, [string, string]>();
       for (const [ids, to, why2] of gd.exceptions ?? []) for (const id of ids) exception.set(id, [to, why2]);
       for (const p of g.products) {
@@ -282,8 +288,20 @@ async function main() {
   if (mode === "list") return list(a, Number(b ?? 30));
   const d = b ? (JSON.parse(readFileSync(b, "utf8")) as Decisions) : null;
   if (!d) throw new Error("usage: see the comment at the top of src/scripts/review-batch.ts");
-  if (mode === "page") return page(readGroups(a), d, c);
-  if (mode === "record") return record(readGroups(a), d);
+  const groups = readGroups(a);
+  // "defaultConfirm": true - every group not listed was read and is right as
+  // it is. For a large batch, where listing hundreds of confirmations would
+  // only hide the decisions that change something.
+  if (d.defaultConfirm) {
+    for (const g of groups) {
+      d.groups[String(g.num)] ??= {
+        verdict: "confirm",
+        why: `Checked: all ${g.products.length} are ${FOOD_TYPE_BY_ID.get(g.kind)?.label ?? g.kind}.`,
+      };
+    }
+  }
+  if (mode === "page") return page(groups, d, c);
+  if (mode === "record") return record(groups, d);
   throw new Error(`unknown mode ${mode}`);
 }
 

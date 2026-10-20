@@ -27,7 +27,8 @@
     "verify:nightly": "tsx --expose-gc src/scripts/verify-nightly.ts",
     "measure:classifier": "tsx src/scripts/measure-classifier.ts",
     "review:kinds": "tsx src/scripts/review-kinds.ts",
-    "review:batch": "tsx src/scripts/review-batch.ts"
+    "review:batch": "tsx src/scripts/review-batch.ts",
+    "kinds:gold": "tsx src/scripts/kind-gold.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.10.0",
