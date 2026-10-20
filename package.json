@@ -28,7 +28,8 @@
     "measure:classifier": "tsx src/scripts/measure-classifier.ts",
     "review:kinds": "tsx src/scripts/review-kinds.ts",
     "review:batch": "tsx src/scripts/review-batch.ts",
-    "kinds:gold": "tsx src/scripts/kind-gold.ts"
+    "kinds:gold": "tsx src/scripts/kind-gold.ts",
+    "nightly": "tsx src/scripts/nightly.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.10.0",
