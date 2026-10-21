@@ -1,6 +1,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DailyReport, ProductNote } from "./daily-report";
+import { promotionLine } from "./promo-watch";
 
 /**
  * Turning a report into something a person reads and something a machine reads.
@@ -617,6 +618,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         `  ${report.quality.total} products; missing price ${report.quality.missingPrice}, ` +
           `brand ${report.quality.missingBrand}, category ${report.quality.missingCategory}, ` +
           `url ${report.quality.missingUrl}`,
+        // A missing promotion marker reads as "not on promotion", so the count
+        // is the only sign the marker broke (promo-watch.ts).
+        ...(report.promotions ? [`  ${promotionLine(report.promotions)}`] : []),
       ],
       explain
     )

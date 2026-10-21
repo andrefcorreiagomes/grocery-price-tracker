@@ -24,6 +24,7 @@ import {
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { buildDailyReport, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
+import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
 import { RUNS_BEFORE_ACCEPTING, comparePerFile, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
 import {
@@ -733,6 +734,14 @@ async function main() {
   if (accepted !== null) {
     report = escalate(report, "WARN", `sitemap baseline moved: ${accepted}`);
   }
+
+  // A misread promotion marker turns every promotion into a full price without
+  // a single error; the count is the only sign (promo-watch.ts).
+  const promotions = await tallyPromotions(STORE, seenAt);
+  report = { ...report, promotions };
+  const promotionProblem = promotionWarning(promotions);
+  if (promotionProblem) report = escalate(report, "WARN", promotionProblem);
+  console.log(promotionLine(promotions));
 
   if (sectionChanges) {
     report = { ...report, sections: sectionLines(sectionChanges, leftOut) };

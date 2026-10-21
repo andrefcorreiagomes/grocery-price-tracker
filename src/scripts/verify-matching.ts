@@ -38,6 +38,7 @@ import {
   type ComparableProduct,
 } from "../lib/comparison";
 import { euros } from "../lib/money";
+import { promotionLine, promotionWarning } from "../scrapers/crawl/promo-watch";
 import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
@@ -486,6 +487,21 @@ function verifyComparison(): number {
   const shown = [...halfCent.values()].map((c) => (c.kind === "price" ? euros(c.unitPrice) : "-"));
   check("a half cent is shown as the cents it is compared in", shown.join() === "1.00,0.99,1.24" &&
     cheapestStores(halfCent).join() === "PINGO_DOCE", `shown ${shown.join(" ")}`);
+
+  // The promotion early warning (promo-watch.ts). A misread marker reads as
+  // "not on promotion", so only the share can show it broke.
+  const tally = (store: string, seen: number, on: number, off: number) =>
+    ({ store, seen, onPromotion: on, notOnPromotion: off, unknown: seen - on - off });
+  check("a usual quarter on promotion is no warning", promotionWarning(tally("CONTINENTE", 17095, 4730, 12283)) === null);
+  check("no promotion at all is a warning", promotionWarning(tally("PINGO_DOCE", 9572, 0, 9572)) !== null);
+  check("most of the catalogue on promotion is a warning", promotionWarning(tally("CONTINENTE", 17095, 13000, 4095)) !== null);
+  check("most products with no promotion state is a warning", promotionWarning(tally("CONTINENTE", 17095, 2000, 5000)) !== null);
+  check("a 20-product test run is too small to judge", promotionWarning(tally("CONTINENTE", 20, 0, 20)) === null);
+  const failed = { ...tally("CONTINENTE", 0, 0, 0), error: "database is locked" };
+  check("a failed count is a warning, not a crash",
+    promotionWarning(failed)?.includes("database is locked") === true && promotionLine(failed).includes("could not be counted"));
+  check("Auchan's unread promotions are reported, not warned about",
+    promotionWarning(tally("AUCHAN", 17740, 0, 0)) === null && promotionLine(tally("AUCHAN", 17740, 0, 0)).includes("not read"));
 
   // Two prices or it is not a comparison. This is what empties the wine page:
   // every wine group pairs a sized Auchan bottle with an unsized Continente row.

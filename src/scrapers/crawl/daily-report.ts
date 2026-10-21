@@ -206,6 +206,9 @@ export interface DailyReport {
    * has no independent list of every published id to check against.
    */
   gridHealth?: GridHealthExtras;
+
+  /** How many products this run saw marked on promotion (promo-watch.ts). */
+  promotions?: import("./promo-watch").PromotionTally;
 }
 
 export interface GridHealthExtras {

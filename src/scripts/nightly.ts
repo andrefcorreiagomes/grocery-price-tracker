@@ -100,12 +100,19 @@ function lastRobots(file: string): string | null {
 
 const norm = (s: string) => s.replace(/\r/g, "").split("\n").map((l) => l.trimEnd()).join("\n").trim();
 
-/** The verdict line a crawl report starts with (**OK**, **WARN**, **FAIL**), if any. */
+/**
+ * What a crawl's output says about itself: its report's verdict (**OK**,
+ * **WARN**, **FAIL**) if it writes one, how long it took, its promotion count
+ * (promo-watch.ts) and any promotion warning - Pingo Doce writes no full
+ * report, so that warning is a plain "WARN:" line in its output.
+ */
 function verdictOf(log: string): string {
   const text = readFileSync(log, "utf8");
   const v = text.match(/^\*\*(OK|WARN|FAIL)\*\*/m)?.[1];
   const done = text.match(/Done in [\d.]+ min/)?.[0];
-  return [v ? `report ${v}` : null, done].filter(Boolean).join(", ");
+  const promotions = text.match(/^promotions: .*$/m)?.[0];
+  const warn = text.match(/^WARN: .*$/m)?.[0];
+  return [v ? `report ${v}` : null, done, promotions, warn].filter(Boolean).join("; ");
 }
 
 async function backup(): Promise<string> {

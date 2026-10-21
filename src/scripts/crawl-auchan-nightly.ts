@@ -5,6 +5,7 @@ import { classifyAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
+import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import {
   recordDead,
   recordUnavailable,
@@ -405,6 +406,14 @@ async function main() {
   for (const reason of truncationReasons) {
     report = escalate(report, "FAIL", reason);
   }
+
+  // Reported, not warned about: the listing walk records no promotion state for
+  // Auchan yet, so the line says so plainly (promo-watch.ts).
+  const promotions = await tallyPromotions(STORE, seenAt);
+  report = { ...report, promotions };
+  const promotionProblem = promotionWarning(promotions);
+  if (promotionProblem) report = escalate(report, "WARN", promotionProblem);
+  console.log(promotionLine(promotions));
 
   const explain = !args.includes("--brief");
   const written = await writeReport(report, { explain });

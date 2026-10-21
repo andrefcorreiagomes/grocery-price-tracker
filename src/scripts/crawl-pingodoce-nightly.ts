@@ -16,6 +16,7 @@ import { catalogueSizes } from "../scrapers/crawl/catalogue-size";
 import type { SearchHit } from "../scrapers/search/types";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { LeftOutTally, recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
+import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -259,10 +260,18 @@ async function main() {
   const updated = summary.summaries.reduce((n, s) => n + s.updated, 0);
   console.log(`Done: ${created} product(s) created, ${updated} updated.`);
 
+  // A misread promotion marker turns every promotion into a full price without
+  // a single error; the count is the only sign (promo-watch.ts). Pingo Doce has
+  // no full report, so the warning joins its sections file below.
+  const promotions = await tallyPromotions("PINGO_DOCE", summary.seenAt);
+  const promotionProblem = promotionWarning(promotions);
+  console.log(`\n${promotionLine(promotions)}`);
+  if (promotionProblem) console.log(`WARN: ${promotionProblem}`);
+
   // Pingo Doce's crawl writes no full report yet, so its sections get a file of
   // their own beside the other stores' reports.
-  const lines = sectionLines(sectionChanges, leftOut);
-  const problems = sectionProblems(sectionChanges);
+  const lines = [...sectionLines(sectionChanges, leftOut), promotionLine(promotions)];
+  const problems = [...sectionProblems(sectionChanges), ...(promotionProblem ? [promotionProblem] : [])];
   const stamp = new Date().toISOString().slice(0, 16);
   const text = [
     `# PINGO_DOCE sections - ${stamp.replace("T", " ")}`,
