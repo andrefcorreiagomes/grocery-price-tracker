@@ -1,4 +1,4 @@
-import { shownQuantity, type Cabaz, type CabazCell, type CellState } from "@/lib/cabaz";
+import { formatEuros, shownQuantity, type Cabaz, type CabazCell, type CellState } from "@/lib/cabaz";
 import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
 import styles from "./CabazTable.module.css";
 
@@ -35,17 +35,19 @@ function blockerPhrase(state: CellState, storeLabel: string): string {
   }
 }
 
-function Cell({ cell, quantity, allowStale, isLowest }: {
+function Cell({ cell, quantity, allowStale, isLowest, store }: {
   cell: CabazCell;
   quantity: number;
   allowStale: boolean;
   isLowest: boolean;
+  /** the store's name, shown above the price on a phone, where there is no header row */
+  store: string;
 }) {
   // The two must LOOK different, as on the food pages: "does not sell it" and
   // "sells it, but gives no weight" are different facts.
   if (cell.unitPrice === null && cell.state === "noListing") {
     return (
-      <td className={styles.missing}>
+      <td className={`${styles.storeCell} ${styles.missing}`} data-store={store}>
         <span className={styles.cross} title="Esta loja não vende." aria-label="Esta loja não vende.">
           ✕
         </span>
@@ -54,7 +56,7 @@ function Cell({ cell, quantity, allowStale, isLowest }: {
   }
   if (cell.unitPrice === null) {
     return (
-      <td>
+      <td className={styles.storeCell} data-store={store}>
         <span className={styles.noSize}>sem peso</span>
         {cell.productName && (
           <div className={styles.productName} title={cell.productName}>
@@ -72,13 +74,13 @@ function Cell({ cell, quantity, allowStale, isLowest }: {
   const shown = shownQuantity(quantity);
 
   return (
-    <td className={isLowest ? styles.lowest : undefined}>
+    <td className={isLowest ? `${styles.storeCell} ${styles.lowest}` : styles.storeCell} data-store={store}>
       {withheld ? (
         <span className={styles.withheld} title="Preço desactualizado — active a opção acima para o usar.">
           —
         </span>
       ) : (
-        <>{(cell.unitPrice * shown).toFixed(2)}€</>
+        <>{formatEuros(cell.unitPrice * shown)}</>
       )}
       {cell.state === "stale" && captured && (
         <div className={styles.staleNote}>de {captured}</div>
@@ -142,7 +144,7 @@ export default function CabazTable({
                     <div className={styles.unit}>por {row.product.unit}</div>
                   )}
                 </td>
-                <td>
+                <td className={styles.qtyCell}>
                   <div className={styles.stepper}>
                     <button
                       type="button"
@@ -169,9 +171,10 @@ export default function CabazTable({
                     quantity={row.quantity}
                     allowStale={allowStale}
                     isLowest={row.lowestStores.includes(STORE_ORDER[i])}
+                    store={STORE_LABELS[STORE_ORDER[i]]}
                   />
                 ))}
-                <td>
+                <td className={styles.removeCell}>
                   {/* deliberately not a ✕: that glyph already means "esta loja
                       não vende este produto" in this same row */}
                   <button
@@ -191,20 +194,21 @@ export default function CabazTable({
               <th className={styles.productColumn} scope="row">
                 Total
               </th>
-              <td />
+              <td className={styles.spacer} />
               {cabaz.totals.map((total, i) => {
                 const store = STORE_ORDER[i];
                 const isCheapest = cabaz.cheapestStores.includes(store);
                 return (
                   <td
                     key={store}
-                    className={isCheapest ? styles.cheapestTotal : styles.total}
+                    className={`${styles.storeCell} ${isCheapest ? styles.cheapestTotal : styles.total}`}
+                    data-store={STORE_LABELS[store]}
                   >
-                    {total === null ? "—" : `${total.toFixed(2)}€`}
+                    {total === null ? "—" : formatEuros(total)}
                   </td>
                 );
               })}
-              <td />
+              <td className={styles.spacer} />
             </tr>
           </tfoot>
         </table>

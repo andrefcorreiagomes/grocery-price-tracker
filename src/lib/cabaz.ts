@@ -1,3 +1,4 @@
+import { euros } from "./money";
 import { unitPrice } from "./pricing";
 import { STORE_ORDER } from "./stores";
 import type { Store } from "@/lib/stores";
@@ -138,6 +139,11 @@ function isUsable(cell: CabazCell, allowStale: boolean): boolean {
  */
 export function shownQuantity(quantity: number): number {
   return quantity === 0 ? 1 : quantity;
+}
+
+/** A price as the basket shows it, in the cents its cheapest marker compares (lib/money.ts). */
+export function formatEuros(value: number): string {
+  return `${euros(value)}€`;
 }
 
 /**

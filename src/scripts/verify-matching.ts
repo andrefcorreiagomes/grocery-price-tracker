@@ -37,6 +37,7 @@ import {
   unitsFor,
   type ComparableProduct,
 } from "../lib/comparison";
+import { euros } from "../lib/money";
 import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
@@ -474,6 +475,17 @@ function verifyComparison(): number {
   );
   check("prices equal in cents are a tie", cheapestStores(nearTie).join() === "CONTINENTE,PINGO_DOCE",
     "the page shows 1.55 for both, so neither may be called cheaper");
+
+  // The other half of that promise: the figure SHOWN must be the cents
+  // compared. 1.99 EUR for 2 kg of onions is 0.995 a kilo; toFixed printed it
+  // 0.99 beside Pingo Doce's 0.99, which was marked cheaper (21 Oct 2026).
+  const halfCent = cheapestPerStore(
+    [p("CONTINENTE", "Cebola A", 1.99, 2), p("PINGO_DOCE", "Cebola B", 0.99, 1), p("AUCHAN", "CEBOLA C", 2.48, 2)],
+    "cebola"
+  );
+  const shown = [...halfCent.values()].map((c) => (c.kind === "price" ? euros(c.unitPrice) : "-"));
+  check("a half cent is shown as the cents it is compared in", shown.join() === "1.00,0.99,1.24" &&
+    cheapestStores(halfCent).join() === "PINGO_DOCE", `shown ${shown.join(" ")}`);
 
   // Two prices or it is not a comparison. This is what empties the wine page:
   // every wine group pairs a sized Auchan bottle with an unsized Continente row.

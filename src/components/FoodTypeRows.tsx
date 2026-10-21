@@ -2,6 +2,7 @@ import Link from "next/link";
 import { STORE_LABELS } from "@/lib/stores";
 import type { Store } from "@/lib/stores";
 import type { IndexEntry } from "@/lib/grupos";
+import { euros } from "@/lib/money";
 import styles from "./FoodTypeRows.module.css";
 
 /**
@@ -35,7 +36,7 @@ export default function FoodTypeRows({ rows }: { rows: IndexEntry[] }) {
             <span className={styles.price}>
               {t.cheapestPrice !== null && (
                 <>
-                  desde <strong>{t.cheapestPrice.toFixed(2)} €</strong>
+                  desde <strong>{euros(t.cheapestPrice)} €</strong>
                   <span className={styles.per}>/{UNIT_LABEL[t.unit]}</span>
                 </>
               )}
