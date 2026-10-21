@@ -15,20 +15,19 @@ function formatDay(date: Date): string {
 }
 
 /*
- * Phrased to avoid gendered adjectives - product names run both ways ("a
+ * Phrased to avoid gendered adjectives - food names run both ways ("a
  * bolacha", "o arroz") and "não vendido/vendida" would be wrong half the time.
  *
- * The noListing wording is careful for a second reason: a missing listing only
- * tells us we have no record, not that the store does not stock the product.
- * Saying "o X não vende este produto" would assert something the data cannot
- * support.
+ * The same two facts the food pages state, in the same words: "não vende" is
+ * now a claim the data supports, because each chain's whole catalogue is
+ * crawled every night (see CellState in lib/cabaz.ts).
  */
 function blockerPhrase(state: CellState, storeLabel: string): string {
   switch (state) {
     case "noListing":
-      return `não temos registo do ${storeLabel} vender este produto`;
+      return `o ${storeLabel} não vende`;
     case "neverPriced":
-      return `ainda não temos preço no ${storeLabel}`;
+      return `o ${storeLabel} vende, mas sem peso indicado`;
     case "stale":
       return `sem preço actual no ${storeLabel}`;
     default:
@@ -42,16 +41,26 @@ function Cell({ cell, quantity, allowStale, isLowest }: {
   allowStale: boolean;
   isLowest: boolean;
 }) {
-  if (cell.unitPrice === null) {
-    const label =
-      cell.state === "noListing"
-        ? "Não temos registo desta loja vender este produto."
-        : "Ainda não temos preço para este produto nesta loja.";
+  // The two must LOOK different, as on the food pages: "does not sell it" and
+  // "sells it, but gives no weight" are different facts.
+  if (cell.unitPrice === null && cell.state === "noListing") {
     return (
       <td className={styles.missing}>
-        <span className={styles.cross} title={label} aria-label={label}>
+        <span className={styles.cross} title="Esta loja não vende." aria-label="Esta loja não vende.">
           ✕
         </span>
+      </td>
+    );
+  }
+  if (cell.unitPrice === null) {
+    return (
+      <td>
+        <span className={styles.noSize}>sem peso</span>
+        {cell.productName && (
+          <div className={styles.productName} title={cell.productName}>
+            {cell.productName}
+          </div>
+        )}
       </td>
     );
   }
@@ -74,6 +83,13 @@ function Cell({ cell, quantity, allowStale, isLowest }: {
       {cell.state === "stale" && captured && (
         <div className={styles.staleNote}>de {captured}</div>
       )}
+      {/* Named, as on the food pages: a price alone cannot say which product
+          of the comparison it is. */}
+      {!withheld && cell.productName && (
+        <div className={styles.productName} title={cell.productName}>
+          {cell.productName}
+        </div>
+      )}
     </td>
   );
 }
@@ -87,7 +103,7 @@ export default function CabazTable({
   if (cabaz.rows.length === 0) {
     return (
       <p className={styles.empty}>
-        Ainda não escolheu nenhum produto. Use o menu acima para montar o seu cabaz.
+        Ainda não escolheu nenhum alimento. Use o menu acima para montar o seu cabaz.
       </p>
     );
   }
@@ -202,9 +218,8 @@ export default function CabazTable({
         </p>
       ) : cabaz.includedCount === 0 ? (
         <p className={styles.noComparison}>
-          Nenhum dos produtos escolhidos tem preço actual nas três lojas, por isso não há
-          comparação possível. Active a opção acima, ou retire os produtos assinalados
-          em baixo.
+          Nenhum dos alimentos escolhidos tem preço nas três lojas, por isso não há
+          comparação possível. Retire os assinalados em baixo, ou junte outros.
         </p>
       ) : (
         <>

@@ -11,6 +11,7 @@ import { FOOD_TYPE_BY_ID } from "./food-types";
 import { CATEGORIES } from "../../data/food-tree";
 import { categoryOf } from "./food-tree";
 import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type TreeProduct } from "./comparison-groups";
+import { STORE_ORDER } from "./stores";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -123,26 +124,9 @@ export interface IndexEntry {
  * Two chains, not three, by the user's rule of 18 October 2026: a store added
  * later should not change what counts as a comparison, and a store that does
  * not sell a food says so on the page ("Não vende").
- *
- * One query for the whole catalogue rather than one per kind: the per-kind work
- * is grouping in memory, which is far cheaper than two hundred round trips.
  */
 export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
-  const rows = await prisma.catalogueProduct.findMany({
-    where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
-    select: {
-      storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, foodType: true, subKind: true, labels: true,
-    },
-  });
-
-  const byType = new Map<string, TreeProduct[]>();
-  for (const row of rows) {
-    const list = byType.get(row.foodType as string) ?? [];
-    list.push(row);
-    byType.set(row.foodType as string, list);
-  }
-
+  const byType = await currentRowsByType();
   const entries: IndexEntry[] = [];
   for (const category of CATEGORIES) {
     const kinds = category.kinds
@@ -170,6 +154,93 @@ export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
     }
   }
   return entries;
+}
+
+/**
+ * Every current catalogue row with a kind of food, by kind. One query for the
+ * whole catalogue rather than one per kind: the per-kind work is grouping in
+ * memory, which is far cheaper than two hundred round trips.
+ */
+async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
+  const rows = await prisma.catalogueProduct.findMany({
+    where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
+    select: {
+      storeProductId: true, store: true, name: true, brand: true,
+      price: true, packageSize: true, unit: true, foodType: true, subKind: true, labels: true,
+    },
+  });
+  const byType = new Map<string, TreeProduct[]>();
+  for (const row of rows) {
+    const list = byType.get(row.foodType as string) ?? [];
+    list.push(row);
+    byType.set(row.foodType as string, list);
+  }
+  return byType;
+}
+
+/** One store's answer for a basket line, small enough to send to the browser. */
+export type BasketCell =
+  | { kind: "price"; unitPrice: number; productName: string }
+  | { kind: "not-stocked" }
+  | { kind: "no-size"; productName: string };
+
+/**
+ * A line the basket can hold: one comparison of a food's page ("Leite ·
+ * Meio-gordo", per litre), with each chain's cheapest product in it. So a
+ * basket line means "the cheapest of this at each store", not one exact
+ * product - the user's choice of 21 October 2026.
+ */
+export interface BasketLine {
+  /** "leite~meio-gordo~~l": kind, sub-kind, labels joined by ".", unit - safe in an address */
+  id: string;
+  /** "Leite · Meio-gordo", "Manteiga · Biológico", or just "Manteiga" */
+  name: string;
+  unit: MeasureUnit;
+  categoryId: string;
+  categoryLabel: string;
+  kindId: string;
+  kindLabel: string;
+  /** aligned to STORE_ORDER */
+  cells: BasketCell[];
+}
+
+/**
+ * Every comparison the food pages show, as basket lines, in the tree's
+ * category order and alphabetical by kind within a category.
+ */
+export async function getBasketLines(): Promise<BasketLine[]> {
+  const byType = await currentRowsByType();
+  const lines: BasketLine[] = [];
+  for (const category of CATEGORIES) {
+    const kinds = category.kinds
+      .map((id) => FOOD_TYPE_BY_ID.get(id))
+      .filter((t): t is NonNullable<typeof t> => t !== undefined && !t.hidden)
+      .sort((a, b) => a.label.localeCompare(b.label, "pt"));
+    for (const type of kinds) {
+      const typeRows = byType.get(type.id);
+      if (!typeRows) continue;
+      for (const g of shownGroups(comparisonGroups(type.id, typeRows))) {
+        lines.push({
+          id: [type.id, g.subKind ?? "", g.labels.join("."), g.unit].join("~"),
+          // A kind without sub-kinds already heads its own titles ("Manteiga ·
+          // Biológico"); the others name the sub-kind only ("Meio-gordo").
+          name: g.title === type.label || g.title.startsWith(`${type.label} · `) ? g.title : `${type.label} · ${g.title}`,
+          unit: g.unit,
+          categoryId: category.id,
+          categoryLabel: category.label,
+          kindId: type.id,
+          kindLabel: type.label,
+          cells: STORE_ORDER.map((store): BasketCell => {
+            const cell = g.cheapest.get(store) as Cell;
+            if (cell.kind === "price") return { kind: "price", unitPrice: cell.unitPrice, productName: cell.product.name };
+            if (cell.kind === "no-size") return { kind: "no-size", productName: cell.example.name };
+            return { kind: "not-stocked" };
+          }),
+        });
+      }
+    }
+  }
+  return lines;
 }
 
 /**

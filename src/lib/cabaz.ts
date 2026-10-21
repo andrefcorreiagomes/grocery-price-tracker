@@ -13,10 +13,12 @@ import type { Store } from "@/lib/stores";
  * three totals, and the user is told which item and why.
  */
 
-/** Structural minimum this module needs; getComparisonData()'s output satisfies it. */
+/** Structural minimum this module needs. */
 export interface CabazListing {
   packageSize: number;
   snapshots: { date: Date; price: number }[];
+  /** the product the price is for, shown under it; absent when not known */
+  productName?: string;
 }
 
 export interface CabazProduct {
@@ -33,13 +35,15 @@ export type CellState =
   /** priced, but not since some earlier scrape - opt-in via allowStale */
   | "stale"
   /*
-   * No listing at this store. Deliberately named for what we know rather than
-   * what we might infer: the absence of a listing is equally consistent with
-   * the store not selling it and with nobody having added it to the tracker
-   * yet, and the UI copy must not claim the stronger of the two.
+   * No listing at this store. Since the basket reads the catalogue (21 October
+   * 2026) this is the food pages' "Não vende": the chain's whole catalogue is
+   * crawled every night and none of its products falls in this comparison.
    */
   | "noListing"
-  /** listing exists but has never been scraped: our gap, not the store's */
+  /**
+   * The store sells it, but no product of it gives a weight or volume, so
+   * there is no price per kilo or litre: the food pages' "Sem peso indicado".
+   */
   | "neverPriced";
 
 export interface CabazCell {
@@ -48,6 +52,8 @@ export interface CabazCell {
   unitPrice: number | null;
   /** day the price was captured; null when unpriced */
   capturedOn: Date | null;
+  /** the product behind the price, when the listing names one */
+  productName: string | null;
 }
 
 export interface CabazRow {
@@ -100,11 +106,12 @@ export function classifyCell(
   latestDay: string | null
 ): CabazCell {
   if (!listing) {
-    return { state: "noListing", unitPrice: null, capturedOn: null };
+    return { state: "noListing", unitPrice: null, capturedOn: null, productName: null };
   }
+  const productName = listing.productName ?? null;
   const snapshot = listing.snapshots[0];
   if (!snapshot) {
-    return { state: "neverPriced", unitPrice: null, capturedOn: null };
+    return { state: "neverPriced", unitPrice: null, capturedOn: null, productName };
   }
   // latestDay is only null when the database holds no snapshots at all, in
   // which case we could not be looking at one - treat as current rather than
@@ -115,6 +122,7 @@ export function classifyCell(
     state,
     unitPrice: unitPrice(snapshot.price, listing.packageSize),
     capturedOn: snapshot.date,
+    productName,
   };
 }
 

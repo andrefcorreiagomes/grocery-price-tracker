@@ -11,28 +11,42 @@ import {
 } from "@/lib/cabaz";
 import styles from "./CabazBuilder.module.css";
 
+/** A basket line with its place in the food tree, for the chooser. */
 export interface CabazBuilderProduct extends CabazProduct {
-  category: string | null;
-  subcategory: string | null;
+  categoryId: string;
+  categoryLabel: string;
+  kindId: string;
+  kindLabel: string;
 }
 
 interface Props {
+  /** in the food tree's order, which the chooser keeps */
   products: CabazBuilderProduct[];
   latestScrapeDate: Date | null;
   initialSelection: SelectedItem[];
-  initialAllowStale: boolean;
 }
 
-export default function CabazBuilder({
-  products,
-  latestScrapeDate,
-  initialSelection,
-  initialAllowStale,
-}: Props) {
-  const [selection, setSelection] = useState<SelectedItem[]>(initialSelection);
-  const [allowStale, setAllowStale] = useState(initialAllowStale);
+/** First appearance order, so the chooser follows the tree rather than the alphabet. */
+function distinct<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const k = key(item);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+export default function CabazBuilder({ products, latestScrapeDate, initialSelection }: Props) {
+  // A shared link can name a line that no longer exists (a comparison that
+  // fell below two chains, or a basket from before the catalogue): dropped
+  // here, so the count in the heading and the address match the table.
+  const [selection, setSelection] = useState<SelectedItem[]>(() => {
+    const known = new Set(products.map((p) => p.id));
+    return initialSelection.filter((item) => known.has(item.productId));
+  });
   const [category, setCategory] = useState<string | null>(null);
-  const [subcategory, setSubcategory] = useState<string | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
 
   /*
    * The basket is kept in the address bar so it survives a refresh and can be
@@ -40,62 +54,48 @@ export default function CabazBuilder({
    * router.replace on purpose: this page is force-dynamic, so a router
    * navigation would round-trip to the server on every single tick of a
    * checkbox. The URL is built by hand rather than with URLSearchParams to keep
-   * the commas readable - cuids are alphanumeric, so nothing needs escaping.
+   * it readable - line ids use only letters, digits, "-", "." and "~", so
+   * nothing needs escaping.
    */
   useEffect(() => {
-    const parts: string[] = [];
-    if (selection.length > 0) parts.push(`itens=${serializeSelection(selection)}`);
-    if (allowStale) parts.push("ultimo=1");
-    const query = parts.join("&");
+    const query = selection.length > 0 ? `itens=${serializeSelection(selection)}` : "";
     window.history.replaceState(
       null,
       "",
       query ? `${window.location.pathname}?${query}` : window.location.pathname
     );
-  }, [selection, allowStale]);
+  }, [selection]);
 
   const categories = useMemo(
-    () =>
-      [...new Set(products.map((p) => p.category).filter((c): c is string => c !== null))].sort(
-        (a, b) => a.localeCompare(b, "pt-PT")
-      ),
+    () => distinct(products, (p) => p.categoryId).map((p) => ({ id: p.categoryId, label: p.categoryLabel })),
     [products]
   );
 
-  const subcategories = useMemo(() => {
+  const kinds = useMemo(() => {
     if (category === null) return [];
-    return [
-      ...new Set(
-        products
-          .filter((p) => p.category === category)
-          .map((p) => p.subcategory)
-          .filter((s): s is string => s !== null)
-      ),
-    ].sort((a, b) => a.localeCompare(b, "pt-PT"));
+    return distinct(
+      products.filter((p) => p.categoryId === category),
+      (p) => p.kindId
+    ).map((p) => ({ id: p.kindId, label: p.kindLabel }));
   }, [products, category]);
 
   const visibleProducts = useMemo(() => {
     if (category === null) return [];
     return products
-      .filter((p) => p.category === category)
-      .filter((p) => subcategory === null || p.subcategory === subcategory)
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
-  }, [products, category, subcategory]);
+      .filter((p) => p.categoryId === category)
+      .filter((p) => kind === null || p.kindId === kind);
+  }, [products, category, kind]);
 
   const selectedIds = useMemo(
     () => new Set(selection.map((item) => item.productId)),
     [selection]
   );
 
+  // Every price the page receives is current (see the page), so stale prices
+  // never come up and are never allowed.
   const cabaz = useMemo(
-    () => buildCabaz(products, selection, latestScrapeDate, allowStale),
-    [products, selection, latestScrapeDate, allowStale]
-  );
-
-  // Only offer the toggle when it would actually change something.
-  const hasStaleCandidates = useMemo(
-    () => cabaz.rows.some((row) => row.cells.some((cell) => cell.state === "stale")),
-    [cabaz]
+    () => buildCabaz(products, selection, latestScrapeDate, false),
+    [products, selection, latestScrapeDate]
   );
 
   function toggleProduct(productId: string) {
@@ -131,6 +131,9 @@ export default function CabazBuilder({
     setSelection((current) => current.filter((item) => item.productId !== productId));
   }
 
+  const categoryLabel = categories.find((c) => c.id === category)?.label;
+  const kindLabel = kinds.find((k) => k.id === kind)?.label;
+
   return (
     <div className={styles.wrapper}>
       <section className={styles.picker}>
@@ -140,7 +143,7 @@ export default function CabazBuilder({
             className={styles.crumb}
             onClick={() => {
               setCategory(null);
-              setSubcategory(null);
+              setKind(null);
             }}
             disabled={category === null}
           >
@@ -152,53 +155,53 @@ export default function CabazBuilder({
               <button
                 type="button"
                 className={styles.crumb}
-                onClick={() => setSubcategory(null)}
-                disabled={subcategory === null}
+                onClick={() => setKind(null)}
+                disabled={kind === null}
               >
-                {category}
+                {categoryLabel}
               </button>
             </>
           )}
-          {subcategory !== null && (
+          {kind !== null && (
             <>
               <span aria-hidden="true">›</span>
-              <span className={styles.crumbCurrent}>{subcategory}</span>
+              <span className={styles.crumbCurrent}>{kindLabel}</span>
             </>
           )}
         </nav>
 
         {category === null ? (
           <div className={styles.grid}>
-            {categories.map((name) => (
+            {categories.map((c) => (
               <button
-                key={name}
+                key={c.id}
                 type="button"
                 className={styles.categoryCard}
-                onClick={() => setCategory(name)}
+                onClick={() => setCategory(c.id)}
               >
-                {name}
+                {c.label}
               </button>
             ))}
           </div>
         ) : (
           <>
-            {subcategories.length > 1 && (
+            {kinds.length > 1 && (
               <div className={styles.chips}>
                 <button
                   type="button"
-                  className={subcategory === null ? `${styles.chip} ${styles.chipActive}` : styles.chip}
-                  onClick={() => setSubcategory(null)}
+                  className={kind === null ? `${styles.chip} ${styles.chipActive}` : styles.chip}
+                  onClick={() => setKind(null)}
                 >
                   Todos
                 </button>
-                {subcategories.map((name) => (
+                {kinds.map((k) => (
                   <button
-                    key={name}
+                    key={k.id}
                     type="button"
-                    className={subcategory === name ? `${styles.chip} ${styles.chipActive}` : styles.chip}
-                    onClick={() => setSubcategory(name)}
+                    className={kind === k.id ? `${styles.chip} ${styles.chipActive}` : styles.chip}
+                    onClick={() => setKind(k.id)}
                   >
-                    {name}
+                    {k.label}
                   </button>
                 ))}
               </div>
@@ -235,20 +238,9 @@ export default function CabazBuilder({
           )}
         </div>
 
-        {hasStaleCandidates && (
-          <label className={styles.toggle}>
-            <input
-              type="checkbox"
-              checked={allowStale}
-              onChange={(event) => setAllowStale(event.target.checked)}
-            />
-            Usar o último preço conhecido quando não há preço actual
-          </label>
-        )}
-
         <CabazTable
           cabaz={cabaz}
-          allowStale={allowStale}
+          allowStale={false}
           onAdjustQuantity={adjustQuantity}
           onRemove={removeProduct}
         />

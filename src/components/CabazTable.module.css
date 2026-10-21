@@ -82,6 +82,22 @@
   display: inline-block;
 }
 
+/* The product behind a price: one line, cut short, in full on hover. */
+.productName {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noSize {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
 .stepper {
   display: flex;
   align-items: center;
