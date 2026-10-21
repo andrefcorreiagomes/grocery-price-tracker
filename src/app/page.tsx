@@ -1,16 +1,25 @@
 import Link from "next/link";
-import { getCategories } from "@/lib/queries";
 import { getComparableFoodTypes } from "@/lib/grupos";
 import styles from "./page.module.css";
 
-// Always read the latest categories from the database rather than a build-time snapshot.
+// Always read the latest prices from the database rather than a build-time snapshot.
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const categories = await getCategories();
+  const entries = await getComparableFoodTypes();
   // Counted, not written in: the number changes whenever a kind of food is
   // added or set aside.
-  const foodCount = new Set((await getComparableFoodTypes()).map((e) => e.id)).size;
+  const foodCount = new Set(entries.map((e) => e.id)).size;
+
+  // The categories of the food tree, in its order, each with how many of its
+  // kinds can be compared today. A category with none is left out rather than
+  // shown as an empty page.
+  const categories: { id: string; label: string; kinds: number }[] = [];
+  for (const e of entries) {
+    const last = categories[categories.length - 1];
+    if (last && last.id === e.categoryId) last.kinds++;
+    else categories.push({ id: e.categoryId, label: e.categoryLabel, kinds: 1 });
+  }
 
   return (
     <main className={styles.main}>
@@ -36,12 +45,11 @@ export default async function Home() {
 
       <div className={styles.grid}>
         {categories.map((category) => (
-          <Link
-            key={category}
-            href={`/categoria/${encodeURIComponent(category)}`}
-            className={styles.card}
-          >
-            {category}
+          <Link key={category.id} href={`/categoria/${category.id}`} className={styles.card}>
+            {category.label}
+            <span className={styles.cardCount}>
+              {category.kinds} alimento{category.kinds === 1 ? "" : "s"}
+            </span>
           </Link>
         ))}
       </div>

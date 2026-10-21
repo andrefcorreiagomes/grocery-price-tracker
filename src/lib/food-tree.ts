@@ -16,6 +16,11 @@ export function categoryOf(kind: string): Category | null {
   return CATEGORY_OF.get(kind) ?? null;
 }
 
+/** A category by its id ("laticinios"), or null for an id the tree does not have. */
+export function categoryById(id: string): Category | null {
+  return CATEGORIES.find((c) => c.id === id) ?? null;
+}
+
 /** Where a set-aside kind will go when it comes back ("Doces e sobremesas", "Bebidas"). */
 export function laterCategoryOf(kind: string): string | null {
   const hidden = FOOD_TYPES.find((t) => t.id === kind)?.hidden;

@@ -190,7 +190,11 @@ export default async function FoodTypePage({
       <Link href="/grupos" className={styles.back}>
         ← Todos os alimentos
       </Link>
-      {page.category && <p className={styles.category}>{page.category.label}</p>}
+      {page.category && (
+        <p className={styles.category}>
+          <Link href={`/categoria/${page.category.id}`}>{page.category.label}</Link>
+        </p>
+      )}
       <h1>{page.label}</h1>
       <p className={styles.count}>
         {page.productCount} produto{page.productCount === 1 ? "" : "s"} nas cadeias
