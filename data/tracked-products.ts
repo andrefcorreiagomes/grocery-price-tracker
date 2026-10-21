@@ -37,6 +37,10 @@ export interface TrackedProduct {
 
 export const trackedProducts: TrackedProduct[] = [
   {
+    // Continente's own 1 L (6879912) left the site in August 2026; replaced on
+    // 21 Oct 2026 by its successor, the Açores screw-cap 1 L at the same price
+    // tier. Its name no longer says UHT, nor "Fresco" as Continente's fresh
+    // milk does.
     name: "Leite UHT Meio Gordo",
     category: "Laticínios",
     subcategory: "Leite",
@@ -44,8 +48,8 @@ export const trackedProducts: TrackedProduct[] = [
     listings: [
       {
         store: "CONTINENTE",
-        storeProductId: "6879912",
-        url: "https://www.continente.pt/produto/leite-uht-meio-gordo-continente-6879912.html",
+        storeProductId: "8912985",
+        url: "https://www.continente.pt/produto/leite-meio-gordo-acores-com-tampa-rosca-continente-8912985.html",
         packageSize: 1,
       },
       {
@@ -854,6 +858,10 @@ export const trackedProducts: TrackedProduct[] = [
     // 0.8/0.8/0.6 packs. Scrapers read the pack price here (Continente
     // €1.98 ÷ 2 kg = €0.99/kg, verified against the price shown on their
     // site; Pingo Doce and Auchan €2.49 ÷ 1.5 kg = €1.66/kg).
+    // 21 Oct 2026: Continente's 2 kg "D. João" bag (5602895) left the site;
+    // replaced by its IGP Algarve 1,5 kg bag, the same size as Auchan's. Pingo
+    // Doce's bag has been absent since 3 Oct, most likely out of season, and is
+    // kept so it counts again when it returns.
     name: "Laranja IGP Algarve (Rede)",
     category: "Fruta",
     subcategory: "Laranja",
@@ -861,9 +869,9 @@ export const trackedProducts: TrackedProduct[] = [
     listings: [
       {
         store: "CONTINENTE",
-        storeProductId: "5602895",
-        url: "https://www.continente.pt/produto/laranja-igp-algarve-d.-joao-continente-continente-5602895.html",
-        packageSize: 2, // 2 kg net
+        storeProductId: "5521725",
+        url: "https://www.continente.pt/produto/laranja-citrinos-do-algarve---igp-igp-algarve-5521725.html",
+        packageSize: 1.5, // 1,5 kg net
       },
       {
         store: "PINGO_DOCE",
@@ -1297,7 +1305,8 @@ export const trackedProducts: TrackedProduct[] = [
   },
   {
     // "Leite UHT Meio Gordo" above is already tracked - this is its adjacent
-    // skimmed variant, not a duplicate
+    // skimmed variant, not a duplicate. Continente's listing replaced on 21 Oct
+    // 2026 (6879889 left the site in August) by the Açores screw-cap 1 L.
     name: "Leite UHT Magro",
     category: "Laticínios",
     subcategory: "Leite",
@@ -1305,8 +1314,8 @@ export const trackedProducts: TrackedProduct[] = [
     listings: [
       {
         store: "CONTINENTE",
-        storeProductId: "6879889",
-        url: "https://www.continente.pt/produto/leite-hgt-magro-com-tampa-rosca-continente-equilibrio-continente-equilibrio-6879889.html",
+        storeProductId: "8912893",
+        url: "https://www.continente.pt/produto/leite-magro-acores-com-tampa-rosca-continente-equilibrio-8912893.html",
         packageSize: 1,
       },
       {
@@ -1324,19 +1333,16 @@ export const trackedProducts: TrackedProduct[] = [
     ],
   },
   {
-    // Continente and Auchan call it "Inteiro", Pingo Doce "Gordo" - same
-    // product, different store naming
+    // Auchan calls it "Inteiro", Pingo Doce "Gordo" - same product, different
+    // store naming. No Continente listing since 21 Oct 2026: its own-brand 1 L
+    // (6927108) left the site in August and nothing like it replaced it - the
+    // nearest is a branded 6-pack (Gresso), which the user judged not a fair
+    // comparison with an own-brand single litre.
     name: "Leite UHT Gordo",
     category: "Laticínios",
     subcategory: "Leite",
     unit: "L",
     listings: [
-      {
-        store: "CONTINENTE",
-        storeProductId: "6927108",
-        url: "https://www.continente.pt/produto/leite-uht-inteiro-continente-continente-6927108.html",
-        packageSize: 1,
-      },
       {
         store: "PINGO_DOCE",
         storeProductId: "48151",
