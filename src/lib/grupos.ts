@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import {
   cheapestStores,
+  comparable,
   namedGroup,
   unitsFor,
   type Cell,
@@ -12,6 +13,7 @@ import { CATEGORIES } from "../../data/food-tree";
 import { categoryOf } from "./food-tree";
 import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type TreeProduct } from "./comparison-groups";
 import { STORE_ORDER } from "./stores";
+import { unitPrice } from "./pricing";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -221,7 +223,7 @@ export async function getBasketLines(): Promise<BasketLine[]> {
       if (!typeRows) continue;
       for (const g of shownGroups(comparisonGroups(type.id, typeRows))) {
         lines.push({
-          id: [type.id, g.subKind ?? "", g.labels.join("."), g.unit].join("~"),
+          id: `${type.id}~${comparisonSlug(g)}`,
           // A kind without sub-kinds already heads its own titles ("Manteiga ·
           // Biológico"); the others name the sub-kind only ("Meio-gordo").
           name: g.title === type.label || g.title.startsWith(`${type.label} · `) ? g.title : `${type.label} · ${g.title}`,
@@ -241,6 +243,135 @@ export async function getBasketLines(): Promise<BasketLine[]> {
     }
   }
   return lines;
+}
+
+/**
+ * A comparison's name in an address: sub-kind, labels joined by ".", unit -
+ * "meio-gordo~~l". Only letters, digits, "-", "." and "~", so it needs no
+ * escaping. A basket line's id is the kind followed by this.
+ */
+export function comparisonSlug(g: Pick<ComparisonGroup, "subKind" | "labels" | "unit">): string {
+  return [g.subKind ?? "", g.labels.join("."), g.unit].join("~");
+}
+
+/**
+ * Where the price history of every comparison starts. Before 3 October 2026
+ * the page readers mis-sized goods sold by the kilo, so stored prices from then
+ * work out at impossible prices per kilo: picanha at EUR 0.02, shrimp at 0.01.
+ * Measured on 21 October 2026 across all 578 comparisons: 59 jumps of more than
+ * 2.5x between neighbouring points from August, 3 from this date - and those 3
+ * are a genuinely cheaper product arriving.
+ */
+export const HISTORY_SINCE = "2026-10-03";
+
+/** A calendar day in Portugal, as "2026-10-21": crawls start late in the evening, so UTC would misdate them. */
+const LISBON_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Lisbon",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+export const lisbonDay = (d: Date) => LISBON_DAY.format(d);
+
+/** One store's cheapest price on a day, and the product it belongs to. */
+export interface HistoryPoint {
+  unitPrice: number;
+  productName: string;
+}
+
+export interface ComparisonHistory {
+  kindId: string;
+  kindLabel: string;
+  category: { id: string; label: string } | null;
+  /** as on the basket: "Leite · Meio-gordo" */
+  name: string;
+  unit: MeasureUnit;
+  /** in date order; a store missing from a day had nothing to say that day */
+  days: { date: string; stores: Partial<Record<string, HistoryPoint>> }[];
+}
+
+/**
+ * How the cheapest price of one comparison moved, store by store, since
+ * HISTORY_SINCE.
+ *
+ * Read from the catalogue's price periods (CataloguePrice), which hold a price
+ * from the day it was first seen. A product's price is taken to hold until its
+ * NEXT price - not just until it was last seen at that price - because a crawl
+ * does not always reach every product: on a day it missed one, that product's
+ * last known price still stands. After its final price, a product counts only
+ * up to its last sighting, so one the store stopped selling drops out.
+ *
+ * Every product that ever belonged to the comparison counts, delisted ones
+ * included, so the cheapest of August is not forgotten because it is gone now.
+ * A store gets a point only on days something changed for it in this
+ * comparison; between points its price held. Its line starts at its first
+ * such day from HISTORY_SINCE on, so stores can start on different days.
+ */
+export async function getComparisonHistory(kindId: string, slug: string): Promise<ComparisonHistory | null> {
+  const type = FOOD_TYPE_BY_ID.get(kindId);
+  if (!type || type.hidden) return null;
+  const [sub, labelText, unit] = slug.split("~");
+  if (unit !== "kg" && unit !== "l" && unit !== "un") return null;
+
+  // The comparison must be one the food page shows today, which also gives it its title.
+  const page = await getFoodTypePage(kindId);
+  const group = page?.groups.find((g) => comparisonSlug(g) === slug);
+  if (!page || !group) return null;
+
+  const sameLabels = (stored: string | null) =>
+    (stored ?? "").split(",").filter(Boolean).sort().join(",") === labelText.split(".").filter(Boolean).sort().join(",");
+  const rows = (
+    await prisma.catalogueProduct.findMany({
+      where: { foodType: kindId, subKind: sub === "" ? null : sub },
+      select: {
+        storeProductId: true, store: true, name: true, brand: true, packageSize: true, unit: true, labels: true,
+        prices: { select: { price: true, firstSeenAt: true, lastSeenAt: true }, orderBy: { firstSeenAt: "asc" } },
+      },
+    })
+  ).filter((r) => sameLabels(r.labels));
+
+  // Each product's prices as stretches of days: [from, to) while a later price
+  // follows, [from, to] for the last one.
+  const stretches = rows.flatMap((r) =>
+    r.prices.flatMap((p, i) => {
+      if (!comparable({ ...r, price: p.price }, kindId, unit)) return [];
+      const next = r.prices[i + 1];
+      return [{
+        store: r.store,
+        productName: r.name,
+        unitPrice: unitPrice(p.price, r.packageSize as number),
+        from: lisbonDay(p.firstSeenAt),
+        to: next ? lisbonDay(next.firstSeenAt) : lisbonDay(p.lastSeenAt),
+        last: !next,
+      }];
+    })
+  ).filter((s) => s.to >= HISTORY_SINCE);
+
+  const byDay = new Map<string, Partial<Record<string, HistoryPoint>>>();
+  for (const store of STORE_ORDER) {
+    const own = stretches.filter((s) => s.store === store);
+    // Only days with a reading from HISTORY_SINCE on - not HISTORY_SINCE itself
+    // for everyone, which started Continente's milk at an August price carried
+    // forward to 3 October because no crawl reached it until the 4th.
+    const days = new Set(own.flatMap((s) => [s.from, s.to]).filter((d) => d >= HISTORY_SINCE));
+    for (const d of days) {
+      let best: HistoryPoint | null = null;
+      for (const s of own) {
+        const holds = s.from <= d && (s.last ? d <= s.to : d < s.to);
+        if (holds && (best === null || s.unitPrice < best.unitPrice)) best = { unitPrice: s.unitPrice, productName: s.productName };
+      }
+      if (best) byDay.set(d, { ...byDay.get(d), [store]: best });
+    }
+  }
+
+  return {
+    kindId,
+    kindLabel: type.label,
+    category: page.category,
+    name: group.title === type.label || group.title.startsWith(`${type.label} · `) ? group.title : `${type.label} · ${group.title}`,
+    unit,
+    days: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([date, stores]) => ({ date, stores })),
+  };
 }
 
 /**

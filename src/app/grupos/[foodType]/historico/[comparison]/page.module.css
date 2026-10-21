@@ -1,0 +1,140 @@
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+  width: 100%;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.category {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  margin-bottom: 0.3rem;
+}
+
+.main h1 {
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.lede {
+  margin-top: 0.6rem;
+  max-width: 58ch;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.chart {
+  margin: 1.8rem 0 1.4rem;
+}
+
+.summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary th,
+.summary td {
+  padding: 0.55rem 0.4rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.summary thead th {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.summary tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  margin-right: 0.45rem;
+  vertical-align: baseline;
+}
+
+.product {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Same green as the cheapest markers: a price going down is good news. */
+.down {
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.up {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .down {
+    color: #4ade80;
+  }
+  .up {
+    color: #fca5a5;
+  }
+}
+
+.note {
+  margin-top: 1.4rem;
+  max-width: 62ch;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.footer {
+  margin-top: 2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.price {
+  white-space: nowrap;
+}
+
+/* A phone fits the four columns only if the product name gives way. */
+@media (max-width: 34rem) {
+  .main {
+    padding: 1.5rem 1rem 3rem;
+  }
+  .summary th,
+  .summary td {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.92rem;
+  }
+  .summary thead th {
+    font-size: 0.68rem;
+  }
+  .product {
+    max-width: 6.5rem;
+  }
+}

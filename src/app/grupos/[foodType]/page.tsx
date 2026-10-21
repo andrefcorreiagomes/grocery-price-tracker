@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFoodTypePage, getFreshness, MAX_NAMED_GROUPS, type NamedGroups } from "@/lib/grupos";
+import { comparisonSlug, getFoodTypePage, getFreshness, MAX_NAMED_GROUPS, type NamedGroups } from "@/lib/grupos";
 import type { ComparisonGroup } from "@/lib/comparison-groups";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
 import type { Cell } from "@/lib/comparison";
+import { euros } from "@/lib/money";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
   return (
     <div className={`${styles.cell} ${best ? styles.best : ""}`}>
       <span className={styles.figure}>
-        {cell.unitPrice.toFixed(2)} €<span className={styles.per}>/{UNIT_LABEL[unit]}</span>
+        {euros(cell.unitPrice)} €<span className={styles.per}>/{UNIT_LABEL[unit]}</span>
       </span>
       {/* The product is NAMED on purpose: a number alone cannot tell you that
           the cheapest "queijo" is a children's dessert. */}
@@ -85,7 +86,7 @@ const UNIT_WORDS: Record<string, string> = { kg: "ao peso", l: "ao volume", un: 
  * the point of the groups is that the page never sets fresh chicken breast
  * against a frozen whole chicken.
  */
-function GroupBlock({ group, showUnit }: { group: ComparisonGroup; showUnit: boolean }) {
+function GroupBlock({ group, showUnit, kindId }: { group: ComparisonGroup; showUnit: boolean; kindId: string }) {
   return (
     <section className={styles.unitBlock} id={anchor(group.key)}>
       <h2 className={styles.groupHeading}>
@@ -95,6 +96,12 @@ function GroupBlock({ group, showUnit }: { group: ComparisonGroup; showUnit: boo
           {group.products} produto{group.products === 1 ? "" : "s"}
         </span>
       </h2>
+      <Link
+        href={`/grupos/${encodeURIComponent(kindId)}/historico/${comparisonSlug(group)}`}
+        className={styles.historyLink}
+      >
+        Evolução do preço →
+      </Link>
       <Comparison
         title="O mais barato de cada loja"
         note="O produto mais barato desta comparação em cada cadeia, seja de que marca for."
@@ -213,7 +220,7 @@ export default async function FoodTypePage({
       )}
 
       {page.groups.map((g) => (
-        <GroupBlock key={g.key} group={g} showUnit={unitShown(page.groups, g)} />
+        <GroupBlock key={g.key} group={g} showUnit={unitShown(page.groups, g)} kindId={page.id} />
       ))}
 
       {page.groups.length === 0 && (
