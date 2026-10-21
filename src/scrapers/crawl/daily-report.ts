@@ -147,7 +147,6 @@ export interface DailyReport {
   };
 
   live: {
-    trackedListingsMissing: ProductNote[];
     candidatePairsAffected: number;
   };
 
@@ -440,16 +439,6 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   ]);
 
   // --- what this does to the live site --------------------------------------
-  const trackedListings = await prisma.storeListing.findMany({
-    where: { store },
-    select: { storeProductId: true, product: { select: { name: true } } },
-  });
-  const missingIds = new Set(missingRows.map((r) => r.storeProductId));
-  const trackedListingsMissing = trackedListings
-    .filter((l) => missingIds.has(l.storeProductId))
-    .slice(0, SAMPLE)
-    .map((l) => ({ storeProductId: l.storeProductId, name: l.product.name }));
-
   // Asked through the pair's own links rather than with a list of ids. The list
   // version passed every unseen product twice in one query, and on 4 October
   // 2026 that was 591 products - 1,182 values, past the 999 the database driver
@@ -483,11 +472,6 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   // FAIL is reserved for "the data is wrong or the site is about to show
   // something wrong". Everything else that merely deserves a look is WARN.
   const problems: string[] = [];
-  if (trackedListingsMissing.length > 0) {
-    problems.push(
-      `${trackedListingsMissing.length} tracked listing(s) missing from the catalogue - the live site may show a stale comparison`
-    );
-  }
   if (input.shortSections.length > 0) {
     problems.push(`section(s) came up short: ${input.shortSections.join(", ")}`);
   }
@@ -576,7 +560,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
       sitemapSlugs: input.sitemapSlugs.length,
       sitemapUnknown: input.sitemapUnknown,
     },
-    live: { trackedListingsMissing, candidatePairsAffected },
+    live: { candidatePairsAffected },
     drift: input.drift,
   };
 }
@@ -662,7 +646,7 @@ export function buildFailureReport(input: {
       sitemapSlugs: 0,
       sitemapUnknown: [],
     },
-    live: { trackedListingsMissing: [], candidatePairsAffected: 0 },
+    live: { candidatePairsAffected: 0 },
     drift: [],
     incomplete: true,
   };

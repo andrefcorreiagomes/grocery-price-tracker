@@ -134,25 +134,6 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
     sections,
   };
 
-  // Live-site impact: the same question the full report asks, because it is the
-  // only part a visitor can see go wrong.
-  const trackedListings = await prisma.storeListing.findMany({
-    where: { store },
-    select: { storeProductId: true, product: { select: { name: true } } },
-  });
-  const missing = new Set(
-    (
-      await prisma.catalogueProduct.findMany({
-        where: { store, lastSeenAt: { lt: new Date(now - 7 * DAY) } },
-        select: { storeProductId: true },
-      })
-    ).map((r) => r.storeProductId)
-  );
-  const trackedListingsMissing = trackedListings
-    .filter((l) => missing.has(l.storeProductId))
-    .slice(0, SAMPLE)
-    .map((l) => ({ storeProductId: l.storeProductId, name: l.product.name }));
-
   // Measured, not assumed. Reporting zeros here would claim the fields were
   // checked and found complete, which is a stronger statement than "not looked
   // at" and the wrong one.
@@ -165,14 +146,9 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
 
   const http = totalStats(input.http);
 
-  const problems: string[] = [];
-  if (trackedListingsMissing.length > 0) {
-    problems.push(
-      `${trackedListingsMissing.length} tracked listing(s) not confirmed in over a week - the live site may be showing a stale price`
-    );
-  }
-  const fail = problems.length > 0;
-
+  // Nothing here is a FAIL any more: the one FAIL this report had, a hand-picked
+  // product not confirmed in a week, went with those products on 21 October
+  // 2026. The run's caller still escalates its own FAILs (escalate()).
   const warnings: string[] = [];
   if (staleness.older > 0) {
     warnings.push(`${staleness.older} product(s) have not been confirmed in over a month`);
@@ -200,13 +176,12 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
     );
   }
   if (http.retries > 0) warnings.push(`${http.retries} request(s) had to be retried`);
-  problems.push(...warnings);
 
   return {
     store,
     runAt: seenAt.toISOString(),
-    verdict: fail ? "FAIL" : warnings.length > 0 ? "WARN" : "OK",
-    problems,
+    verdict: warnings.length > 0 ? "WARN" : "OK",
+    problems: warnings,
     baseline: { runs: 0, since: null },
     scraper: {
       sections: [],
@@ -244,7 +219,7 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
       sitemapSlugs: 0,
       sitemapUnknown: [],
     },
-    live: { trackedListingsMissing, candidatePairsAffected: 0 },
+    live: { candidatePairsAffected: 0 },
     drift: [],
     rotation,
   };

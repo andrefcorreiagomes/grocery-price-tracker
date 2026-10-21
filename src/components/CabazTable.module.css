@@ -1,5 +1,5 @@
-/* Same scroll-container pattern as ComparisonTable: globals.css hides overflow
-   on html/body, so a wide table needs its own scroller or it is simply clipped. */
+/* globals.css hides overflow on html/body, so a wide table needs its own
+   scroller or it is simply clipped. */
 .scroller {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

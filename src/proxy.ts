@@ -4,9 +4,14 @@ import { adminEnabled } from "@/lib/admin";
 /**
  * Keeps the admin pages off the public site.
  *
- * `/admin/categorias` has no password. It does not need one, because it is not
- * meant to be reachable from the internet: it runs where the site is
- * maintained, and the public server simply does not serve it.
+ * There are none at the moment: the only one, /admin/categorias (filing kinds
+ * of food under menu headings), was retired on 21 October 2026 when the menu
+ * came to be read from data/food-tree.ts. The guard stays so that any future
+ * admin page is off the public site by default, as the user decided.
+ *
+ * Admin pages have no password. They do not need one, because they are not
+ * meant to be reachable from the internet: they run where the site is
+ * maintained, and the public server simply does not serve them.
  *
  * Answers 404, not 403 and not a redirect. A refusal confirms the page is
  * there; a 404 is indistinguishable from a route that was never built, which is
@@ -14,10 +19,10 @@ import { adminEnabled } from "@/lib/admin";
  *
  * This is the outer layer only. Next's own documentation is explicit that Proxy
  * is for optimistic checks and "should not be used as a full session management
- * or authorization solution", so the same test is repeated inside the Server
- * Action that writes - see src/app/admin/categorias/actions.ts. The page and
- * the mutation are protected separately, because a Server Action is a POST and
- * a POST does not have to come from the page it belongs to.
+ * or authorization solution", so an admin page's Server Actions must repeat the
+ * same test (as /admin/categorias's did, with adminEnabled()). The page and the
+ * mutation are protected separately, because a Server Action is a POST and a
+ * POST does not have to come from the page it belongs to.
  */
 export function proxy() {
   if (!adminEnabled()) {

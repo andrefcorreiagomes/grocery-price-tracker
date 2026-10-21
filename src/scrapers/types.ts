@@ -40,8 +40,10 @@ export interface ScrapeResult {
   /**
    * Whether `price` is a promotional price. Every store publishes this, but via
    * a different mechanism - see each scraper. A missing marker is read as
-   * `false` rather than throwing, so a markup change degrades quietly; the
-   * per-store promo counts printed by scrape-daily are the canary for that.
+   * `false` rather than throwing, so a markup change degrades quietly. The
+   * per-store promo counts that scrape-daily printed were the canary for that;
+   * it was retired on 21 October 2026, and no crawl report counts promotions
+   * yet - a gap worth closing if promotions are ever shown on the site.
    */
   onPromotion: boolean;
   /** Price before the discount. Only Continente publishes it; null elsewhere. */

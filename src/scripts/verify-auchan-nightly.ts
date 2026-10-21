@@ -563,7 +563,7 @@ export async function verifyAuchanNightly(): Promise<number> {
     catalogue: { seen: 0, newProducts: 0, disappeared: 0, stillMissing: 0, returned: 0, moved: 0, renamed: 0, samples: { newProducts: [], disappeared: [], returned: [], moved: [], renamed: [] } },
     prices: { opened: 0, changed: 0, unchanged: 0, skipped: 0, movers: [], absurd: [] },
     categories: { published: 0, crawled: 0, unknown: [], missing: [], publishedCountChanges: [], sitemapSlugs: 0, sitemapUnknown: [] },
-    live: { trackedListingsMissing: [], candidatePairsAffected: 0 },
+    live: { candidatePairsAffected: 0 },
     drift: [],
     gridHealth,
   };

@@ -148,7 +148,7 @@ function decodeEntities(text: string): string {
  *
  * Note the label can carry a second figure - "emb. 540 gr (peso escorrido
  * 400 gr)" - which is the drained weight, deliberately not returned here: the
- * caller decides which basis a group uses (see the product-discovery skill).
+ * caller decides which basis a comparison uses.
  */
 function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   const match = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|g|l|ml|cl)/i);

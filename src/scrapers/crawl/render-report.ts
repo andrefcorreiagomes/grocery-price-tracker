@@ -122,15 +122,12 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
   lines.push(
     ...section(
       "Impact on the live site",
-      "The only part a visitor can see go wrong, so it comes first. A missing tracked listing means " +
-        "one of the published comparisons is about to show a stale price or a dead link. Candidate " +
-        "pairs are matches still waiting to be confirmed - nobody sees them yet, so that number is " +
-        "context rather than a problem, and it only becomes one if it climbs run after run.",
+      "Candidate pairs are matches still waiting to be confirmed - nobody sees them yet, so that " +
+        "number is context rather than a problem, and it only becomes one if it climbs run after run. " +
+        "(Until 21 October 2026 this section also listed hand-picked products that had lost a " +
+        "listing; the site no longer shows those products. A product the crawls stop seeing now " +
+        "leaves the comparisons by itself after two weeks.)",
       [
-        report.live.trackedListingsMissing.length === 0
-          ? "  no tracked product lost a listing"
-          : `  ${report.live.trackedListingsMissing.length} tracked listing(s) missing:`,
-        ...notes(report.live.trackedListingsMissing, "    "),
         `  ${report.live.candidatePairsAffected} match candidate pair(s) point at a product that was not seen`,
       ],
       explain

@@ -1,88 +1,40 @@
 # Operations
 
-Running notes for the original part of the app: the 275 hand-picked products
-in `data/tracked-products.ts` and their daily price snapshots. Moved here from
-the front page, which now describes the project as a whole.
+How the nightly work runs. The site reads everything from the catalogue the
+crawls build; there is no separate list of products to keep up to date.
 
-## Setup
+## The night in one command
 
 ```bash
-npm install
-cp .env.example .env     # then set CRAWLER_CONTACT to your own email address
-npx prisma migrate dev   # creates dev.db with the schema
-npm run seed              # loads data/tracked-products.ts into the database
-npm run scrape             # scrapes current prices for all tracked products
-npm run dev                 # starts the web app at http://localhost:3000
+npm run nightly                   # the real thing: requests to all three stores
+npm run nightly -- --plan         # print what would run, change nothing
+npm run nightly -- --no-crawl     # everything except robots.txt and the crawls
+npm run nightly -- --together     # the three crawls at the same time
 ```
 
-## How it works
+In order (`src/scripts/nightly.ts`):
 
-- **`src/scrapers/`** — one file per store. Each fetches a product page with
-  a plain HTTP request (no headless browser needed) and extracts price/name/
-  brand/EAN from structured data already embedded in the page
-  (`application/ld+json` or a GTM `dataLayer`, depending on the store).
-- **`data/tracked-products.ts`** — the curated list of products to track.
-  Each entry gives the canonical product name/category/subcategory/unit and,
-  per store, the exact product page URL/ID plus that store's package size
-  (`packageSize`, expressed in the product's `unit` - e.g. `0.75` for a
-  750ml bottle when `unit` is `"L"`). Prices are normalized to
-  `price / packageSize` for fair comparison when stores sell different pack
-  sizes. **Edit this file to add more products**, then run `npm run seed`
-  again. A single store can have more than one listing for the same
-  product (e.g. a promo SKU alongside a regular one, or different pack
-  sizes) - just add multiple entries with that `store` under the same
-  product; the comparison always shows whichever tracked SKU is currently
-  cheapest per unit at that store, so it automatically follows promotions
-  rotating between sibling SKUs instead of being locked onto one.
-- **`npm run scrape`** (`src/scripts/scrape-daily.ts`) — scrapes every
-  tracked listing and upserts one `PriceSnapshot` per listing for today's
-  date. Safe to re-run the same day (idempotent via a unique constraint).
-- The web app reads directly from the SQLite database:
-  - `/` — category menu (derived from the distinct `category` values on
-    tracked products).
-  - `/categoria/[category]` — subcategory filter chips (when a category has
-    more than one) plus the comparison table for that category/subcategory,
-    cheapest **unit price** (not raw price) highlighted per product.
-  - `/produtos/[id]` — price history chart per store, normalized to
-    price-per-unit.
+1. **Checks.** It runs only on the machine named in `NIGHTLY_HOST` in `.env`,
+   because the database has one real copy and only that machine writes it.
+   `CRAWLER_CONTACT` must be set too.
+2. **robots.txt.** Each store's file is compared with the last saved copy in
+   `logs/`. A store whose file changed is not crawled that night; the new copy
+   is saved and the summary says so, for a person to read first.
+3. **The crawls, one after another:** Auchan, Pingo Doce, Continente. About
+   1½, 3 and 6 hours, so roughly ten hours in all.
+4. **Afterwards, offline:** pack sizes, kinds of food, the count of uncertain
+   kinds, the automated checks (`verify:nightly`) and the comparison check.
+5. **A backup** of the database into `backups/`, keeping the last 7.
+6. **A summary** in `logs/nightly-<date>/summary.md`, with each step's full
+   output beside it. The command exits with an error when any step needs a
+   look, so a scheduler can tell.
 
-## Scheduling the daily scrape
+## After a night
 
-The scraper is just a script (`npm run scrape`) - nothing runs automatically
-on its own. To collect a price every day, set up a Windows Task Scheduler
-task yourself:
-
-1. Open **Task Scheduler** → **Create Basic Task…**
-2. Name it e.g. "Grocery Price Scrape", trigger **Daily** at a time of your
-   choosing.
-3. Action: **Start a program**
-   - Program/script: `npm.cmd`
-   - Add arguments: `run scrape`
-   - Start in: the full path to this project folder, e.g.
-     `C:\path\to\grocery-price-tracker`
-4. Finish. You can test it immediately via **Run** in Task Scheduler, and
-   check `npx prisma studio` afterwards to confirm a new row appeared in
-   `PriceSnapshot`.
-
-## Checking for scrape failures
-
-Sites occasionally change their HTML/structured data, which breaks a
-scraper for that one listing. `npm run scrape` never stops for this - it
-logs the failure and moves on to the rest. Failures are written to
-**`logs/scrape.log`** (created on first failure, gitignored - it's a local
-runtime file, not source), one timestamped line per failure plus a run
-summary line, e.g.:
-
-```
-[2026-08-06T09:00:03.412Z] FAIL CONTINENTE Peito de Frango (https://www.continente.pt/...): Continente: could not find product/price data at ...
-[2026-08-06T09:00:04.500Z] Run summary: 20 succeeded, 1 failed.
-```
-
-Nothing is written on a clean run, so an empty (or unchanged) file means
-nothing needs attention - check it after each scrape, or make checking it
-part of whatever schedules the scrape. The error message usually points at
-what changed on the store's site; the fix is normally re-finding the
-product's current URL and updating `data/tracked-products.ts`.
+Read the summary first. A crawl marked **FAIL** in its report means its data
+may be wrong; **WARN** means something deserves a look. The full reports are in
+`reports/`. To confirm nothing was lost, compare, for each store, the number
+of catalogue rows seen that night with the number the crawl says it saved.
 
 ## Notes
 
@@ -92,5 +44,10 @@ product's current URL and updating `data/tracked-products.ts`.
   to expose it at all. A caveat when comparing across stores: weighed and
   counter goods carry GS1 restricted-circulation codes (prefix `2`) that each
   retailer mints for itself, so they identify a scale ticket rather than a
-  product and must not be matched between stores. EAN is a sanity check and a
-  cross-store match signal, not required for price tracking to work.
+  product and must not be matched between stores.
+- Until 21 October 2026 the site also showed 95 hand-picked products (274
+  listings) with their own daily scrape. They were retired once the catalogue
+  could do the same job and stay current by itself. Their tables (`Product`,
+  `StoreListing`, `PriceSnapshot`, July to August 2026) are kept in the
+  database; the matching scripts still use them as known pairs to measure how
+  many the automatic matching finds.

@@ -53,19 +53,17 @@ The agent followed these rules in every session:
 - **Plain language**, so I can judge design decisions without reading code.
 
 A skill is a set of written instructions the agent follows for a repeated
-task. This project has two:
+task. This project has one:
 
-- [`product-discovery`](.claude/skills/product-discovery/SKILL.md): given a
-  search term, proposes groups of comparable products across the three chains.
-  It separates fresh from frozen, checks labels against the price per kilo,
-  uses drained weight for tinned food, and waits for my approval. It searches
-  this project's own catalogue (`npm run discover`), not the stores; its first
-  version used the stores' search pages, which their robots.txt forbids.
 - [`run-catalogue-crawls`](.claude/skills/run-catalogue-crawls/SKILL.md): which
   crawl command to use for each store, how long each takes and how it saves,
   and the checks to make before, during and after a crawl. It was written after
   a crawl was started with the wrong command, chosen from its description
   instead of from what it does.
+
+A second skill, `product-discovery`, proposed the hand-picked products the
+first version of the site compared. It was retired with them on 21 October
+2026, once the site read everything from the daily catalogue.
 
 ## At a glance
 
@@ -242,7 +240,8 @@ stores include in their pages.
 | `data/food-tree.ts` | the categories, the sub-kinds (cuts and varieties) and the labels (frozen, tinned, organic…) |
 | `data/store-sections.ts` | which of each store's sections hold food, decided in one place |
 | `src/lib/comparison.ts` | the comparison rules, including the three cell states |
-| `src/app/grupos/` | the comparison pages (in Portuguese) |
+| `src/app/` | the site's pages (in Portuguese): categories, comparisons, price history, the basket |
+| `src/scripts/nightly.ts` | the whole night in one command: crawls, classification, checks, backup, summary |
 | `src/scrapers/crawl/*report*.ts` | the reports each crawl writes about itself |
 | `src/scripts/verify-*.ts` | the automated checks |
 | `src/scripts/discover.ts` | searches the catalogue for a product across the three chains |
@@ -258,17 +257,15 @@ npm install
 cp .env.example .env             # the private settings file, never uploaded
 npx prisma migrate dev           # creates the database
 npm run verify:nightly           # the automated checks; no requests to the stores
-npm run dev                      # the site, at http://localhost:3000/grupos
+npm run dev                      # the site, at http://localhost:3000
 npm run discover -- carapau      # find a product in the catalogue (no network)
 ```
 
-Filling the database means crawling the stores (`npm run crawl:auchan:nightly`,
-`npm run crawl:continente:nightly`, `npm run crawl:pingodoce:nightly`, then
-`npm run classify:food`). Each of these saves as it goes, so a run that stops
-early keeps what it had already collected. These make real requests to the chains' websites and
-take hours, so please do not run them. Whoever does must first put their own
-email address or web page in `.env` as `CRAWLER_CONTACT` (see `.env.example`),
-because every request names them.
-
-Notes on the original hand-picked product list and its daily scrape are in
-[`docs/operations.md`](docs/operations.md).
+Filling the database means crawling the stores: `npm run nightly` runs the
+three crawls one after another, then classification, the checks and a backup
+(details in [`docs/operations.md`](docs/operations.md)). Each crawl saves as it
+goes, so a run that stops early keeps what it had already collected. These make
+real requests to the chains' websites and take about ten hours, so please do
+not run them. Whoever does must first put their own email address or web page
+in `.env` as `CRAWLER_CONTACT` (see `.env.example`), because every request
+names them.
