@@ -11,6 +11,7 @@ import {
   recordDead,
   recordUnavailable,
   stopTrackingLeftOut,
+  stopTrackingMovedOut,
   touchChecked,
   UNAVAILABLE_RECHECK_DAYS,
 } from "../scrapers/crawl/product-checks";
@@ -124,6 +125,15 @@ async function main() {
         (stoppedTracking > 0 ? ` (${stoppedTracking} held before, no longer tracked)` : "")
     );
   }
+  // Products we hold that the walk saw in a non-food section have moved there
+  // (Auchan's baby food did, around 31 August 2026): stopped now, as at the
+  // other two chains, rather than looking missing and "alive" every night.
+  const liveBefore = await prisma.catalogueProduct.count({ where: { store: STORE, delistedAt: null } });
+  const movedOut = await stopTrackingMovedOut(STORE, walk.nonFoodIds, liveBefore, seenAt);
+  if (movedOut.stopped.length > 0) {
+    console.log(`  moved into a non-food section: ${movedOut.stopped.length.toLocaleString()} held product(s), no longer tracked`);
+  }
+  if (movedOut.refused) console.log(`  !! ${movedOut.refused}`);
   const sectionChanges = await recordSections(STORE, walk.sections, seenAt, complete);
 
   // ---------------------------------------------------------------- phase 2
@@ -293,6 +303,8 @@ async function main() {
     unreachable: unreachable.length,
     aliveButMissing: alive.length,
     aliveButMissingSamples: alive.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),
+    movedToNonFood: movedOut.stopped.length,
+    movedToNonFoodSamples: movedOut.stopped.slice(0, SAMPLE),
   };
 
   const nonFood = segmentCounts.filter((s) => !s.kept).reduce((n, s) => n + s.count, 0);
@@ -399,6 +411,7 @@ async function main() {
     );
   }
   if (catastrophe) report = escalate(report, "FAIL", catastrophe);
+  if (movedOut.refused) report = escalate(report, "FAIL", movedOut.refused);
   for (const reason of tileHealthReasons(tileHealth)) report = escalate(report, "FAIL", reason);
   {
     const reason = underCollectedReason({ missing: missing.length, live, complete });

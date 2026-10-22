@@ -22,6 +22,7 @@ import { verifyContinentePages } from "./verify-continente-pages";
 import { verifyKindReviews } from "./verify-kind-reviews";
 import { checkGold } from "./kind-gold";
 import { verifyCrawlSafety } from "./verify-crawl-safety";
+import { verifyStorePages } from "./verify-store-pages";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -346,6 +347,9 @@ async function main() {
   // The fixes of the code review's first group (docs/code-review-2026-10.md).
   console.log("\n19. failed pages, long lists, and kinds of products no longer sold");
   failures += await verifyCrawlSafety();
+
+  console.log("\n20. store page readers on pieces of saved pages (promotions)");
+  failures += verifyStorePages();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

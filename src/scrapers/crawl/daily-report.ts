@@ -278,6 +278,9 @@ export interface GridHealthExtras {
   /** missing from the grid yet the page still answered: the walk has a hole */
   aliveButMissing: number;
   aliveButMissingSamples: ProductNote[];
+  /** held products the walk saw in a non-food section: no longer tracked */
+  movedToNonFood: number;
+  movedToNonFoodSamples: ProductNote[];
 }
 
 /**

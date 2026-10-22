@@ -61,7 +61,7 @@ function PromoMark({ promo, unit }: { promo: Promotion; unit: string }) {
   return (
     <span className={styles.promo}>
       promoção
-      {/* only Continente gives the price before; only Pingo Doce the end */}
+      {/* all three give the price before; only Pingo Doce the end */}
       {promo.regularUnitPrice !== null && (
         <s className={styles.promoDetail}>
           {euros(promo.regularUnitPrice)} €/{UNIT_LABEL[unit]}

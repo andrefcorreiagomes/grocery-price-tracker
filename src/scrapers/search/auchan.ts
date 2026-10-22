@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { auchanTileSize } from "../../lib/matching";
 import { parseShownUnitPrice } from "../page-size";
+import { struckPricePromotion } from "../struck-price";
 import type { SearchHit } from "./types";
 
 /**
@@ -129,18 +130,11 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
  *
  * NOT the "Promoção" label: it sat on 43 of those 48 tiles, promoted or not -
  * a template the page fills in the visitor's browser, with offers (multi-buy,
- * loyalty card) a crawler reading the HTML never sees. So "on promotion" here
- * means what the site's mark means: the price shown is a reduced price.
- *
- * A tile without a struck price is NOT on promotion, which also clears a
- * promotion that has ended.
+ * loyalty card) a crawler reading the HTML never sees. The rule is shared with
+ * Pingo Doce's pages: see src/scrapers/struck-price.ts.
  */
 export function auchanTilePromotion(struck: string, price: number): { onPromotion: boolean; regularPrice: number | null } {
-  const before = struck.match(/(\d+(?:[.,]\d+)?)/)?.[1];
-  const regular = before ? Number(before.replace(",", ".")) : NaN;
-  return Number.isFinite(regular) && regular > price
-    ? { onPromotion: true, regularPrice: regular }
-    : { onPromotion: false, regularPrice: null };
+  return struckPricePromotion(struck, price);
 }
 
 /**

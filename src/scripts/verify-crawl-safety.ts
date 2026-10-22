@@ -11,9 +11,10 @@ import {
   forEachBatch,
   recordRecategorised,
   recordUnavailable,
+  stopTrackingMovedOut,
   touchChecked,
 } from "../scrapers/crawl/product-checks";
-import { kindAssignments, rowsToClassify } from "./classify-food-types";
+import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "./classify-food-types";
 
 /**
  * The first three fixes of the code review of 22 October 2026
@@ -212,12 +213,90 @@ async function verifyKindsKept() {
   );
 }
 
+async function verifyMovedOut() {
+  console.log("\n  H4: a product seen in a non-food section stops being tracked");
+  await cleanup();
+  const ids = [1, 2, 3, 4, 5, 6, 7].map((n) => `${PREFIX}moved-${n}`);
+  for (const id of ids) {
+    await prisma.catalogueProduct.create({
+      data: { store: "AUCHAN", storeProductId: id, name: `Saqueta de fruta ${id}`, url: "https://example.invalid/m" },
+    });
+  }
+  await prisma.catalogueProduct.create({
+    data: { store: "AUCHAN", storeProductId: `${PREFIX}already`, name: "Already gone", url: "https://example.invalid/a", delistedAt: new Date(0) },
+  });
+  const at = new Date();
+  const seen = [...ids, `${PREFIX}already`, `${PREFIX}never-held`];
+  const delisted = async () =>
+    prisma.catalogueProduct.count({ where: { storeProductId: { in: ids }, delistedAt: at } });
+
+  // 7 of 100 held is 7%: above the 5% brake, so nothing is marked.
+  const braked = await stopTrackingMovedOut("AUCHAN", seen, 100, at);
+  check("an implausible share at once marks nothing and says why", braked.stopped.length === 0 && braked.refused !== null && (await delisted()) === 0,
+    braked.refused?.slice(0, 60) ?? "no reason");
+
+  // 7 of 1,000 is 0.7%: a real move.
+  const moved = await stopTrackingMovedOut("AUCHAN", seen, 1000, at);
+  check("a held product seen in a non-food section stops being tracked", moved.refused === null && (await delisted()) === 7);
+  check("only products we hold and still track are counted", moved.stopped.length === 7 && moved.stopped.every((s) => ids.includes(s.storeProductId)),
+    `${moved.stopped.length} stopped`);
+  check("with their names, for the report", moved.stopped[0]?.name.startsWith("Saqueta de fruta"));
+  await cleanup();
+}
+
+async function verifyKindWrites() {
+  console.log("\n  H5: classification writes only what changed, all at once");
+  const v = (id: string, foodType: string | null, subKind: string | null = null, labels: string | null = null) => ({ id, foodType, subKind, labels });
+  const stored = [v("same", "batata"), v("relabelled", "atum", null, null), v("unknown-now", "maca"), v("new", null), v("still-none", null)];
+  const decided = [v("same", "batata"), v("relabelled", "atum", null, "lata"), v("new", "pera")];
+  const changes = kindChanges(stored, decided);
+  const ids = changes.map((c) => c.id).sort().join(",");
+  check("unchanged products are not written", ids === "new,relabelled,unknown-now", ids);
+  check("a product no longer recognised goes back to no kind",
+    changes.find((c) => c.id === "unknown-now")?.foodType === null);
+  check("a change of label alone is written", changes.find((c) => c.id === "relabelled")?.labels === "lata");
+
+  await cleanup();
+  const shelf = "Frutas e Legumes/Legumes/Batatas";
+  const make = (n: string, name: string, foodType: string | null) =>
+    prisma.catalogueProduct.create({
+      data: { store: STORE, storeProductId: `${PREFIX}k-${n}`, name, url: "https://example.invalid/k", categoryPath: shelf, foodType },
+    });
+  await make("wrong", "Batata Vermelha", "maca");
+  await make("right", "Batata Branca", "batata");
+  await make("stale", "Saco de Rede", "batata");
+  // "right" must hold exactly what today's rules give it, sub-kind and labels too.
+  const rightRow = (await rowsToClassify()).find((r) => r.storeProductId === `${PREFIX}k-right`);
+  const rightValues = rightRow ? kindAssignments([rightRow])[0] : undefined;
+  if (rightValues) {
+    await prisma.catalogueProduct.update({
+      where: { id: rightValues.id },
+      data: { foodType: rightValues.foodType, subKind: rightValues.subKind, labels: rightValues.labels },
+    });
+  }
+  const rows = (await rowsToClassify()).filter((r) => r.storeProductId.startsWith(PREFIX));
+  const first = kindChanges(rows, kindAssignments(rows));
+  await writeKindChanges(first);
+  const after = new Map(
+    (await prisma.catalogueProduct.findMany({ where: { storeProductId: { startsWith: `${PREFIX}k-` } }, select: { storeProductId: true, foodType: true } }))
+      .map((r) => [r.storeProductId.replace(`${PREFIX}k-`, ""), r.foodType])
+  );
+  check("a wrong kind is corrected", after.get("wrong") === "batata", String(after.get("wrong")));
+  check("a right kind is left alone, and was not rewritten", after.get("right") === "batata" && !first.some((c) => c.id === rows.find((r) => r.storeProductId.endsWith("k-right"))?.id));
+  check("a kind the rules no longer give is cleared", after.get("stale") === null, String(after.get("stale")));
+  const again = (await rowsToClassify()).filter((r) => r.storeProductId.startsWith(PREFIX));
+  check("a second run finds nothing to write", kindChanges(again, kindAssignments(again)).length === 0);
+  await cleanup();
+}
+
 export async function verifyCrawlSafety(): Promise<number> {
   failures = 0;
   try {
     await verifyFailedPages();
     await verifyBatching();
     await verifyKindsKept();
+    await verifyMovedOut();
+    await verifyKindWrites();
   } finally {
     await cleanup();
   }

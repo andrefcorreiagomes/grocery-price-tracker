@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/db";
 import type { Verdict } from "@/generated/prisma/client";
 import type { Store } from "@/lib/stores";
+import { nonFoodCatastropheReason } from "./reidentification";
 
 /**
  * The record of product ids we opened and decided not to keep.
@@ -311,6 +312,45 @@ export async function stopTrackingLeftOut(
       })
     ).count
   );
+}
+
+/** The products among `ids` that we hold and still track, with their names. */
+export async function heldLive(store: Store, ids: string[]): Promise<{ storeProductId: string; name: string }[]> {
+  const held: { storeProductId: string; name: string }[] = [];
+  await forEachBatch(ids, async (slice) => {
+    held.push(
+      ...(await prisma.catalogueProduct.findMany({
+        where: { store, delistedAt: null, storeProductId: { in: slice } },
+        select: { storeProductId: true, name: true },
+      }))
+    );
+  });
+  return held;
+}
+
+/**
+ * Stop tracking the products we hold that a crawl SAW in a section
+ * data/store-sections.ts decides is not food - they moved there, as Auchan's
+ * baby food did around 31 August 2026. Unless an implausible share of what we
+ * hold moved at once (NON_FOOD_LIMIT, the brake Continente uses): that is the
+ * store renaming its shelves or our reading breaking, so nothing is marked and
+ * the reason comes back for the report.
+ *
+ * Until 22 October 2026 only Continente and Pingo Doce did this. Auchan skipped
+ * such a product without stopping it, so it looked missing every night, its
+ * page answered, and the report called it a hole in the walk.
+ */
+export async function stopTrackingMovedOut(
+  store: Store,
+  seenInNonFood: string[],
+  live: number,
+  checkedAt: Date
+): Promise<{ stopped: { storeProductId: string; name: string }[]; refused: string | null }> {
+  const moved = await heldLive(store, seenInNonFood);
+  const refused = nonFoodCatastropheReason({ nonFood: moved.length, attempted: live });
+  if (refused) return { stopped: [], refused };
+  await stopTrackingLeftOut(store, moved.map((m) => m.storeProductId), checkedAt);
+  return { stopped: moved, refused: null };
 }
 
 /**

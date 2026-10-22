@@ -2,18 +2,18 @@
  * Whether a price the site shows is a promotion, and what the store says
  * about it.
  *
- * The three chains say different amounts (21 October 2026): Continente marks
- * about 28% of its products and gives the price before the discount, but no
- * end date; Pingo Doce marks about 27% and gives an end date, but no earlier
- * price. Auchan's crawl reads its listing tiles' struck earlier price since
- * 22 October 2026 (price reductions only; no end date) - before that its
- * prices were never called promotions: unknown, not "not on promotion".
+ * At all three chains a promotion means a price cut, with the price before it
+ * (since 22 October 2026; src/scrapers/struck-price.ts). Continente marks about
+ * 28% of its products and gives no end date; Pingo Doce gives an end date too;
+ * Auchan's listing tiles give none. Until 22 October 2026 Pingo Doce's count
+ * also took in "Preço Garantido" pages with no price cut, and Auchan's prices
+ * were never called promotions: unknown, not "not on promotion".
  *
  * Pure, and free of the database, so the pages and the basket can share it.
  */
 
 export interface Promotion {
-  /** the price per kilo, litre or unit before the discount; Continente only */
+  /** the price per kilo, litre or unit before the discount; all three stores give it */
   regularUnitPrice: number | null;
   /** the last day it runs, "2026-10-27"; Pingo Doce only */
   endsOn: string | null;

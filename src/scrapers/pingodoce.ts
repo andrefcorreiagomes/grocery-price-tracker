@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit } from "./page-size";
+import { struckPricePromotion } from "./struck-price";
 import { detached, PageReadError, type ScrapeResult } from "./types";
 
 /**
@@ -88,7 +89,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
     categoryPath: null,
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
-    ...parsePromotion($),
+    ...parsePingoDocePromotion($, price),
     // The price itself when it is per kilo ("12,49 €/Kg"), otherwise the figure
     // after the size in the label ("0.1 Kg | 13,9 €/Kg").
     shownUnitPrice: pricedPerUnit(priceText, price) ? parseShownUnitPrice(priceText) : parseShownUnitPrice(label),
@@ -137,33 +138,32 @@ function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | n
 }
 
 /**
- * Pingo Doce signals a promotion in the DOM: a `.product-promo-end` element
- * reading "Promoção até 17/08", alongside `.product-promotion-info`. Neither
- * appears on an unpromoted page. Note the `product-` prefix - the unprefixed
- * `.promo-end` matches nothing.
+ * A Pingo Doce promotion is a crossed-out earlier price in the price box -
+ *
+ *   <span class="strike-through list"><span class="value" content="4.59">
+ *     Price reduced from 4,59 €/Kg to</span></span>
+ *
+ * - above today's price, with the end date in `.product-promo-end` ("Promoção
+ * até 26/10"). The same rule as Auchan's tiles (src/scrapers/struck-price.ts).
+ *
+ * Until 22 October 2026 a promotion was any page with a `.product-promotion-info`
+ * or `.product-promo-end` element. But Pingo Doce puts that box, EMPTY, on pages
+ * with no promotion at all - a "Preço Garantido" (guaranteed price) badge, or a
+ * price below the manufacturer's recommended one ("PVPR") - so up to 361 of its
+ * 2,688 "promotions" were not. Five pages read on 22 October 2026 showed it, and
+ * also that the earlier price IS printed, which an older note here denied.
  *
  * Do not be tempted by the `discount` key in its dataLayer - it reads 0 even on
  * a page that is actively discounted, so it is useless.
- *
- * `regularPrice` stays null: Pingo Doce never prints the old price. It does
- * publish the discount rate, as the alt text of a badge image ("Poupe 35%"),
- * from which the old price could be derived - but that arrives rounded, so it
- * would put an approximate figure in the same column where Continente's is
- * exact. Left out deliberately rather than overlooked.
  */
-function parsePromotion($: cheerio.CheerioAPI): Pick<
-  ScrapeResult,
-  "onPromotion" | "regularPrice" | "promoEndsAt"
-> {
-  const onPromotion = $(".product-promo-end, .product-promotion-info").length > 0;
-  if (!onPromotion) {
-    return { onPromotion: false, regularPrice: null, promoEndsAt: null };
-  }
-  return {
-    onPromotion: true,
-    regularPrice: null,
-    promoEndsAt: parsePromoEnd($(".product-promo-end").first().text()),
-  };
+function parsePingoDocePromotion(
+  $: cheerio.CheerioAPI,
+  price: number | null
+): Pick<ScrapeResult, "onPromotion" | "regularPrice" | "promoEndsAt"> {
+  const struck = $(".prices .strike-through .value").first();
+  const promotion = struckPricePromotion(struck.attr("content") ?? struck.text(), price);
+  if (!promotion.onPromotion) return { onPromotion: false, regularPrice: null, promoEndsAt: null };
+  return { ...promotion, promoEndsAt: parsePromoEnd($(".product-promo-end").first().text()) };
 }
 
 /**

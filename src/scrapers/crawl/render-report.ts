@@ -432,6 +432,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               ? `   (plus ${g.unavailableSkipped.toLocaleString()} already known, not re-fetched tonight)`
               : ""),
           "",
+          `  moved into a non-food section:       ${g.movedToNonFood.toLocaleString()}   (seen there by the walk; no longer tracked)`,
+          ...notes(g.movedToNonFoodSamples, "    "),
+          "",
           `  alive but missing from the grid:     ${g.aliveButMissing.toLocaleString()}`,
           ...notes(g.aliveButMissingSamples, "    "),
           "",

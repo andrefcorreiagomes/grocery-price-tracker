@@ -5,6 +5,7 @@ import { decideKind } from "../lib/kind-decisions";
 import { FOOD_TYPES } from "../../data/food-types";
 import { SUB_KINDS } from "../../data/food-tree";
 import { labelsOf, subKindOf } from "../lib/food-tree";
+import { BATCH } from "../scrapers/crawl/product-checks";
 
 /**
  * Label every catalogue product with the KIND of food it is. No network.
@@ -41,14 +42,64 @@ export interface ClassifyRow {
   delistedAt: Date | null;
 }
 
-/** Every product to classify - those no longer sold included. */
+/** Every product to classify - those no longer sold included - with what it holds now. */
 export async function rowsToClassify() {
   return prisma.catalogueProduct.findMany({
     select: {
       id: true, store: true, storeProductId: true, name: true, categoryPath: true,
       packageSize: true, unit: true, price: true, delistedAt: true,
+      foodType: true, subKind: true, labels: true,
     },
   });
+}
+
+/** A product's kind, sub-kind and labels, all null when it has no kind. */
+export interface KindValues {
+  id: string;
+  foodType: string | null;
+  subKind: string | null;
+  labels: string | null;
+}
+
+/**
+ * The products whose stored kind, sub-kind or labels differ from what today's
+ * rules give them - a product the rules no longer recognise goes back to
+ * null. Pure.
+ *
+ * Only these are written. Until 22 October 2026 every run first erased every
+ * product's kind and then wrote them all back, outside any transaction: while
+ * it ran the site had no comparisons at all, and a run stopped halfway left the
+ * catalogue half classified until the next night.
+ */
+export function kindChanges(stored: KindValues[], decided: KindValues[]): KindValues[] {
+  const want = new Map(decided.map((d) => [d.id, d]));
+  const changes: KindValues[] = [];
+  for (const s of stored) {
+    const d = want.get(s.id) ?? { id: s.id, foodType: null, subKind: null, labels: null };
+    if (d.foodType !== s.foodType || d.subKind !== s.subKind || d.labels !== s.labels) changes.push(d);
+  }
+  return changes;
+}
+
+/**
+ * Write the changes in ONE transaction: all of them, or - if anything fails -
+ * none. Grouped by the values written, so a night that changes nothing makes
+ * no query, and one that changes everything makes a few hundred.
+ */
+export async function writeKindChanges(changes: KindValues[]): Promise<void> {
+  const groups = new Map<string, { values: Omit<KindValues, "id">; ids: string[] }>();
+  for (const c of changes) {
+    const key = `${c.foodType ?? ""}|${c.subKind ?? ""}|${c.labels ?? ""}`;
+    const group = groups.get(key) ?? { values: { foodType: c.foodType, subKind: c.subKind, labels: c.labels }, ids: [] };
+    group.ids.push(c.id);
+    groups.set(key, group);
+  }
+  const writes = [...groups.values()].flatMap((g) => {
+    const slices: string[][] = [];
+    for (let i = 0; i < g.ids.length; i += BATCH) slices.push(g.ids.slice(i, i + BATCH));
+    return slices.map((ids) => prisma.catalogueProduct.updateMany({ where: { id: { in: ids } }, data: g.values }));
+  });
+  if (writes.length > 0) await prisma.$transaction(writes);
 }
 
 /** The kind, sub-kind and labels to write for each row in a food section that has a kind. Pure. */
@@ -212,32 +263,13 @@ async function main() {
   if (dry || only) {
     console.log("\nnothing written (dry run or single-type inspection).");
   } else {
-    await prisma.catalogueProduct.updateMany({ data: { foodType: null, subKind: null, labels: null } });
-    // Grouped by (kind, sub-kind, labels), so this is a few hundred updateMany
-    // calls rather than 37,000 single ones.
-    const groups = new Map<string, { foodType: string; subKind: string | null; labels: string | null; ids: string[] }>();
-    for (const a of toWrite) {
-      const key = `${a.foodType}|${a.subKind ?? ""}|${a.labels ?? ""}`;
-      const bucket = groups.get(key) ?? { foodType: a.foodType, subKind: a.subKind, labels: a.labels, ids: [] };
-      bucket.ids.push(a.id);
-      groups.set(key, bucket);
-    }
-    let written = 0;
-    for (const g of groups.values()) {
-      for (let i = 0; i < g.ids.length; i += 500) {
-        const batch = g.ids.slice(i, i + 500);
-        await prisma.catalogueProduct.updateMany({
-          where: { id: { in: batch } },
-          data: { foodType: g.foodType, subKind: g.subKind, labels: g.labels },
-        });
-        written += batch.length;
-      }
-    }
+    const changes = kindChanges(all, toWrite);
+    await writeKindChanges(changes);
     const types = new Set(toWrite.map((a) => a.foodType)).size;
     console.log(
-      `\nwrote foodType, sub-kind and labels on ${written.toLocaleString()} products across ${types} types` +
-        ` (${assignments.length.toLocaleString()} on sale, ${(written - assignments.length).toLocaleString()} no longer sold,` +
-        ` kept for the price history).`
+      `\n${toWrite.length.toLocaleString()} products have a kind across ${types} types` +
+        ` (${assignments.length.toLocaleString()} on sale, ${(toWrite.length - assignments.length).toLocaleString()} no longer sold,` +
+        ` kept for the price history); ${changes.length.toLocaleString()} changed and were written.`
     );
   }
 

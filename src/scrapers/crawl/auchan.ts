@@ -105,6 +105,8 @@ export interface AuchanCrawlResult {
   leftOut: LeftOutTally;
   /** their ids, so the nightly can stop tracking any it already holds */
   leftOutIds: string[];
+  /** products seen in a non-food section, so the nightly can stop tracking any it holds */
+  nonFoodIds: string[];
   /** distinct products walked, food and non-food together */
   crawled: number;
   /** one entry per category walked: `root`, or the five departments */
@@ -222,6 +224,7 @@ export async function crawlAuchan(
   const sections = new SectionTally("AUCHAN");
   const leftOut = new LeftOutTally();
   const leftOutIds: string[] = [];
+  const nonFoodIds: string[] = [];
   const foodBySegment = new Map<string, SearchHit[]>();
   const walks: AuchanWalkSummary[] = [];
 
@@ -271,7 +274,11 @@ export async function crawlAuchan(
           // category path - and, in a mixed aisle, by its name.
           const decision = keepInCatalogue("AUCHAN", tile.category, tile.name);
           if (!decision.keep) {
-            if (decision.reason !== "non-food section" && decision.reason !== "unknown section") {
+            // A product in a non-food section may be one we hold that has moved
+            // there; the nightly stops tracking it (stopTrackingMovedOut). An
+            // undecided section is reported, and decides nothing.
+            if (decision.reason === "non-food section") nonFoodIds.push(tile.id);
+            else if (decision.reason !== "unknown section") {
               leftOut.add(decision, tile.name, tile.category);
               leftOutIds.push(tile.id);
             }
@@ -320,6 +327,7 @@ export async function crawlAuchan(
     sections,
     leftOut,
     leftOutIds,
+    nonFoodIds,
     crawled: seen.size,
     walks,
     failedDepartments,

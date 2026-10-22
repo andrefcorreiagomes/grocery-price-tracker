@@ -551,6 +551,8 @@ export async function verifyAuchanNightly(): Promise<number> {
     unreachable: 0,
     aliveButMissing: 2,
     aliveButMissingSamples: [{ storeProductId: "y", name: "Alive product" }],
+    movedToNonFood: 27,
+    movedToNonFoodSamples: [{ storeProductId: "z", name: "SAQUETA FRUTA HERO SOLO BIO" }],
   };
   const base: DailyReport = {
     store: STORE,
@@ -573,6 +575,8 @@ export async function verifyAuchanNightly(): Promise<number> {
   check("the report lists per-category coverage", rendered.includes("catálogo (root)") && rendered.includes("Alimentação"));
   check("the report shows what departments added beyond root", rendered.includes("departments added 49 beyond root"));
   check("the report shows alive-but-missing", rendered.includes("alive but missing"));
+  check("the report shows products that moved into a non-food section",
+    rendered.includes("moved into a non-food section:       27") && rendered.includes("SAQUETA FRUTA HERO SOLO BIO"));
   check("the report shows unpriced apart from malformed", rendered.includes("listed without a price") && rendered.includes("MALFORMED"));
   check(
     "the report shows out-of-stock apart, and the nightly re-fetch it saves",

@@ -441,6 +441,25 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
 
 - **H1, H2, H3** on 22 October 2026, with checks in
   `src/scripts/verify-crawl-safety.ts` (section 19 of `verify:nightly`).
+- **H4, H5** on 22 October 2026, checks in the same file.
+- **M12, Pingo Doce part** on 22 October 2026: a promotion is a crossed-out
+  earlier price above today's, at Pingo Doce as at Auchan
+  (`src/scrapers/struck-price.ts`); a price below the recommended price
+  ("PVPR") is not one, by the user's decision. Checks on pieces of saved pages
+  in `src/scripts/verify-store-pages.ts` (section 20). Still open: the enrich
+  script's Auchan promotions.
+
+## Measured, waiting for a decision
+
+- **H6.** Rebuilding the groups on a copy of the database (22 October 2026,
+  about 3 minutes, no store requests): the 922 groups would become 2,861, of
+  them 544 at all three chains, 214 of today's groups would change members and
+  56 would be retired. The three-chain groups rest on brand, size and name
+  alone, because Pingo Doce has no barcodes, and the site says no group spans
+  the three. Before matching runs nightly: check a sample of the new groups,
+  and change that text.
+- **H7.** Needs a few Continente product pages of products that are out of
+  stock, to see whether such a page drops its price.
 
 ## Suggested order
 

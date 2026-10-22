@@ -38,17 +38,15 @@ export interface ScrapeResult {
   packageUnit: "kg" | "l" | null;
 
   /**
-   * Whether `price` is a promotional price. Every store publishes this, but via
-   * a different mechanism - see each scraper. A missing marker is read as
-   * `false` rather than throwing, so a markup change degrades quietly. The
-   * per-store promo counts that scrape-daily printed were the canary for that;
-   * it was retired on 21 October 2026, and no crawl report counts promotions
-   * yet - a gap worth closing if promotions are ever shown on the site.
+   * Whether `price` is a promotional price - a price cut, at every store (see
+   * src/scrapers/struck-price.ts). A missing marker is read as `false` rather
+   * than throwing, so a markup change degrades quietly; each crawl report
+   * counts promotions to notice that (src/scrapers/crawl/promo-watch.ts).
    */
   onPromotion: boolean;
-  /** Price before the discount. Only Continente publishes it; null elsewhere. */
+  /** Price before the discount, in the basis of `price`; null when not on promotion. */
   regularPrice: number | null;
-  /** When the promotion ends. Pingo Doce and Auchan publish it; Continente doesn't. */
+  /** When the promotion ends. Pingo Doce's pages publish it, and Auchan's (unused by the nightly); Continente's don't. */
   promoEndsAt: Date | null;
   /** The price per kilo, litre or unit as the page displays it; null when it shows none. */
   shownUnitPrice: { value: number; unit: "kg" | "l" | "un" } | null;
