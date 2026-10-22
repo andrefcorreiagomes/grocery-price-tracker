@@ -135,7 +135,7 @@
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
-/* The two blank states, deliberately unalike. "Não vende" is a settled fact and
+/* The two blank states, deliberately unalike. "Indisponível" is a settled fact and
    reads quiet; "sem peso" is a gap in what we know and reads as unfinished, so
    nobody mistakes one for the other. */
 .absent {

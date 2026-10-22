@@ -10,6 +10,7 @@ import {
 } from "../lib/comparison";
 import { FOOD_TYPE_BY_ID } from "../lib/food-types";
 import { forEachBatch } from "../scrapers/crawl/product-checks";
+import { PLACEHOLDER_PRICE } from "../scrapers/types";
 import { unitPrice } from "../lib/pricing";
 import { FOOD_TYPES } from "../../data/food-types";
 import { renderComparisonReport } from "./comparison-report-html";
@@ -176,20 +177,17 @@ export function reportFor(id: string, rows: ComparableProduct[]): TypeReport {
 }
 
 /**
- * At or below this, a store is not quoting a price.
+ * Clear prices at or below PLACEHOLDER_PRICE (src/scrapers/types.ts): a store
+ * not quoting a price. Pingo Doce publishes "0,00 EUR" for a product that is
+ * listed but not sellable, and one cent for a handful it cannot price at all -
+ * measured, six products: a picanha, two fresh prawns, a bread, a yogurt and a
+ * tin of frankfurters.
  *
- * Pingo Doce publishes "0,00 EUR" for a product that is listed but not
- * sellable, and one cent for a handful it cannot price at all - measured, six
- * products: a picanha, two fresh prawns, a bread, a yogurt and a tin of
- * frankfurters. Nothing in a supermarket costs a cent, and the next cheapest
- * real price in the catalogue is five, so the cut is unambiguous.
- *
- * The scraper now refuses these at the source. This clears the ones collected
- * before it did, because a one-cent picanha is the cheapest beef in the country
- * and would head the ranking until the next crawl three hours from now.
+ * Every reader refuses these at the source since 22 October 2026
+ * (`sellablePrice`, code review M9). This clears any collected before, because
+ * a one-cent picanha would be the cheapest beef in the country until the
+ * product's next crawl.
  */
-const PLACEHOLDER_PRICE = 0.01;
-
 async function clearPlaceholderPrices(apply: boolean): Promise<number> {
   const rows = await prisma.catalogueProduct.findMany({
     where: { delistedAt: null, price: { lte: PLACEHOLDER_PRICE, gt: 0 } },

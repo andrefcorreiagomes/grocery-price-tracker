@@ -1,6 +1,7 @@
 import { fetchHtml } from "../http";
 import { sectionOf } from "../../lib/store-sections";
 import { SectionTally } from "./section-watch";
+import { productIdFromUrl } from "./product-id";
 
 /**
  * Discovery for the COMPLIANT Pingo Doce crawler: product URLs from the sitemap
@@ -30,21 +31,51 @@ import { SectionTally } from "./section-watch";
  * from the page.
  */
 
-/** The two files the sitemap index lists as products. */
-const PRODUCT_SITEMAPS = [
+/** The index robots.txt names; it lists every sitemap file. */
+export const SITEMAP_INDEX = "https://www.pingodoce.pt/home/sitemap_index.xml";
+
+/**
+ * The two product files the index listed when this was written. Used only
+ * when the index cannot be read or lists no product file, and the report then
+ * says so. Until 22 October 2026 these were the only files ever read, so a
+ * third would have been missed in silence (code review M3).
+ */
+const KNOWN_PRODUCT_SITEMAPS = [
   "https://www.pingodoce.pt/home/sitemap_0-product.xml",
   "https://www.pingodoce.pt/home/sitemap_1-product.xml",
 ];
 
 /**
- * `sitemap_2.xml` is listed by the index alongside those two, and is NOT a
- * product sitemap: its 543 entries are category LISTING pages
- * (`/produtos/limpeza/roupa/detergentes`, no `.html`, no id). Filtering the
- * index on the string "produtos" sweeps them in and they then look like 543
- * products with unparseable ids. Named here so the next reader does not
- * rediscover it.
+ * The product files a sitemap index lists: the ones named `...-product.xml`.
+ * Pure, so it is checked without a request.
+ *
+ * The index also lists `sitemap_2.xml`, which is NOT a product sitemap: its
+ * 543 entries are category LISTING pages (`/produtos/limpeza/roupa/detergentes`,
+ * no `.html`, no id). Filtering the index on the string "produtos" would sweep
+ * them in as 543 products with unparseable ids.
  */
-export const NON_PRODUCT_SITEMAP = "https://www.pingodoce.pt/home/sitemap_2.xml";
+export function productSitemapsFromIndex(xml: string): string[] {
+  const files = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+  return [...new Set(files.filter((url) => /-product\.xml(\?|$)/.test(url)))];
+}
+
+/**
+ * The product files to read tonight, from the index, or the known two with
+ * the reason when the index fails us. A failed index does not stop the run:
+ * the files themselves are still read, and missing one is what the per-file
+ * counts and the trust rule are there to notice.
+ */
+async function productSitemaps(): Promise<{ files: string[]; indexProblem: string | null }> {
+  try {
+    const files = productSitemapsFromIndex(await fetchHtml(SITEMAP_INDEX));
+    if (files.length > 0) return { files, indexProblem: null };
+    return { files: KNOWN_PRODUCT_SITEMAPS, indexProblem: "the sitemap index listed no product file; read the two known ones" };
+  } catch (error) {
+    const reason = (error as Error).message.slice(0, 100);
+    return { files: KNOWN_PRODUCT_SITEMAPS, indexProblem: `the sitemap index could not be read (${reason}); read the two known files` };
+  }
+}
+
 
 /**
  * Every top-level section Pingo Doce publishes, by URL slug, with its display
@@ -129,21 +160,9 @@ export interface PingoDoceProductUrl {
   categoryPath: string;
 }
 
-/**
- * The product id a Pingo Doce URL ends with: `...-893466.html` gives `893466`.
- * Confirmed against the page's own `sku`, and it is the same id the listing
- * tiles report, so rows from the two routes land on the same
- * `(store, storeProductId)`.
- */
-export function productIdFromUrl(url: string): string | null {
-  const tail = url.match(/-([^-/]+)\.html$/)?.[1];
-  if (!tail) return null;
-  try {
-    return decodeURIComponent(tail);
-  } catch {
-    return tail;
-  }
-}
+// The product id a Pingo Doce URL ends with (`...-893466.html` gives
+// `893466`), read by the same function as Continente's (product-id.ts).
+export { productIdFromUrl };
 
 /**
  * A readable product name from the URL alone, for examples in a report:
@@ -238,13 +257,16 @@ export interface PingoDoceSitemap {
   unparseableSamples: string[];
   /** entries seen per sitemap file, in the order the index lists them */
   perFile: { url: string; entries: number }[];
+  /** why the index was not used tonight, or null when it was */
+  indexProblem: string | null;
 }
 
 const UNPARSEABLE_SAMPLES = 5;
 
 /**
  * Every product URL Pingo Doce publishes, partitioned by what its section is
- * worth fetching for. Two requests.
+ * worth fetching for. One request for the index and one per product file:
+ * three today.
  *
  * All the files or none: one that fails throws rather than returning a partial
  * set, because half a sitemap looks exactly like a shop that halved overnight,
@@ -264,7 +286,8 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   const excludedIds: string[] = [];
   let unparseable = 0;
 
-  for (const sitemap of PRODUCT_SITEMAPS) {
+  const { files, indexProblem } = await productSitemaps();
+  for (const sitemap of files) {
     const xml = await fetchHtml(sitemap);
     let entries = 0;
 
@@ -318,5 +341,6 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
 
   return {
     food, nonFood, fromMixed, skipped, sections, excludedIds, allIds: seen, unknownSections, unfiled, unparseable, unparseableSamples, perFile,
+    indexProblem,
   };
 }

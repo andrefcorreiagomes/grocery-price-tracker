@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/db";
 import type { Store } from "@/lib/stores";
 import type { IdentitySwap } from "./persist";
+import { BRAKES } from "./brakes";
 
 /**
  * Two guards against a product changing its id.
@@ -23,8 +24,11 @@ import type { IdentitySwap } from "./persist";
 
 // --- Guard 1 -------------------------------------------------------------
 
-/** Below this share of attempted products failing, a run is normal churn. */
-export const CHURN_LIMIT = 0.1;
+/**
+ * Below this share of attempted products failing, a run is normal churn.
+ * Continente's; each store's is in brakes.ts, used when the store is given.
+ */
+export const CHURN_LIMIT = BRAKES.CONTINENTE.deadPages;
 /** Too few products attempted to judge a fraction meaningfully. */
 export const MIN_ATTEMPTED = 500;
 
@@ -40,11 +44,12 @@ export function isChurnCatastrophe(input: {
   dead: number;
   attempted: number;
   complete: boolean;
+  store?: Store;
 }): boolean {
-  const { dead, attempted, complete } = input;
+  const { dead, attempted, complete, store } = input;
   if (!complete) return false;
   if (attempted < MIN_ATTEMPTED) return false;
-  return dead / attempted > CHURN_LIMIT;
+  return dead / attempted > (store ? BRAKES[store].deadPages : CHURN_LIMIT);
 }
 
 /** A phrased reason for the report, or null when there is no catastrophe. */
@@ -52,6 +57,7 @@ export function churnCatastropheReason(input: {
   dead: number;
   attempted: number;
   complete: boolean;
+  store?: Store;
 }): string | null {
   if (!isChurnCatastrophe(input)) return null;
   const pct = ((100 * input.dead) / input.attempted).toFixed(0);
@@ -72,7 +78,7 @@ export function churnCatastropheReason(input: {
  * every product read as non-food - with no limit, the end of that run would
  * have stopped tracking almost the whole Continente catalogue at once.
  */
-export const NON_FOOD_LIMIT = 0.05;
+export const NON_FOOD_LIMIT = BRAKES.CONTINENTE.nonFood;
 
 /**
  * Did an implausible share of the products we track read as non-food this
@@ -80,13 +86,13 @@ export const NON_FOOD_LIMIT = 0.05;
  * is products we hold as food, so a high share means the same there, and the
  * cost of a false alarm is only that nothing is marked this run.
  */
-export function isNonFoodCatastrophe(input: { nonFood: number; attempted: number }): boolean {
-  const { nonFood, attempted } = input;
-  return attempted > 0 && nonFood / attempted > NON_FOOD_LIMIT;
+export function isNonFoodCatastrophe(input: { nonFood: number; attempted: number; store?: Store }): boolean {
+  const { nonFood, attempted, store } = input;
+  return attempted > 0 && nonFood / attempted > (store ? BRAKES[store].nonFood : NON_FOOD_LIMIT);
 }
 
 /** A phrased reason for the report, or null when there is no catastrophe. */
-export function nonFoodCatastropheReason(input: { nonFood: number; attempted: number }): string | null {
+export function nonFoodCatastropheReason(input: { nonFood: number; attempted: number; store?: Store }): string | null {
   if (!isNonFoodCatastrophe(input)) return null;
   const pct = ((100 * input.nonFood) / input.attempted).toFixed(0);
   return (
@@ -110,11 +116,12 @@ export const SWAP_LIMIT = 0.02;
  */
 export const LOSS_LIMIT = 0.1;
 /**
- * Grocery prices are sticky - a normal night moves a low single-digit
- * percentage. A third of the catalogue moving at once means the wrong number is
- * being read off the page.
+ * Grocery prices are sticky - a normal night at Continente or Auchan moves a
+ * low single-digit percentage. A third of the catalogue moving at once means
+ * the wrong number is being read off the page. Continente's; Pingo Doce's own
+ * nights move far more (brakes.ts).
  */
-export const PRICE_CHURN_LIMIT = 0.3;
+export const PRICE_CHURN_LIMIT = BRAKES.CONTINENTE.priceChurn;
 
 function storm(count: number, of: number, limit: number, complete: boolean): boolean {
   if (!complete) return false;
@@ -145,8 +152,9 @@ export function isPriceChurnStorm(input: {
   changed: number;
   priced: number;
   complete: boolean;
+  store?: Store;
 }): boolean {
-  return storm(input.changed, input.priced, PRICE_CHURN_LIMIT, input.complete);
+  return storm(input.changed, input.priced, input.store ? BRAKES[input.store].priceChurn : PRICE_CHURN_LIMIT, input.complete);
 }
 
 /** Phrased reasons for the report, empty when nothing is wrong. */
@@ -232,7 +240,7 @@ export async function archiveIdentitySwaps(
     const retired = retiredId(swap.storeProductId, seenAt);
     await prisma.catalogueProduct.update({
       where: { id: old.id },
-      data: { storeProductId: retired, delistedAt: seenAt, lastCheckedAt: seenAt },
+      data: { storeProductId: retired, delistedAt: seenAt, delistReason: "replaced", lastCheckedAt: seenAt },
     });
 
     archived.push({
@@ -329,7 +337,9 @@ export async function reconcileByBarcode(
     const periodsCarried = await carryPriceHistory(old.id, product.id);
     await prisma.catalogueProduct.update({
       where: { id: old.id },
-      data: { supersededById: product.id },
+      // Already delisted as gone, it now has a better reason; not yet
+      // delisted, recordDead gives it this one when it is.
+      data: { supersededById: product.id, delistReason: "replaced" },
     });
 
     result.changes.push({

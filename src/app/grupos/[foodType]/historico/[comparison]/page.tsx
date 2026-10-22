@@ -6,6 +6,7 @@ import { euros } from "@/lib/money";
 import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
 import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
+import PricesCollected from "@/components/PricesCollected";
 
 // Prices change under us; read them live rather than from a build-time snapshot.
 export const dynamic = "force-dynamic";
@@ -137,13 +138,7 @@ export default async function HistoryPage({
       </p>
 
       <footer className={styles.footer}>
-        Preços recolhidos:{" "}
-        {freshness.map((f, i) => (
-          <span key={f.store}>
-            {i > 0 && " · "}
-            {STORE_LABELS[f.store as Store]} {f.lastSeenAt.toLocaleDateString("pt-PT")}
-          </span>
-        ))}
+        <PricesCollected freshness={freshness} />
       </footer>
     </main>
   );

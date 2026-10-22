@@ -111,6 +111,13 @@
   flex: 1;
 }
 
+/* "falta no Pingo Doce": under the name, quieter than it. */
+.productLacks {
+  display: block;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
 .productUnit {
   font-size: 0.78rem;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);

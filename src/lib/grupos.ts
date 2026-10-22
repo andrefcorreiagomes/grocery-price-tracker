@@ -16,6 +16,7 @@ import { STORE_ORDER } from "./stores";
 import { unitPrice } from "./pricing";
 import { promotionOf, type Promotion } from "./promotion";
 import { shownOnSite } from "./grouping";
+import { sellablePrice } from "../scrapers/types";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -127,7 +128,7 @@ export interface IndexEntry {
  *
  * Two chains, not three, by the user's rule of 18 October 2026: a store added
  * later should not change what counts as a comparison, and a store that does
- * not sell a food says so on the page ("Não vende").
+ * has no price for a food says so on the page ("Indisponível").
  */
 export async function getComparableFoodTypes(): Promise<IndexEntry[]> {
   const byType = await currentRowsByType();
@@ -194,6 +195,16 @@ export type BasketCell =
  * basket line means "the cheapest of this at each store", not one exact
  * product - the user's choice of 21 October 2026.
  */
+/**
+ * A comparison's full name, kind first: "Leite · Meio-gordo". A kind without
+ * sub-kinds already heads its own titles ("Manteiga · Biológico"); the others
+ * name the sub-kind only ("Meio-gordo"). Used by the basket and the history
+ * page; written once since 22 October 2026 (code review L3).
+ */
+export function comparisonName(kindLabel: string, groupTitle: string): string {
+  return groupTitle === kindLabel || groupTitle.startsWith(`${kindLabel} · `) ? groupTitle : `${kindLabel} · ${groupTitle}`;
+}
+
 export interface BasketLine {
   /** "leite~meio-gordo~~l": kind, sub-kind, labels joined by ".", unit - safe in an address */
   id: string;
@@ -226,9 +237,7 @@ export async function getBasketLines(): Promise<BasketLine[]> {
       for (const g of shownGroups(comparisonGroups(type.id, typeRows))) {
         lines.push({
           id: `${type.id}~${comparisonSlug(g)}`,
-          // A kind without sub-kinds already heads its own titles ("Manteiga ·
-          // Biológico"); the others name the sub-kind only ("Meio-gordo").
-          name: g.title === type.label || g.title.startsWith(`${type.label} · `) ? g.title : `${type.label} · ${g.title}`,
+          name: comparisonName(type.label, g.title),
           unit: g.unit,
           categoryId: category.id,
           categoryLabel: category.label,
@@ -338,7 +347,8 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
   // follows, [from, to] for the last one.
   const stretches = rows.flatMap((r) =>
     r.prices.flatMap((p, i) => {
-      if (!comparable({ ...r, price: p.price }, kindId, unit)) return [];
+      // A placeholder (0 or one cent, six from August 2026) is no price.
+      if (sellablePrice(p.price) === null || !comparable({ ...r, price: p.price }, kindId, unit)) return [];
       const next = r.prices[i + 1];
       return [{
         store: r.store,
@@ -372,7 +382,7 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
     kindId,
     kindLabel: type.label,
     category: page.category,
-    name: group.title === type.label || group.title.startsWith(`${type.label} · `) ? group.title : `${type.label} · ${group.title}`,
+    name: comparisonName(type.label, group.title),
     unit,
     days: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([date, stores]) => ({ date, stores })),
   };
@@ -523,7 +533,7 @@ export async function getNamedGroups(
 /** When the catalogue was last confirmed, per chain - the page's honesty line. */
 export async function getFreshness(): Promise<{ store: string; lastSeenAt: Date }[]> {
   const out: { store: string; lastSeenAt: Date }[] = [];
-  for (const store of ["CONTINENTE", "PINGO_DOCE", "AUCHAN"] as const) {
+  for (const store of STORE_ORDER) {
     const newest = await prisma.catalogueProduct.findFirst({
       where: { store, delistedAt: null },
       orderBy: { lastSeenAt: "desc" },

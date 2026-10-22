@@ -1,4 +1,4 @@
-import { stripAccents } from "./matching";
+import { stripAccents } from "./text";
 
 /**
  * How many items are in a pack, for the kinds compared per ITEM rather than per

@@ -1,6 +1,6 @@
 import { CATEGORIES, LABELS, LATER_CATEGORIES, SUB_KINDS, type Category } from "../../data/food-tree";
 import { FOOD_TYPES } from "../../data/food-types";
-import { stripAccents } from "./matching";
+import { stripAccents } from "./text";
 
 /**
  * Reading data/food-tree.ts: the category of a kind, and the sub-kind and

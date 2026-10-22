@@ -1,5 +1,8 @@
 import { parsePingoDocePage } from "../scrapers/pingodoce";
 import { struckPricePromotion } from "../scrapers/struck-price";
+import { sellablePrice } from "../scrapers/types";
+import { parseContinentePage } from "../scrapers/continente";
+import { parseAuchanTilesDetailed } from "../scrapers/search/auchan";
 
 /**
  * The store page readers, on pieces of real pages. No network, no database.
@@ -45,9 +48,50 @@ const UNAVAILABLE =
   product("Bolo") +
   `<div class="product-promotion-info"><span class="product-promo-end">Promo&ccedil;&atilde;o at&eacute; 26/10</span></div><div class="prices"><div class="price"><span class="sales">0,00 &euro;</span><span class="strike-through list"><span class="value" content="2.10">2,10 &euro;</span></span></div></div>`;
 
+/**
+ * Whole product pages for the two readers that read one page per product
+ * (code review M13). Unlike the pieces above these are REBUILT, not copied:
+ * each holds the markup the reader's own comments quote from real pages (the
+ * `&amp;ean=` nutrition address, the escaped dataLayer with
+ * `pre_discount_price` and four `item_category` levels, Pingo Doce's
+ * "0.4 Kg | 9,98 €/Kg" size label), with everything else left out. Pieces of
+ * real pages would be better, and can replace these when pages are next read.
+ */
+const escaped = (json: string) => json.replace(/"/g, "&quot;");
+const CONTINENTE_PAGE =
+  `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Iogurte Grego Natural Oikos","brand":{"name":"Oikos"},"offers":{"@type":"Offer","price":"3.89","priceCurrency":"EUR"}}</script>` +
+  `<div class="ct-pdp--prices"><span class="pwc-tile--price-primary">3,89€</span><span class="pwc-tile--price-secondary">8,46€/kg</span></div>` +
+  `<span class="ct-pdp--unit">emb. 4 x 115 gr</span>` +
+  `<a href="/nutrition?pid=4696048&amp;ean=5601234567897">Informação nutricional</a>` +
+  `<script>dataLayer.push(${escaped('{"ecommerce":{"items":[{"item_category":"Supermercado","item_category2":"Laticínios e Ovos","item_category3":"Iogurtes e Outros Lácteos","item_category4":"Gregos","discount":1.1,"pre_discount_price":4.99}]}}')})</script>`;
+const PINGO_DOCE_PAGE =
+  `<script type="application/ld+json">{"@type":"Product","name":"Pão de Forma Integral","brand":{"name":"Nossa Padaria"}}</script>` +
+  `<h1 class="product-unit-measure">0.4 Kg | 9,98 €/Kg</h1>` +
+  `<div class="prices"><div class="price"><span class="sales"><span class="value" content="3.99"></span> 3,99 &euro; </span></div></div>`;
+
 export function verifyStorePages(): number {
   failures = 0;
-  console.log("  the crossed-out-price rule (Auchan tiles and Pingo Doce pages)");
+  console.log("  whole product pages, rebuilt from the markup the readers quote (code review M13)");
+  const co = parseContinentePage(CONTINENTE_PAGE, "https://www.continente.pt/produto/iogurte-4696048.html");
+  check("Continente: name, brand, price and barcode", co.name === "Iogurte Grego Natural Oikos" && co.brand === "Oikos" && co.price === 3.89 && co.ean === "5601234567897",
+    `${co.name} | ${co.brand} | ${co.price} | ${co.ean}`);
+  check("Continente: the shelf, four levels with Supermercado dropped", co.categoryPath === "Laticínios e Ovos/Iogurtes e Outros Lácteos/Gregos", String(co.categoryPath));
+  check("Continente: 4 x 115 g is 0.46 kg, and the price per kilo is the one shown",
+    co.packageUnit === "kg" && Math.abs((co.packageSize ?? 0) - 0.46) < 1e-9 && co.shownUnitPrice?.value === 8.46, `${co.packageSize} ${co.packageUnit}`);
+  check("Continente: a price before the discount above today's is a promotion", co.onPromotion && co.regularPrice === 4.99);
+  const coOwn = parseContinentePage(
+    CONTINENTE_PAGE.replace('"brand":{"name":"Oikos"},', "").replace(/,&quot;discount&quot;:1\.1,&quot;pre_discount_price&quot;:4\.99/, ""),
+    "co-own"
+  );
+  check("Continente: no brand is its own range, and no price before the discount is no promotion",
+    coOwn.brand === "Continente" && !coOwn.onPromotion && coOwn.regularPrice === null);
+  const pd = parsePingoDocePage(PINGO_DOCE_PAGE, "https://www.pingodoce.pt/home/produtos/padaria-e-pastelaria/pao/pao-de-forma-integral-123456.html");
+  check("Pingo Doce: price, size from the label, and the price per kilo shown",
+    pd.price === 3.99 && pd.packageSize === 0.4 && pd.packageUnit === "kg" && pd.shownUnitPrice?.value === 9.98, `${pd.price} ${pd.packageSize} ${pd.packageUnit} ${pd.shownUnitPrice?.value}`);
+  check("Pingo Doce: its own counter (\"Nossa Padaria\") is its own brand", pd.brand === "Pingo Doce", pd.brand ?? "");
+  check("Pingo Doce: no shelf from the page (it comes from the address) and no barcode", pd.categoryPath === null && pd.ean === null);
+
+  console.log("\n  the crossed-out-price rule (Auchan tiles and Pingo Doce pages)");
   check("an earlier price above today's is a promotion", struckPricePromotion("Price reduced from 4,59 €/Kg to", 3.59).regularPrice === 4.59);
   check("a dot as the decimal mark reads too", struckPricePromotion("4.05", 3.03).regularPrice === 4.05);
   check("an earlier price not above today's is not", !struckPricePromotion("3,03 €", 3.03).onPromotion);
@@ -69,6 +113,20 @@ export function verifyStorePages(): number {
   check("a page with no promotion box is not one", !parsePingoDocePage(PLAIN, "plain").onPromotion);
   const unavailable = parsePingoDocePage(UNAVAILABLE, "unavailable");
   check("a product not for sale is never on promotion", unavailable.price === null && !unavailable.onPromotion);
+  console.log("\n  a zero is never a price, at any store (code review M9)");
+  check("0, one cent, nothing and an unreadable number are no price",
+    [0, 0.01, null, undefined, NaN].every((v) => sellablePrice(v) === null));
+  check("five cents is a price", sellablePrice(0.05) === 0.05);
+  const zeroAtContinente = parseContinentePage(
+    `<script type="application/ld+json">{"@type":"Product","name":"Pão","offers":{"price":"0.00"}}</script>`,
+    "co"
+  );
+  check("Continente: a page priced 0 is listed, not for sale", zeroAtContinente.price === null && !zeroAtContinente.onPromotion);
+  const tile = (price: string) =>
+    `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;
+  const zeroTile = parseAuchanTilesDetailed(tile("0.00"));
+  check("Auchan: a tile priced 0 is skipped as unpriced, like one with no price", zeroTile.hits.length === 0 && zeroTile.unpriced === 1);
+  check("Auchan: a real price still reads", parseAuchanTilesDetailed(tile("1.29")).hits[0]?.price === 1.29);
   return failures;
 }
 

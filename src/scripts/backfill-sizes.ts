@@ -1,12 +1,12 @@
 import { prisma } from "../lib/db";
-import { parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/matching";
+import { parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
 import { classifyFoodType, isFoodSection } from "../lib/food-types";
 import { itemCount } from "../lib/egg-count";
 import { FOOD_TYPES } from "../../data/food-types";
+import { implausiblePodSize } from "../scrapers/page-size";
 
 /** The kinds compared per item rather than per kilo or litre. */
 const PER_ITEM = new Set(FOOD_TYPES.filter((t) => t.unit === "un").map((t) => t.id));
-import { implausiblePodSize } from "../scrapers/page-size";
 
 /**
  * Fill in package sizes we can prove from the product NAME. No network.

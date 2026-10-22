@@ -1,35 +1,6 @@
 import { fetchHtml } from "../http";
-import type { CrawlCategory } from "./types";
 import { STORE_SECTIONS, type SectionKind } from "../../../data/store-sections";
 import { sectionKey } from "../../lib/store-sections";
-
-/**
- * Continente's top-level food sections, by category id.
- *
- * These are the food branches, picked by hand once from the site navigation.
- * The non-food sections (Limpeza, Beleza e Higiene, Animais, Casa e Jardim,
- * Brinquedos, Livros, Papelaria, ...) are deliberately left out, so the
- * catalogue holds groceries only.
- *
- * The catalogue itself is read one product page at a time, so these ids are no
- * longer requested. They are what the category audit below checks Continente's
- * published tree against: a section that disappears, or a new one nobody has
- * looked at, is reported.
- *
- * "Bio e Saudável" (cgid `biologicos`) overlaps the other five - it is organic
- * versions of items already in them.
- *
- * `label` is for humans reading crawl output only. Mapping a store category
- * onto the app's own taxonomy is a separate, later step - not done here.
- */
-export const CONTINENTE_FOOD_CATEGORIES: CrawlCategory[] = [
-  { cgid: "frescos", label: "Frescos", approxCount: 4125 },
-  { cgid: "laticinios", label: "Laticínios e Ovos", approxCount: 1205 },
-  { cgid: "congelados", label: "Congelados", approxCount: 1106 },
-  { cgid: "mercearias", label: "Mercearia", approxCount: 5469 },
-  { cgid: "bebidas", label: "Bebidas e Garrafeira", approxCount: 7023 },
-  { cgid: "biologicos", label: "Bio e Saudável", approxCount: 1842 },
-];
 
 /**
  * Each food section's landing page, by the section's name as the products
@@ -81,102 +52,13 @@ export async function fetchPublishedCounts(): Promise<Map<string, number>> {
   return counts;
 }
 
-/**
- * Continente publishes its whole category tree on the homepage, as JSON in a
- * `window.rootCategoryObj` script - id, display name, product count, and nested
- * sub-categories.
- *
- * Reading it each run is what stops the configured list above going quietly
- * stale, in both directions: a section that is renamed or deleted, and a NEW
- * food department, which would otherwise be invisible - we would simply never
- * ask for it, and the run would report success while missing an entire
- * section.
- */
+/** A category Continente publishes, as the retired category audit read it. */
 export interface DiscoveredCategory {
   cgid: string;
   label: string;
   /** how many products Continente says the category holds */
   hitCount: number;
 }
-
-/** Extract the top-level categories from the homepage's category tree. */
-export function parseCategoryTree(html: string): DiscoveredCategory[] {
-  const at = html.indexOf("window.rootCategoryObj");
-  if (at === -1) return [];
-
-  const start = html.indexOf("{", at);
-  if (start === -1) return [];
-
-  const end = findClosingBrace(html, start);
-  if (end === -1) return [];
-
-  let tree: { subCategories?: DiscoveredCategory[] };
-  try {
-    tree = JSON.parse(html.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-
-  return (tree.subCategories ?? []).map((c) => ({
-    cgid: c.cgid ?? (c as unknown as { id: string }).id,
-    label: c.label ?? (c as unknown as { name: string }).name,
-    hitCount: c.hitCount ?? 0,
-  }));
-}
-
-/** Index of the `}` closing the object opening at `start`, ignoring braces in strings. */
-function findClosingBrace(text: string, start: number): number {
-  const BACKSLASH = 92;
-  const QUOTE = 34;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (code === BACKSLASH) {
-      escaped = true;
-      continue;
-    }
-    if (code === QUOTE) {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}" && --depth === 0) return i;
-  }
-  return -1;
-}
-
-/**
- * Top-level categories we deliberately do not crawl. Listed explicitly so that
- * anything Continente publishes which is neither crawled nor named here is
- * reported as UNKNOWN and gets a human decision - that is the whole point. A
- * silent default of "not in the config means skip it" is exactly how a new food
- * department would be missed.
- *
- * `marcas` is a brand directory and `campanhas-novidades` a promotional shelf:
- * both re-list products the food sections already carry.
- */
-export const CONTINENTE_NON_FOOD_CATEGORIES = new Set([
-  "campanhas-novidades",
-  "limpeza",
-  "bebe", // baby food lives here; see the baby-food to-do before enabling
-  "higiene-beleza",
-  "animais",
-  "casa",
-  "brinquedos",
-  "livros",
-  "papelaria-material",
-  "desporto-ar-livre",
-  "col-entregazero",
-  "marcas",
-]);
 
 export interface CategoryAudit {
   /** published categories that are neither crawled nor a known skip */
@@ -186,47 +68,15 @@ export interface CategoryAudit {
 }
 
 /**
- * Compare what Continente publishes against the sections we hold: a configured
- * id that is no longer published (renamed or deleted), and a published one that
- * is neither ours nor a known non-food section - a category appearing that
- * nobody told us about.
- */
-export function auditCategories(discovered: DiscoveredCategory[]): CategoryAudit {
-  const configured = new Set(CONTINENTE_FOOD_CATEGORIES.map((c) => c.cgid));
-  const published = new Set(discovered.map((c) => c.cgid));
-
-  return {
-    unknown: discovered.filter(
-      (c) => !configured.has(c.cgid) && !CONTINENTE_NON_FOOD_CATEGORIES.has(c.cgid)
-    ),
-    missing: [...configured].filter((cgid) => !published.has(cgid)),
-  };
-}
-
-/** Fetch the homepage and read the published category tree. One request. */
-export async function discoverCategories(): Promise<DiscoveredCategory[]> {
-  return parseCategoryTree(await fetchHtml("https://www.continente.pt/"));
-}
-
-/**
- * Continente's category sitemap: 1,974 category URLs, every depth, with a
- * `lastmod` on each. Its `robots.txt` points at it, so reading it is invited.
+ * Continente's category sitemap: about 2,000 category URLs, every depth, with
+ * a `lastmod` on each. Its `robots.txt` points at it, so reading it is invited.
+ * The nightly reads it for the section watch (discoverCategoryPaths), which
+ * sees a new branch below the top level as well as a new department.
  *
- * A SECOND source for the audit, not a replacement. The homepage tree is
- * better - it carries the cgids we actually crawl by, and each category's
- * product count - where the sitemap carries neither. What the sitemap adds:
- *
- *   - it survives a homepage markup change, which would otherwise leave the
- *     audit silently auditing nothing
- *   - it covers sub-categories too, so a new branch below the top level is
- *     visible rather than hidden inside a department we already crawl
- *   - it is 361 KB against the homepage's 2 MB
- *
- * It speaks in URL slugs rather than cgids, and the two do not match
- * (`mercearia` against `mercearias`, `laticinios-e-ovos` against `laticinios`),
- * so the correspondence is kept below as data. Guessing at it - prefix matching,
- * fuzzy comparison - would be a silent failure waiting to happen, and the point
- * of this check is to catch silent failures.
+ * (A second audit read the homepage's category tree by category id; it served
+ * only the `crawl:continente` command, and both were removed on 22 October
+ * 2026 - code review M10. The ids it checked had been out of date since
+ * Continente's reorganisation of 18 October.)
  */
 const CATEGORY_SITEMAP = "https://www.continente.pt/sitemap-custom_sitemap_23-category.xml";
 
@@ -261,10 +111,6 @@ export function parseCategorySlugs(xml: string): string[] {
     if (path && !path.includes("/")) slugs.add(path);
   }
   return [...slugs];
-}
-
-export async function discoverCategorySlugs(): Promise<string[]> {
-  return parseCategorySlugs(await fetchHtml(CATEGORY_SITEMAP));
 }
 
 /**

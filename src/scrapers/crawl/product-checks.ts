@@ -2,7 +2,7 @@ import { prisma } from "../../lib/db";
 import type { Verdict } from "@/generated/prisma/client";
 import type { Store } from "@/lib/stores";
 import { nonFoodCatastropheReason } from "./reidentification";
-import { matchableEan } from "../../lib/matching";
+import { matchableEan } from "../../lib/barcodes";
 
 /**
  * The record of product ids we opened and decided not to keep.
@@ -285,13 +285,14 @@ export async function recordDead(
     const row = await prisma.catalogueProduct.update({
       where: { store_storeProductId: { store, storeProductId } },
       data: { deadCount: { increment: 1 }, lastCheckedAt: checkedAt },
-      select: { deadCount: true, delistedAt: true },
+      select: { deadCount: true, delistedAt: true, supersededById: true },
     });
 
     if (row.deadCount >= DEAD_NIGHTS_BEFORE_DELISTING && row.delistedAt === null) {
       await prisma.catalogueProduct.update({
         where: { store_storeProductId: { store, storeProductId } },
-        data: { delistedAt: checkedAt },
+        // Gone, unless it already came back under a new id (reidentification.ts).
+        data: { delistedAt: checkedAt, delistReason: row.supersededById ? "replaced" : "gone" },
       });
       delisted.push(storeProductId);
     }
@@ -313,7 +314,7 @@ export async function recordRecategorised(
   await forEachBatch(storeProductIds, async (slice) => {
     await prisma.catalogueProduct.updateMany({
       where: { store, storeProductId: { in: slice } },
-      data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+      data: { delistedAt: checkedAt, delistReason: "not-food", lastCheckedAt: checkedAt },
     });
   });
 }
@@ -334,7 +335,7 @@ export async function stopTrackingLeftOut(
     (
       await prisma.catalogueProduct.updateMany({
         where: { store, delistedAt: null, storeProductId: { in: slice } },
-        data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+        data: { delistedAt: checkedAt, delistReason: "not-food", lastCheckedAt: checkedAt },
       })
     ).count
   );
@@ -380,7 +381,7 @@ export async function heldLive(store: Store, ids: string[]): Promise<{ storeProd
  * Stop tracking the products we hold that a crawl SAW in a section
  * data/store-sections.ts decides is not food - they moved there, as Auchan's
  * baby food did around 31 August 2026. Unless an implausible share of what we
- * hold moved at once (NON_FOOD_LIMIT, the brake Continente uses): that is the
+ * hold moved at once (the store's non-food brake, brakes.ts): that is the
  * store renaming its shelves or our reading breaking, so nothing is marked and
  * the reason comes back for the report.
  *
@@ -395,18 +396,22 @@ export async function stopTrackingMovedOut(
   checkedAt: Date
 ): Promise<{ stopped: { storeProductId: string; name: string }[]; refused: string | null }> {
   const moved = await heldLive(store, seenInNonFood);
-  const refused = nonFoodCatastropheReason({ nonFood: moved.length, attempted: live });
+  const refused = nonFoodCatastropheReason({ nonFood: moved.length, attempted: live, store });
   if (refused) return { stopped: [], refused };
   await stopTrackingLeftOut(store, moved.map((m) => m.storeProductId), checkedAt);
   return { stopped: moved, refused: null };
 }
 
 /**
- * Record that a product page loaded but carries no price: listed but
- * unavailable (out of stock, or variable-weight). Stamps `unavailableAt`, which
- * the next crawl re-checks (see UNAVAILABLE_RECHECK_DAYS), and touches the
- * clock. Never advances `deadCount`: the page answered, so the product is not
- * gone.
+ * Record that a product page answered but the product is not for sale right
+ * now: listed but unavailable (out of stock). Stamps `unavailableAt`, which the
+ * next crawl re-checks (see UNAVAILABLE_RECHECK_DAYS), and touches the clock.
+ *
+ * The same rule at every store since 22 October 2026 (code review H7): kept,
+ * with NO current price, and never counted as gone. So the price goes - the
+ * price history keeps it - where Auchan's out-of-stock products used to keep
+ * showing their last price for up to two weeks; and the dead-night counter is
+ * reset, because the page answered.
  */
 export async function recordUnavailable(
   store: Store,
@@ -416,7 +421,7 @@ export async function recordUnavailable(
   await forEachBatch(storeProductIds, async (slice) => {
     await prisma.catalogueProduct.updateMany({
       where: { store, storeProductId: { in: slice } },
-      data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt },
+      data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt, price: null, deadCount: 0 },
     });
   });
 }

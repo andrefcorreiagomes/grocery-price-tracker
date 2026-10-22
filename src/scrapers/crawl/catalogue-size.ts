@@ -21,6 +21,12 @@ export interface StoreSize {
   total: number;
   /** rows kept but no longer offered to the app */
   delisted: number;
+  /**
+   * The delisted split by reason (`delistReason`, since 22 October 2026; code
+   * review M5): gone from the store, still sold but not food we compare, or
+   * replaced by another id. Absent in runs recorded before then.
+   */
+  delistedWhy?: { gone: number; notFood: number; replaced: number; unknown: number };
 }
 
 export interface StoreSizeChange extends StoreSize {
@@ -30,16 +36,25 @@ export interface StoreSizeChange extends StoreSize {
   percent: number | null;
 }
 
-/** Count every store's rows. Six cheap indexed counts. */
+/** Count every store's rows: a count and a grouped count per store. */
 export async function catalogueSizes(): Promise<StoreSize[]> {
   const sizes = await Promise.all(
-    STORE_ORDER.map(async (store) => ({
-      store,
-      total: await prisma.catalogueProduct.count({ where: { store } }),
-      delisted: await prisma.catalogueProduct.count({
+    STORE_ORDER.map(async (store) => {
+      const byReason = await prisma.catalogueProduct.groupBy({
+        by: ["delistReason"],
         where: { store, delistedAt: { not: null } },
-      }),
-    }))
+        _count: { _all: true },
+      });
+      const count = (reason: string | null) => byReason.find((r) => r.delistReason === reason)?._count._all ?? 0;
+      const delisted = byReason.reduce((n, r) => n + r._count._all, 0);
+      const known = count("gone") + count("not-food") + count("replaced");
+      return {
+        store,
+        total: await prisma.catalogueProduct.count({ where: { store } }),
+        delisted,
+        delistedWhy: { gone: count("gone"), notFood: count("not-food"), replaced: count("replaced"), unknown: delisted - known },
+      };
+    })
   );
   return sizes;
 }

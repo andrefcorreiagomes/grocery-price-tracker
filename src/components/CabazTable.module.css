@@ -70,16 +70,15 @@
   cursor: help;
 }
 
-.withheld {
-  color: color-mix(in srgb, var(--foreground) 40%, transparent);
-  cursor: help;
-}
-
-.staleNote {
-  font-size: 0.7rem;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-  border-bottom: 1px dotted color-mix(in srgb, var(--foreground) 35%, transparent);
-  display: inline-block;
+/* What a store lacks, under its "Total com tudo": cut short, in full on hover. */
+.lacks {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  max-width: 10rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The product behind a price: one line, cut short, in full on hover. */
@@ -209,7 +208,6 @@
 }
 
 .scope,
-.staleWarning,
 .noComparison {
   margin-top: 1rem;
   font-size: 0.9rem;
@@ -218,10 +216,6 @@
 
 .scope {
   color: color-mix(in srgb, var(--foreground) 70%, transparent);
-}
-
-.staleWarning {
-  color: #b45309;
 }
 
 .noComparison {
@@ -259,10 +253,6 @@
 @media (prefers-color-scheme: dark) {
   .cross {
     --cabaz-missing: #fca5a5;
-  }
-
-  .staleWarning {
-    color: #fbbf24;
   }
 
   .noComparison {

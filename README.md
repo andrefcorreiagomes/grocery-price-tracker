@@ -247,7 +247,8 @@ stores include in their pages.
 |---|---|
 | `src/scrapers/crawl/` | the catalogue crawler for each chain |
 | `src/scrapers/http.ts` | the shared fetcher: pace, retries, `Retry-After` |
-| `src/lib/matching.ts` | reading sizes and normalising product names |
+| `src/lib/matching.ts` | scoring a possible pair of identical products |
+| `src/lib/sizes.ts`, `text.ts`, `barcodes.ts` | reading sizes; comparing names and brands; checking barcodes |
 | `data/food-types.ts` | the 252 kinds of food |
 | `data/food-tree.ts` | the categories, the sub-kinds (cuts and varieties) and the labels (frozen, tinned, organic…) |
 | `data/store-sections.ts` | which of each store's sections hold food, decided in one place |
@@ -268,7 +269,7 @@ The site is in Portuguese, since it is meant for shoppers in Portugal.
 npm install
 cp .env.example .env             # the private settings file, never uploaded
 npx prisma migrate dev           # creates the database
-npm run verify:nightly           # the automated checks; no requests to the stores
+npm run verify:nightly           # the automated checks, on a copy of the database; no requests to the stores
 npm run dev                      # the site, at http://localhost:3000
 npm run discover -- carapau      # find a product in the catalogue (no network)
 ```

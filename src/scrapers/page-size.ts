@@ -1,4 +1,4 @@
-import { stripAccents } from "../lib/matching";
+import { stripAccents } from "../lib/text";
 
 /**
  * What a product page's size really means, beyond what the size label says.

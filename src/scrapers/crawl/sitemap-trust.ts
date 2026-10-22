@@ -98,6 +98,14 @@ export interface TrustInput {
   baseline: { entries: number; files: number } | null;
   /** runs since that baseline, newest first, believed or not */
   recent: SitemapObservation[];
+  /**
+   * A reason for suspicion only the store's own crawl can see, in words; null
+   * when there is none. Pingo Doce's: too many of the products we hold are
+   * missing from the list. It expires the same way as the others (code review
+   * M3, 22 October 2026): until then that guard, once tripped by a real
+   * change, would have refused the list every night after.
+   */
+  extraSuspicion?: string | null;
 }
 
 export interface TrustVerdict {
@@ -115,7 +123,7 @@ function sameAs(a: SitemapObservation, entries: number, files: number): boolean 
 }
 
 export function judgeSitemap(input: TrustInput): TrustVerdict {
-  const { entries, files, error, baseline, recent } = input;
+  const { entries, files, error, baseline, recent, extraSuspicion = null } = input;
 
   // Unreadable is never acceptable, however many times it repeats. There are no
   // figures to accept, and skipping discovery is the only option regardless.
@@ -131,26 +139,26 @@ export function judgeSitemap(input: TrustInput): TrustVerdict {
     };
   }
 
-  if (baseline === null) {
-    // Nothing to compare against. A sitemap with files in it is the best
-    // evidence available on a first run.
-    return { trusted: true, distrust: null, accepted: null };
-  }
-
+  // With no baseline there is nothing to compare against: a sitemap with files
+  // in it is the best evidence available on a first run, unless the caller saw
+  // something wrong with it.
   let suspicion: string | null = null;
-  if (files < baseline.files) {
+  if (baseline !== null && files < baseline.files) {
     suspicion = `the index listed ${files} product file(s), down from ${baseline.files}`;
-  } else if (entries < baseline.entries * SHRINK_LIMIT) {
+  } else if (baseline !== null && entries < baseline.entries * SHRINK_LIMIT) {
     suspicion = `it shrank from ${baseline.entries.toLocaleString()} to ${entries.toLocaleString()} entries`;
   }
+  suspicion ??= extraSuspicion;
 
   if (suspicion === null) return { trusted: true, distrust: null, accepted: null };
 
   // Suspicion expires. Count how many consecutive recent runs saw the same
-  // thing; if this run makes RUNS_BEFORE_ACCEPTING, it is the new normal.
+  // thing and were themselves not believed; if this run makes
+  // RUNS_BEFORE_ACCEPTING, it is the new normal. A believed run breaks the
+  // chain: it was not suspicious, so it is no evidence that the suspicion lasts.
   let matching = 1; // this run
   for (const observation of recent) {
-    if (!sameAs(observation, entries, files)) break;
+    if (observation.trusted || !sameAs(observation, entries, files)) break;
     matching++;
     if (matching >= RUNS_BEFORE_ACCEPTING) break;
   }

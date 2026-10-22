@@ -1,100 +1,70 @@
-import { formatEuros, shownQuantity, type Cabaz, type CabazCell, type CellState } from "@/lib/cabaz";
-import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
+import { formatEuros, shownQuantity, type Cabaz, type CabazCell, type CabazExclusion } from "@/lib/cabaz";
+import { STORE_LABELS, STORE_ORDER, storeCountWord } from "@/lib/stores";
 import { shortDay } from "@/lib/promotion";
 import styles from "./CabazTable.module.css";
 
 interface Props {
   cabaz: Cabaz;
-  allowStale: boolean;
   /** delta, not an absolute quantity - see adjustQuantity in CabazBuilder */
   onAdjustQuantity: (productId: string, delta: number) => void;
   onRemove: (productId: string) => void;
-}
-
-function formatDay(date: Date): string {
-  return date.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
 }
 
 /*
  * Phrased to avoid gendered adjectives - food names run both ways ("a
  * bolacha", "o arroz") and "não vendido/vendida" would be wrong half the time.
  *
- * The same two facts the food pages state, in the same words: "não vende" is
- * now a claim the data supports, because each chain's whole catalogue is
- * crawled every night (see CellState in lib/cabaz.ts).
+ * The same two facts the food pages state, in the same words. "Indisponível"
+ * (the user's word, 22 October 2026) claims only what the data shows: the
+ * chain's site has no price for it today, though its shops may sell it.
  */
-function blockerPhrase(state: CellState, storeLabel: string): string {
-  switch (state) {
-    case "noListing":
-      return `o ${storeLabel} não vende`;
-    case "neverPriced":
-      return `o ${storeLabel} vende, mas sem peso indicado`;
-    case "stale":
-      return `sem preço actual no ${storeLabel}`;
-    default:
-      return "";
-  }
+function blockerPhrase(kind: CabazExclusion["blockers"][number]["kind"], storeLabel: string): string {
+  return kind === "not-stocked" ? `indisponível no ${storeLabel}` : `o ${storeLabel} vende, mas sem peso indicado`;
 }
 
-function Cell({ cell, quantity, allowStale, isLowest, store }: {
+function Cell({ cell, quantity, isLowest, store }: {
   cell: CabazCell;
   quantity: number;
-  allowStale: boolean;
   isLowest: boolean;
   /** the store's name, shown above the price on a phone, where there is no header row */
   store: string;
 }) {
   // The two must LOOK different, as on the food pages: "does not sell it" and
   // "sells it, but gives no weight" are different facts.
-  if (cell.unitPrice === null && cell.state === "noListing") {
+  if (cell.kind === "not-stocked") {
     return (
       <td className={`${styles.storeCell} ${styles.missing}`} data-store={store}>
-        <span className={styles.cross} title="Esta loja não vende." aria-label="Esta loja não vende.">
+        <span className={styles.cross} title="Indisponível: sem preço no site da loja." aria-label="Indisponível nesta loja.">
           ✕
         </span>
       </td>
     );
   }
-  if (cell.unitPrice === null) {
+  if (cell.kind === "no-size") {
     return (
       <td className={styles.storeCell} data-store={store}>
         <span className={styles.noSize}>sem peso</span>
-        {cell.productName && (
-          <div className={styles.productName} title={cell.productName}>
-            {cell.productName}
-          </div>
-        )}
+        <div className={styles.productName} title={cell.productName}>
+          {cell.productName}
+        </div>
       </td>
     );
   }
 
-  const withheld = cell.state === "stale" && !allowStale;
-  const captured = cell.capturedOn ? formatDay(cell.capturedOn) : null;
   // At quantity 0 the row is kept on screen precisely so its prices stay
   // readable, so show the price of one rather than a useless 0.00€.
   const shown = shownQuantity(quantity);
 
   return (
     <td className={isLowest ? `${styles.storeCell} ${styles.lowest}` : styles.storeCell} data-store={store}>
-      {withheld ? (
-        <span className={styles.withheld} title="Preço desactualizado — active a opção acima para o usar.">
-          —
-        </span>
-      ) : (
-        <>{formatEuros(cell.unitPrice * shown)}</>
-      )}
-      {cell.state === "stale" && captured && (
-        <div className={styles.staleNote}>de {captured}</div>
-      )}
+      {formatEuros(cell.unitPrice * shown)}
       {/* Named, as on the food pages: a price alone cannot say which product
           of the comparison it is. */}
-      {!withheld && cell.productName && (
-        <div className={styles.productName} title={cell.productName}>
-          {cell.productName}
-        </div>
-      )}
+      <div className={styles.productName} title={cell.productName}>
+        {cell.productName}
+      </div>
       {/* Amber, apart from the green "cheapest": a price can be both. */}
-      {!withheld && cell.promotion && (
+      {cell.promotion && (
         <div className={styles.promo}>
           promoção
           {cell.promotion.regularUnitPrice !== null && (
@@ -109,7 +79,6 @@ function Cell({ cell, quantity, allowStale, isLowest, store }: {
 
 export default function CabazTable({
   cabaz,
-  allowStale,
   onAdjustQuantity,
   onRemove,
 }: Props) {
@@ -175,19 +144,18 @@ export default function CabazTable({
                     </button>
                   </div>
                 </td>
-                {row.cells.map((cell, i) => (
+                {row.product.cells.map((cell, i) => (
                   <Cell
                     key={i}
                     cell={cell}
                     quantity={row.quantity}
-                    allowStale={allowStale}
                     isLowest={row.lowestStores.includes(STORE_ORDER[i])}
                     store={STORE_LABELS[STORE_ORDER[i]]}
                   />
                 ))}
                 <td className={styles.removeCell}>
-                  {/* deliberately not a ✕: that glyph already means "esta loja
-                      não vende este produto" in this same row */}
+                  {/* deliberately not a ✕: that glyph already means "indisponível
+                      nesta loja" in this same row */}
                   <button
                     type="button"
                     className={styles.remove}
@@ -203,7 +171,8 @@ export default function CabazTable({
           <tfoot>
             <tr>
               <th className={styles.productColumn} scope="row">
-                Total
+                {someExcluded ? "Total comparável" : "Total"}
+                {someExcluded && <div className={styles.unit}>o que todas as lojas têm</div>}
               </th>
               <td className={styles.spacer} />
               {cabaz.totals.map((total, i) => {
@@ -221,6 +190,33 @@ export default function CabazTable({
               })}
               <td className={styles.spacer} />
             </tr>
+            {/* Only when it differs from the line above: each store's sum of
+                everything it has, naming what it lacks. Never marked cheapest,
+                because the columns no longer hold the same items. */}
+            {someExcluded && (
+              <tr>
+                <th className={styles.productColumn} scope="row">
+                  Total com tudo
+                  <div className={styles.unit}>o que cada loja tem</div>
+                </th>
+                <td className={styles.spacer} />
+                {cabaz.fullTotals.map((total, i) => {
+                  const store = STORE_ORDER[i];
+                  const lacks = cabaz.missing[i];
+                  return (
+                    <td key={store} className={`${styles.storeCell} ${styles.total}`} data-store={STORE_LABELS[store]}>
+                      {total === null ? "—" : formatEuros(total)}
+                      {lacks.length > 0 && (
+                        <div className={styles.lacks} title={lacks.map((p) => p.name).join(", ")}>
+                          falta: {lacks.map((p) => p.name).join(", ")}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className={styles.spacer} />
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -233,21 +229,17 @@ export default function CabazTable({
         </p>
       ) : cabaz.includedCount === 0 ? (
         <p className={styles.noComparison}>
-          Nenhum dos alimentos escolhidos tem preço nas três lojas, por isso não há
-          comparação possível. Retire os assinalados em baixo, ou junte outros.
+          Nenhum dos alimentos escolhidos tem preço nas {storeCountWord()} lojas, por isso não há total
+          comparável. A linha &ldquo;Total com tudo&rdquo; mostra quanto custa em cada loja o que ela tem.
         </p>
       ) : (
         <>
           {someExcluded && (
             <p className={styles.scope}>
-              Estes totais incluem <strong>{cabaz.includedCount} dos {cabaz.selectedCount} artigos</strong>{" "}
-              que seleccionou, para que as três lojas sejam comparadas sobre exactamente
-              os mesmos produtos.
-            </p>
-          )}
-          {cabaz.usesStalePrices && (
-            <p className={styles.staleWarning}>
-              Alguns totais usam preços de recolhas anteriores, assinalados na tabela.
+              O <strong>total comparável</strong> soma {cabaz.includedCount} dos {cabaz.selectedCount} artigos
+              que escolheu: os que as {storeCountWord()} lojas têm, para que sejam comparadas sobre
+              exactamente os mesmos produtos. O <strong>total com tudo</strong> soma, em cada loja, tudo o
+              que ela tem, e diz o que lhe falta.
             </p>
           )}
         </>
@@ -255,13 +247,13 @@ export default function CabazTable({
 
       {cabaz.exclusions.length > 0 && (
         <div className={styles.exclusions}>
-          <h2 className={styles.exclusionsTitle}>Fora da comparação</h2>
+          <h2 className={styles.exclusionsTitle}>Só em algumas lojas</h2>
           <ul>
             {cabaz.exclusions.map((exclusion) => (
               <li key={exclusion.product.id}>
                 <strong>{exclusion.product.name}</strong> —{" "}
                 {exclusion.blockers
-                  .map(({ store, state }) => blockerPhrase(state, STORE_LABELS[store]))
+                  .map(({ store, kind }) => blockerPhrase(kind, STORE_LABELS[store]))
                   .join("; ")}
                 {exclusion.pricedNowhere && (
                   <>

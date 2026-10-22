@@ -9,6 +9,7 @@ import {
   type CabazProduct,
   type SelectedItem,
 } from "@/lib/cabaz";
+import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
 import styles from "./CabazBuilder.module.css";
 
 /** A basket line with its place in the food tree, for the chooser. */
@@ -22,8 +23,12 @@ export interface CabazBuilderProduct extends CabazProduct {
 interface Props {
   /** in the food tree's order, which the chooser keeps */
   products: CabazBuilderProduct[];
-  latestScrapeDate: Date | null;
   initialSelection: SelectedItem[];
+}
+
+/** The stores with no price for a line, by name. */
+function lackingStores(product: CabazProduct): string[] {
+  return STORE_ORDER.filter((_, i) => product.cells[i]?.kind !== "price").map((store) => STORE_LABELS[store]);
 }
 
 /** First appearance order, so the chooser follows the tree rather than the alphabet. */
@@ -37,7 +42,7 @@ function distinct<T>(items: T[], key: (item: T) => string): T[] {
   });
 }
 
-export default function CabazBuilder({ products, latestScrapeDate, initialSelection }: Props) {
+export default function CabazBuilder({ products, initialSelection }: Props) {
   // A shared link can name a line that no longer exists (a comparison that
   // fell below two chains, or a basket from before the catalogue): dropped
   // here, so the count in the heading and the address match the table.
@@ -91,12 +96,7 @@ export default function CabazBuilder({ products, latestScrapeDate, initialSelect
     [selection]
   );
 
-  // Every price the page receives is current (see the page), so stale prices
-  // never come up and are never allowed.
-  const cabaz = useMemo(
-    () => buildCabaz(products, selection, latestScrapeDate, false),
-    [products, selection, latestScrapeDate]
-  );
+  const cabaz = useMemo(() => buildCabaz(products, selection), [products, selection]);
 
   function toggleProduct(productId: string) {
     setSelection((current) =>
@@ -216,7 +216,15 @@ export default function CabazBuilder({ products, latestScrapeDate, initialSelect
                       checked={selectedIds.has(product.id)}
                       onChange={() => toggleProduct(product.id)}
                     />
-                    <span className={styles.productName}>{product.name}</span>
+                    <span className={styles.productName}>
+                      {product.name}
+                      {/* Said before it is chosen, so nobody is surprised by the
+                          totals: the store has no price for it (none online, or
+                          no weight to price it by). */}
+                      {lackingStores(product).length > 0 && (
+                        <span className={styles.productLacks}>falta no {lackingStores(product).join(" e no ")}</span>
+                      )}
+                    </span>
                     {product.unit && <span className={styles.productUnit}>por {product.unit}</span>}
                   </label>
                 </li>
@@ -240,7 +248,6 @@ export default function CabazBuilder({ products, latestScrapeDate, initialSelect
 
         <CabazTable
           cabaz={cabaz}
-          allowStale={false}
           onAdjustQuantity={adjustQuantity}
           onRemove={removeProduct}
         />

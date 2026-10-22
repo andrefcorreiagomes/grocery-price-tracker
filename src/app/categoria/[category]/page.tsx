@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import FoodTypeRows from "@/components/FoodTypeRows";
 import { getComparableFoodTypes, getFreshness } from "@/lib/grupos";
 import { categoryById } from "@/lib/food-tree";
-import { STORE_LABELS } from "@/lib/stores";
-import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
+import PricesCollected from "@/components/PricesCollected";
 
 // Always read the latest prices from the database rather than a build-time snapshot.
 export const dynamic = "force-dynamic";
@@ -44,13 +43,7 @@ export default async function CategoryPage({
       {rows.length > 0 && <FoodTypeRows rows={rows} />}
 
       <footer className={styles.footer}>
-        Preços recolhidos:{" "}
-        {freshness.map((f, i) => (
-          <span key={f.store}>
-            {i > 0 && " · "}
-            {STORE_LABELS[f.store as Store]} {f.lastSeenAt.toLocaleDateString("pt-PT")}
-          </span>
-        ))}
+        <PricesCollected freshness={freshness} />
       </footer>
     </main>
   );

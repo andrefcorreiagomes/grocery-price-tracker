@@ -50,13 +50,13 @@ export type Cell =
   /** The store sells nothing of this kind of food. */
   | { kind: "not-stocked" }
   /**
-   * The store sells it, but no product of it has both a price and a size, so a
+   * The store sells it, priced, but no product of it has a known size, so a
    * price per kilo cannot be computed.
    *
    * This is NOT the same as not stocking it, and the page must never render the
-   * two alike. It is common rather than rare: Continente publishes a size for
-   * 57% of its products, and 21% of Pingo Doce's pages carry no sellable price.
-   * `example` is carried so the page can still name something the store sells.
+   * two alike. A product without a price is unavailable and not counted here at
+   * all (see cheapestOf). `example` is carried so the page can still name
+   * something the store sells.
    */
   | { kind: "no-size"; example: ComparableProduct };
 
@@ -131,7 +131,11 @@ function cheapestOf(
   const byStore = new Map<string, Cell>();
 
   for (const store of STORES) {
-    const here = stocked.filter((p) => p.store === store);
+    // Only products for sale right now: one listed without a price is
+    // unavailable (code review H7), and a store whose only products here are
+    // unavailable does not sell this today. Until 22 October 2026 such a store
+    // read "sells it, but gives no weight", which named the wrong reason.
+    const here = stocked.filter((p) => p.store === store && p.price !== null);
     if (here.length === 0) {
       byStore.set(store, { kind: "not-stocked" });
       continue;

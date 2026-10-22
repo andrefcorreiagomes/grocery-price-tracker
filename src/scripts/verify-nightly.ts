@@ -1,4 +1,4 @@
-import { prisma } from "../lib/db";
+import { databaseFile, prisma } from "../lib/db";
 import { STORE_LIST } from "../lib/stores";
 import { syncStores } from "../lib/stores-db";
 import { SectionTally, recordSections } from "../scrapers/crawl/section-watch";
@@ -18,11 +18,16 @@ import { verifyProductCheckTotals } from "./verify-productcheck-totals";
 import { verifyReidentification } from "./verify-reidentification";
 import { verifyAuchanNightly } from "./verify-auchan-nightly";
 import { verifyMatching } from "./verify-matching";
+import { verifyComparisons } from "./verify-comparisons";
+import { verifyFoodKinds } from "./verify-food-kinds";
+import { verifyCrawlChecks } from "./verify-crawl-checks";
 import { verifyContinentePages } from "./verify-continente-pages";
 import { verifyKindReviews } from "./verify-kind-reviews";
 import { checkGold } from "./kind-gold";
 import { verifyCrawlSafety } from "./verify-crawl-safety";
 import { verifyStorePages } from "./verify-store-pages";
+import { verifyReports } from "./verify-reports";
+import { verifyBasket } from "./verify-basket";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -57,6 +62,7 @@ async function cleanup() {
 }
 
 async function main() {
+  console.log(`database: ${databaseFile()}`);
   await cleanup();
 
   // --- the store table ------------------------------------------------------
@@ -329,8 +335,12 @@ async function main() {
   console.log("\n14. Auchan nightly (grid guards, delisting, segment monitor)");
   failures += await verifyAuchanNightly();
 
-  console.log("\n15. matching (clustering guards, decisions, retirement)");
+  console.log("\n15. matching, comparisons, kinds of food, crawl checks");
   failures += await verifyMatching();
+  // Split out of verify-matching.ts on 22 October 2026 (code review M13).
+  failures += verifyComparisons();
+  failures += verifyFoodKinds();
+  failures += await verifyCrawlChecks();
 
   console.log("\n16. Continente pages (layout of 18 October 2026, the non-food limit, moved addresses)");
   failures += verifyContinentePages();
@@ -350,6 +360,12 @@ async function main() {
 
   console.log("\n20. store page readers on pieces of saved pages (promotions)");
   failures += verifyStorePages();
+
+  console.log("\n21. the crawl reports say what the run did");
+  failures += await verifyReports();
+
+  console.log("\n22. the basket's sums");
+  failures += verifyBasket();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

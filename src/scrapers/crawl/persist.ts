@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/db";
-import { matchableEan } from "../../lib/matching";
+import { matchableEan } from "../../lib/barcodes";
 import type { Store } from "@/lib/stores";
 import { syncStores } from "../../lib/stores-db";
 import { recordPrices, type PriceHistorySummary } from "./price-history";
@@ -87,26 +87,6 @@ export function enrichment(p: {
 }
 
 /**
- * A save path held open for the length of a crawl, so results can be written as
- * they arrive instead of all at the end.
- *
- * The compliant Continente crawler runs for about five hours. Accumulating five
- * hours of results in memory and writing once, at the end, means a dropped
- * connection at hour four loses the whole night. Saving every batch caps that
- * loss at a few minutes, and costs nothing: the same number of transactions, in
- * the same size, just spread across the run.
- *
- * Two things must still happen exactly once per run, which is why this is opened
- * rather than called:
- *
- *   - ONE `seenAt`. The report answers "which products did this run not see?" by
- *     comparing `lastSeenAt` against the run's instant. Per-batch timestamps
- *     would leave that question with no single answer.
- *   - ONE read of the existing ids. "Is this product new?" has to be judged
- *     against the table as it was BEFORE the run; re-reading per batch would
- *     make products created by batch 3 look pre-existing to batch 4.
- */
-/**
  * A product arriving under an id that already belongs to a DIFFERENT product,
  * proven by the barcode changing from one real value to another.
  *
@@ -144,6 +124,26 @@ export interface CatalogueWriter {
   finish(): PersistResult;
 }
 
+/**
+ * A save path held open for the length of a crawl, so results can be written as
+ * they arrive instead of all at the end.
+ *
+ * The compliant Continente crawler runs for about five hours. Accumulating five
+ * hours of results in memory and writing once, at the end, means a dropped
+ * connection at hour four loses the whole night. Saving every batch caps that
+ * loss at a few minutes, and costs nothing: the same number of transactions, in
+ * the same size, just spread across the run.
+ *
+ * Two things must still happen exactly once per run, which is why this is opened
+ * rather than called:
+ *
+ *   - ONE `seenAt`. The report answers "which products did this run not see?" by
+ *     comparing `lastSeenAt` against the run's instant. Per-batch timestamps
+ *     would leave that question with no single answer.
+ *   - ONE read of the existing ids. "Is this product new?" has to be judged
+ *     against the table as it was BEFORE the run; re-reading per batch would
+ *     make products created by batch 3 look pre-existing to batch 4.
+ */
 export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter> {
   // Every saved row points at its store's row in the Store table, so make sure
   // the table holds every store in the code's list before the first save.
@@ -250,6 +250,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 firstSeenAt: seenAt,
                 lastSeenAt: seenAt,
                 lastCheckedAt: seenAt,
+                unavailableAt: p.price === null ? seenAt : null,
                 ...enrichment(p),
               },
               update: {
@@ -261,12 +262,16 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 lastSeenAt: seenAt,
                 lastCheckedAt: seenAt,
                 // Answering at all clears a delisting: a product that returns is
-                // not delisted, however many nights it was missing. Seeing it in
-                // a grid also means it is back in stock, so any "unavailable"
-                // marker is stale.
+                // not delisted, however many nights it was missing. And whether
+                // it is for sale is what this answer says: listed without a price
+                // is "unavailable" (Pingo Doce's "Indisponível"), with one it is
+                // back. One rule at every store since 22 October 2026 (code
+                // review H7); before, Pingo Doce's unpriced rows were saved with
+                // the marker cleared.
                 deadCount: 0,
                 delistedAt: null,
-                unavailableAt: null,
+                delistReason: null,
+                unavailableAt: p.price === null ? seenAt : null,
                 ...enrichment(p),
               },
               select: { id: true, price: true },
@@ -305,10 +310,11 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
 
 /**
  * Upsert crawled products into CatalogueProduct by (store, storeProductId), so
- * all three runners share one save path. Listing data only - name, brand,
- * categoryPath, price, url; ean/size are left to enrichment. On an existing row,
- * refreshes those fields and `lastSeenAt`; leaves firstSeenAt, enrichedAt, ean
- * and size untouched.
+ * all three runners share one save path. Writes name, brand, categoryPath,
+ * price and url, and - only when the source can see them (`enrichment`) - the
+ * barcode, size, promotion and displayed unit price, so a listing that cannot
+ * see a size never erases one a product page gave. On an existing row it also
+ * refreshes `lastSeenAt`, and leaves firstSeenAt untouched.
  *
  * Whether a row is new is decided from one up-front read of the store's existing
  * rows rather than a lookup before each upsert, and the upserts go out in

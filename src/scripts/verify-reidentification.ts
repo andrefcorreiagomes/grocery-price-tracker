@@ -14,7 +14,7 @@ import {
   retiredId,
 } from "../scrapers/crawl/reidentification";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { matchableEan } from "../lib/matching";
+import { matchableEan } from "../lib/barcodes";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**

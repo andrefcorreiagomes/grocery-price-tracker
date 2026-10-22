@@ -1,73 +1,49 @@
 import { euros } from "./money";
-import type { Promotion } from "./promotion";
-import { unitPrice } from "./pricing";
 import { STORE_ORDER } from "./stores";
 import type { Store } from "@/lib/stores";
+import type { BasketCell } from "./grupos";
 
 /*
- * Basket maths, kept free of React and Prisma so it can be reasoned about (and
- * one day tested) on its own.
+ * Basket maths, kept free of React and Prisma so it can be checked on its own
+ * (src/scripts/verify-basket.ts).
  *
  * The rule that shapes everything here: a store's total may only be compared
  * against another store's total when both cover *the same products*. Summing
  * whatever each store happens to stock lets a store win by not selling things.
- * So an item priceable at only two of the three stores is excluded from all
- * three totals, and the user is told which item and why.
+ *
+ * So there are two totals per store (the user's design, 22 October 2026):
+ *   - the COMPARABLE total, of the items every store prices. The same items in
+ *     every column; the only one that names a cheapest store.
+ *   - the FULL total, of every item that store prices, with the items it
+ *     lacks named beside it.
+ * No item is ever dropped from the basket, and adding a store never changes
+ * what another store's full total covers. Until then an item one store could
+ * not price was left out of every total, so a store added later would have
+ * emptied other people's baskets - against the rule of 18 October 2026 that a
+ * new store must not change what counts as a comparison.
+ *
+ * Rewritten on 22 October 2026 around the basket lines themselves (code review
+ * M6). It used to turn each catalogue price into a listing of the retired
+ * tracked-products model, with a pack size of 1 and an invented capture date,
+ * and to carry a whole "out-of-date price" feature that could no longer
+ * happen: every price the catalogue shows is current (STALE_AFTER_DAYS).
  */
 
-/** Structural minimum this module needs. */
-export interface CabazListing {
-  packageSize: number;
-  snapshots: { date: Date; price: number }[];
-  /** the product the price is for, shown under it; absent when not known */
-  productName?: string;
-  /** set when the store marks that price as a promotion (lib/promotion.ts) */
-  promotion?: Promotion | null;
-}
+/** One store's answer for a basket line: priced, sold without a size, or not sold. */
+export type CabazCell = BasketCell;
 
 export interface CabazProduct {
   id: string;
   name: string;
   unit: string | null;
-  /** one entry per store, aligned to STORE_ORDER; undefined = no listing there */
-  listings: (CabazListing | undefined)[];
-}
-
-export type CellState =
-  /** priced in the most recent scrape */
-  | "current"
-  /** priced, but not since some earlier scrape - opt-in via allowStale */
-  | "stale"
-  /*
-   * No listing at this store. Since the basket reads the catalogue (21 October
-   * 2026) this is the food pages' "Não vende": the chain's whole catalogue is
-   * crawled every night and none of its products falls in this comparison.
-   */
-  | "noListing"
-  /**
-   * The store sells it, but no product of it gives a weight or volume, so
-   * there is no price per kilo or litre: the food pages' "Sem peso indicado".
-   */
-  | "neverPriced";
-
-export interface CabazCell {
-  state: CellState;
-  /** price for one unit of the product's canonical unit; null when unpriced */
-  unitPrice: number | null;
-  /** day the price was captured; null when unpriced */
-  capturedOn: Date | null;
-  /** the product behind the price, when the listing names one */
-  productName: string | null;
-  /** the price is a promotion, per the store */
-  promotion: Promotion | null;
+  /** one per store, aligned to STORE_ORDER */
+  cells: CabazCell[];
 }
 
 export interface CabazRow {
   product: CabazProduct;
   quantity: number;
-  /** aligned to STORE_ORDER */
-  cells: CabazCell[];
-  /** stores that cannot price this row under the current rules */
+  /** stores that cannot price this row */
   blockers: Store[];
   /** quantity > 0 - a row at zero stays on screen but takes part in nothing */
   counted: boolean;
@@ -79,8 +55,8 @@ export interface CabazRow {
 
 export interface CabazExclusion {
   product: CabazProduct;
-  blockers: { store: Store; state: CellState }[];
-  /** no store can price this at all - toggling stale prices will not help */
+  blockers: { store: Store; kind: "not-stocked" | "no-size" }[];
+  /** no store can price this at all */
   pricedNowhere: boolean;
 }
 
@@ -89,12 +65,14 @@ export interface Cabaz {
   exclusions: CabazExclusion[];
   selectedCount: number;
   includedCount: number;
-  /** aligned to STORE_ORDER; null throughout when no item is priceable everywhere */
+  /** the comparable totals, aligned to STORE_ORDER; null throughout when no item is priceable everywhere */
   totals: (number | null)[];
-  /** every store whose total ties for lowest */
+  /** every store whose comparable total ties for lowest */
   cheapestStores: Store[];
-  /** at least one included price came from an earlier scrape */
-  usesStalePrices: boolean;
+  /** each store's sum of every counted item it prices, aligned to STORE_ORDER; null when it prices none */
+  fullTotals: (number | null)[];
+  /** the counted items each store cannot price, aligned to STORE_ORDER */
+  missing: CabazProduct[][];
 }
 
 export interface SelectedItem {
@@ -102,40 +80,9 @@ export interface SelectedItem {
   quantity: number;
 }
 
-/** Calendar day as YYYY-MM-DD, so dates compare by day rather than clock time. */
-export function dayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-export function classifyCell(
-  listing: CabazListing | undefined,
-  latestDay: string | null
-): CabazCell {
-  if (!listing) {
-    return { state: "noListing", unitPrice: null, capturedOn: null, productName: null, promotion: null };
-  }
-  const productName = listing.productName ?? null;
-  const snapshot = listing.snapshots[0];
-  if (!snapshot) {
-    return { state: "neverPriced", unitPrice: null, capturedOn: null, productName, promotion: null };
-  }
-  // latestDay is only null when the database holds no snapshots at all, in
-  // which case we could not be looking at one - treat as current rather than
-  // marking every price stale against a missing reference.
-  const state: CellState =
-    latestDay === null || dayKey(snapshot.date) === latestDay ? "current" : "stale";
-  return {
-    state,
-    unitPrice: unitPrice(snapshot.price, listing.packageSize),
-    capturedOn: snapshot.date,
-    productName,
-    promotion: listing.promotion ?? null,
-  };
-}
-
-function isUsable(cell: CabazCell, allowStale: boolean): boolean {
-  if (cell.unitPrice === null) return false;
-  return cell.state === "current" || (allowStale && cell.state === "stale");
+/** The price of one unit (kilo, litre or item), or null when the store gives none. */
+function priceOf(cell: CabazCell): number | null {
+  return cell.kind === "price" ? cell.unitPrice : null;
 }
 
 /**
@@ -155,27 +102,20 @@ export function formatEuros(value: number): string {
 /**
  * Which stores get the cheapest-in-row marker.
  *
- * Only cells that actually render a price are eligible - a stale price held
- * back behind the toggle shows as a dash, and marking a dash as cheapest would
- * be nonsense.
- *
  * The marker means "this beat something". So it appears only when at least one
- * other eligible price is strictly higher: a three-way tie highlights nothing,
- * two tied at the bottom with a third above highlights both, and a row with
- * only one price highlights nothing, because none of those beat anything.
+ * other price is strictly higher: a three-way tie highlights nothing, two tied
+ * at the bottom with a third above highlights both, and a row with only one
+ * price highlights nothing, because none of those beat anything.
  *
  * Compared in whole cents, on the same figure the cell renders. Comparing raw
  * floats would leave two cells both reading 1.49€ with only one marked.
  */
-function lowestInRow(
-  cells: CabazCell[],
-  quantity: number,
-  allowStale: boolean
-): Store[] {
+function lowestInRow(cells: CabazCell[], quantity: number): Store[] {
   const shown = shownQuantity(quantity);
-  const cents = cells.map((cell) =>
-    isUsable(cell, allowStale) ? Math.round((cell.unitPrice as number) * shown * 100) : null
-  );
+  const cents = cells.map((cell) => {
+    const price = priceOf(cell);
+    return price === null ? null : Math.round(price * shown * 100);
+  });
   const values = cents.filter((value): value is number => value !== null);
   if (values.length === 0) return [];
   const lowest = Math.min(...values);
@@ -183,30 +123,22 @@ function lowestInRow(
   return STORE_ORDER.filter((_, i) => cents[i] === lowest);
 }
 
-export function buildCabaz(
-  products: CabazProduct[],
-  selection: SelectedItem[],
-  latestScrapeDate: Date | null,
-  allowStale: boolean
-): Cabaz {
-  const latestDay = latestScrapeDate ? dayKey(latestScrapeDate) : null;
+export function buildCabaz(products: CabazProduct[], selection: SelectedItem[]): Cabaz {
   const byId = new Map(products.map((product) => [product.id, product]));
 
   const rows: CabazRow[] = [];
   for (const item of selection) {
     const product = byId.get(item.productId);
     if (!product) continue; // stale id from a shared URL - drop it silently
-    const cells = STORE_ORDER.map((_, i) => classifyCell(product.listings[i], latestDay));
-    const blockers = STORE_ORDER.filter((_, i) => !isUsable(cells[i], allowStale));
+    const blockers = STORE_ORDER.filter((_, i) => priceOf(product.cells[i]) === null);
     const counted = item.quantity > 0;
     rows.push({
       product,
       quantity: item.quantity,
-      cells,
       blockers,
       counted,
       included: counted && blockers.length === 0,
-      lowestStores: lowestInRow(cells, item.quantity, allowStale),
+      lowestStores: lowestInRow(product.cells, item.quantity),
     });
   }
 
@@ -225,39 +157,50 @@ export function buildCabaz(
   const totals: (number | null)[] = STORE_ORDER.map((_, i) =>
     included.length === 0
       ? null
-      : included.reduce((sum, row) => sum + (row.cells[i].unitPrice as number) * row.quantity, 0)
+      : included.reduce((sum, row) => sum + (priceOf(row.product.cells[i]) as number) * row.quantity, 0)
   );
 
-  const priced = totals.filter((total): total is number => total !== null);
+  const fullTotals: (number | null)[] = STORE_ORDER.map((_, i) => {
+    const priced = counted.filter((row) => priceOf(row.product.cells[i]) !== null);
+    return priced.length === 0
+      ? null
+      : priced.reduce((sum, row) => sum + (priceOf(row.product.cells[i]) as number) * row.quantity, 0);
+  });
+  const missing = STORE_ORDER.map((_, i) =>
+    counted.filter((row) => priceOf(row.product.cells[i]) === null).map((row) => row.product)
+  );
+
+  // Compared in whole cents, as the totals are shown.
+  const cents = totals.map((total) => (total === null ? null : Math.round(total * 100)));
+  const priced = cents.filter((c): c is number => c !== null);
   const lowest = priced.length > 0 ? Math.min(...priced) : null;
-  const cheapestStores =
-    lowest === null ? [] : STORE_ORDER.filter((_, i) => totals[i] === lowest);
+  const cheapestStores = lowest === null ? [] : STORE_ORDER.filter((_, i) => cents[i] === lowest);
 
   return {
     rows,
-    exclusions: rows
-      .filter((row) => row.counted && row.blockers.length > 0)
+    exclusions: counted
+      .filter((row) => row.blockers.length > 0)
       .map((row) => ({
         product: row.product,
-        blockers: row.blockers.map((store) => ({
-          store,
-          state: row.cells[STORE_ORDER.indexOf(store)].state,
-        })),
+        blockers: row.blockers.map((store) => {
+          const cell = row.product.cells[STORE_ORDER.indexOf(store)];
+          return { store, kind: cell.kind === "no-size" ? ("no-size" as const) : ("not-stocked" as const) };
+        }),
         pricedNowhere: row.blockers.length === STORE_ORDER.length,
       })),
     selectedCount: counted.length,
     includedCount: included.length,
     totals,
     cheapestStores,
-    usesStalePrices: included.some((row) => row.cells.some((cell) => cell.state === "stale")),
+    fullTotals,
+    missing,
   };
 }
 
 /*
- * URL encoding: `itens=<id>,<id>:3,<id>` with the quantity omitted when it is 1,
- * plus `ultimo=1` for the stale-price toggle. Parsing is deliberately forgiving
- * - a hand-edited or truncated shared link should drop the bad parts and render,
- * never throw.
+ * URL encoding: `itens=<id>,<id>:3,<id>` with the quantity omitted when it is 1.
+ * Parsing is deliberately forgiving - a hand-edited or truncated shared link
+ * should drop the bad parts and render, never throw.
  */
 
 export const MAX_QUANTITY = 99;

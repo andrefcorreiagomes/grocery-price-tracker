@@ -1,5 +1,5 @@
 import { prisma } from "../lib/db";
-import { matchableEan } from "../lib/matching";
+import { matchableEan } from "../lib/barcodes";
 import { extractLdJsonBlocks, failedPageVerdict, fetchPage, requireCrawlerContact } from "../scrapers/http";
 
 /**

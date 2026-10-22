@@ -2,6 +2,15 @@ import { STORE_SECTIONS, type SectionKind } from "../../data/store-sections";
 import { isStore } from "./stores";
 
 /**
+ * The top segment of a category path ("Talho/Porco" gives "Talho"), or
+ * "(sem categoria)" when there is none. One helper since 22 October 2026
+ * (code review L3); four files each had a copy.
+ */
+export function topSection(path: string | null | undefined): string {
+  return (path ?? "").split("/")[0].trim() || "(sem categoria)";
+}
+
+/**
  * Reading data/store-sections.ts: what a product's section says about whether
  * it is food. Pure and I/O-free, so every rule is tested without a database.
  */

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { prisma } from "../lib/db";
 import { fetchPage, requireCrawlerContact } from "../scrapers/http";
+import { LOG_KEEP_DAYS, pruneLogs } from "./log-retention";
 
 /**
  * The whole night in one command: the three crawls, then everything that
@@ -22,7 +23,7 @@ import { fetchPage, requireCrawlerContact } from "../scrapers/http";
  * In order:
  *   1. checks: this machine is the one named in NIGHTLY_HOST (the database has
  *      ONE real copy, and only that machine writes it); CRAWLER_CONTACT is set
- *   2. robots.txt of each store, compared with the last saved copy in logs/.
+ *   2. robots.txt of each store, compared with the last saved copy in data/.
  *      A store whose robots.txt changed is NOT crawled tonight: the new file
  *      is saved, and the summary says so - a person reads it first.
  *   3. the crawls, one after another (the user's choice, 20 October 2026).
@@ -105,10 +106,18 @@ function run(script: string, logName: string, extra: string[] = []): Promise<{ c
   });
 }
 
-/** The last saved copy of a store's robots.txt in logs/, or null. */
+/**
+ * Where the saved copies of the stores' robots.txt live: data/, which git
+ * keeps, so another computer starts with them. Until 22 October 2026 they were
+ * in logs/, which git does not keep, and on a new computer the first night
+ * would have found no copy and crawled no store (code review L7).
+ */
+const ROBOTS_DIR = "data";
+
+/** The last saved copy of a store's robots.txt, or null. */
 function lastRobots(file: string): string | null {
-  const saved = readdirSync("logs").filter((f) => f.startsWith("robots-") && f.endsWith(`-${file}.txt`)).sort();
-  return saved.length ? readFileSync(path.join("logs", saved[saved.length - 1]), "utf8") : null;
+  const saved = readdirSync(ROBOTS_DIR).filter((f) => f.startsWith("robots-") && f.endsWith(`-${file}.txt`)).sort();
+  return saved.length ? readFileSync(path.join(ROBOTS_DIR, saved[saved.length - 1]), "utf8") : null;
 }
 
 const norm = (s: string) => s.replace(/\r/g, "").split("\n").map((l) => l.trimEnd()).join("\n").trim();
@@ -116,8 +125,8 @@ const norm = (s: string) => s.replace(/\r/g, "").split("\n").map((l) => l.trimEn
 /**
  * What a crawl's output says about itself: its report's verdict (**OK**,
  * **WARN**, **FAIL**) if it writes one, how long it took, its promotion count
- * (promo-watch.ts) and any promotion warning - Pingo Doce writes no full
- * report, so that warning is a plain "WARN:" line in its output.
+ * (promo-watch.ts) and any promotion warning, which each crawl also prints as
+ * a plain "WARN:" line in its output.
  */
 function verdictOf(log: string): string {
   const text = readFileSync(log, "utf8");
@@ -171,7 +180,7 @@ async function main() {
           toCrawl.push(s);
           steps.push({ name: `${s.name} robots.txt`, ok: true, minutes: 0, note: "unchanged" });
         } else {
-          writeFileSync(path.join("logs", `robots-${day.slice(0, 10)}-${s.file}.txt`), now);
+          writeFileSync(path.join(ROBOTS_DIR, `robots-${day.slice(0, 10)}-${s.file}.txt`), now);
           steps.push({ name: `${s.name} robots.txt`, ok: false, minutes: 0,
             note: before === null ? "no earlier copy to compare - saved this one, not crawled tonight" : "CHANGED - new copy saved; not crawled tonight until a person reads it" });
         }
@@ -231,6 +240,19 @@ async function main() {
     steps.push({ name: "backup", ok: true, minutes: 0, note: `${target} (keeping the last ${KEEP_BACKUPS})` });
   } catch (e) {
     steps.push({ name: "backup", ok: false, minutes: 0, note: (e as Error).message });
+  }
+
+  // Logs older than LOG_KEEP_DAYS (code review L8); reports are kept for good.
+  try {
+    const removed = pruneLogs();
+    steps.push({
+      name: "old logs",
+      ok: true,
+      minutes: 0,
+      note: removed.length === 0 ? `none older than ${LOG_KEEP_DAYS} days` : `${removed.length} removed, older than ${LOG_KEEP_DAYS} days`,
+    });
+  } catch (e) {
+    steps.push({ name: "old logs", ok: false, minutes: 0, note: (e as Error).message });
   }
 
   // 6. summary -------------------------------------------------------------

@@ -4,6 +4,7 @@ import { megabytes, totalStats, type HostStats } from "../http";
 import type { DailyReport, ProductNote } from "./daily-report";
 import type { PriceHistorySummary } from "./price-history";
 import { DEAD_NIGHTS_BEFORE_DELISTING } from "./product-checks";
+import { SAMPLE } from "./types";
 
 /**
  * The report for a crawl that refreshes a SLICE of the catalogue, rather than
@@ -27,8 +28,6 @@ import { DEAD_NIGHTS_BEFORE_DELISTING } from "./product-checks";
  * barcode and package size, so enrichment coverage climbs run over run.
  */
 
-/** Examples carried per list. */
-const SAMPLE = 12;
 
 export interface RotationInput {
   store: Store;
@@ -82,8 +81,11 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
   const { store, seenAt } = input;
   const now = seenAt.getTime();
 
+  // Products still on sale only. Until 22 October 2026 this read every row, so
+  // "not confirmed in over a month" counted products already delisted - 531 of
+  // Continente's 533 - and warned every night about products nobody tracks.
   const all = await prisma.catalogueProduct.findMany({
-    where: { store },
+    where: { store, delistedAt: null },
     select: { lastSeenAt: true, categoryPath: true, ean: true, packageSize: true },
   });
 
@@ -137,11 +139,12 @@ export async function buildRotationReport(input: RotationInput): Promise<DailyRe
   // Measured, not assumed. Reporting zeros here would claim the fields were
   // checked and found complete, which is a stronger statement than "not looked
   // at" and the wrong one.
+  const live = { store, delistedAt: null };
   const [missingPrice, missingBrand, missingCategory, missingUrl] = await Promise.all([
-    prisma.catalogueProduct.count({ where: { store, price: null } }),
-    prisma.catalogueProduct.count({ where: { store, OR: [{ brand: null }, { brand: "" }] } }),
-    prisma.catalogueProduct.count({ where: { store, categoryPath: null } }),
-    prisma.catalogueProduct.count({ where: { store, url: "" } }),
+    prisma.catalogueProduct.count({ where: { ...live, price: null } }),
+    prisma.catalogueProduct.count({ where: { ...live, OR: [{ brand: null }, { brand: "" }] } }),
+    prisma.catalogueProduct.count({ where: { ...live, categoryPath: null } }),
+    prisma.catalogueProduct.count({ where: { ...live, url: "" } }),
   ]);
 
   const http = totalStats(input.http);

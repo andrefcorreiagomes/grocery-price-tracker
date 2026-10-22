@@ -3,6 +3,7 @@ import { coverageRows, readPingoDoceDepartments } from "../scrapers/crawl/pingod
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
+import { topSection } from "../lib/store-sections";
 
 /**
  * Pingo Doce coverage check: does the shop think it sells more than we know
@@ -17,7 +18,7 @@ import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
  * THIS IS NOT A CATALOGUE CRAWL, and this command used to be one. The old
  * version walked listing grids that Pingo Doce's robots.txt disallows on four
  * separate rules. The compliant route reads one product page at a time and
- * takes about two and a half hours:
+ * takes about three hours:
  *
  *   npm run crawl:pingodoce:nightly
  *
@@ -27,11 +28,6 @@ import { formatHttpStats, requireCrawlerContact } from "../scrapers/http";
  * again be a census - but the number they print is exactly the yardstick a
  * census needs to be checked against.
  */
-
-/** Top segment of a stored category path ("Talho/Porco" gives "Talho"). */
-function topSection(path: string | null): string {
-  return (path ?? "").split("/")[0].trim();
-}
 
 async function main() {
   requireCrawlerContact();

@@ -7,6 +7,7 @@ import type { Cell } from "@/lib/comparison";
 import { euros } from "@/lib/money";
 import { promotionOf, shortDay, type Promotion } from "@/lib/promotion";
 import styles from "./page.module.css";
+import PricesCollected from "@/components/PricesCollected";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +17,21 @@ const UNIT_LABEL: Record<string, string> = { kg: "kg", l: "L", un: "un" };
  * One store's answer.
  *
  * The three kinds must LOOK different, which is the whole reason `Cell` is a
- * union rather than a nullable price. "Não vende" and "sem peso indicado" are
- * different facts - the first says the chain does not sell this food, the
+ * union rather than a nullable price. "Indisponível" and "sem peso indicado" are
+ * different facts - the first says the chain's site has no price for this food, the
  * second says it does but we cannot work out a price per kilo - and rendering
  * both as an empty cell would be the page's most frequent lie. They are common,
- * not rare: Continente publishes a size for 57% of its products.
+ * not rare: about a tenth of Continente's products give no size (91% do,
+ * 22 October 2026).
  */
 function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boolean }) {
   if (cell.kind === "not-stocked") {
     return (
       <div className={styles.cell}>
-        <span className={styles.absent}>Não vende</span>
+        {/* "Indisponível", not "Não vende" (the user's choice, 22 October
+            2026): we know only that the store's site has no price for it
+            today. It may still sell it in its shops. */}
+        <span className={styles.absent}>Indisponível</span>
       </div>
     );
   }
@@ -268,14 +273,7 @@ export default async function FoodTypePage({
       {/* Per chain, not one date: they genuinely differ, and comparing a price
           from today against one from last week deserves to say so. */}
       <footer className={styles.footer}>
-        Preços recolhidos:{" "}
-        {freshness.map((f, i) => (
-          <span key={f.store}>
-            {i > 0 && " · "}
-            {STORE_LABELS[f.store as keyof typeof STORE_LABELS]}{" "}
-            {f.lastSeenAt.toLocaleDateString("pt-PT")}
-          </span>
-        ))}
+        <PricesCollected freshness={freshness} />
       </footer>
     </main>
   );

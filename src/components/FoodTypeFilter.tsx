@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { stripAccents } from "@/lib/matching";
+import { stripAccents } from "@/lib/text";
 import type { IndexEntry } from "@/lib/grupos";
 import FoodTypeRows from "./FoodTypeRows";
 import styles from "./FoodTypeFilter.module.css";

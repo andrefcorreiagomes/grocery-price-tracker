@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/db";
 import type { Store } from "@/lib/stores";
-import { stripAccents } from "../../lib/matching";
+import { stripAccents } from "../../lib/text";
 
 /**
  * Comparing a crawl against the one before it.

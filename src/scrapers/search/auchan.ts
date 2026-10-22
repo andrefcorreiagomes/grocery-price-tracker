@@ -1,7 +1,8 @@
 import * as cheerio from "cheerio";
-import { auchanTileSize } from "../../lib/matching";
+import { auchanTileSize } from "../../lib/sizes";
 import { parseShownUnitPrice } from "../page-size";
 import { struckPricePromotion } from "../struck-price";
+import { sellablePrice } from "../types";
 import type { SearchHit } from "./types";
 
 /**
@@ -15,7 +16,7 @@ import type { SearchHit } from "./types";
 /**
  * What one HTML fragment yielded, beyond the products themselves.
  *
- * The counts exist because the failure they measure is silent. `parseAuchanTiles`
+ * The counts exist because the failure they measure is silent. The tile reader
  * returns early on a tile whose JSON will not parse or is missing a field, so a
  * renamed attribute does not throw - it quietly returns fewer products, and the
  * catalogue shrinks with nothing to show why.
@@ -85,7 +86,8 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     // Price is the one field a listed-but-unavailable product legitimately
     // lacks. Verified against the live grid: these tiles carry no price ANYWHERE
     // in their markup, so it is genuine absence, not a parser miss.
-    if (gtm.price === undefined) {
+    // A price of 0, or one that will not read, is no price either (sellablePrice).
+    if (gtm.price === undefined || sellablePrice(Number(gtm.price)) === null) {
       unpriced++;
       return;
     }
@@ -135,14 +137,6 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
  */
 export function auchanTilePromotion(struck: string, price: number): { onPromotion: boolean; regularPrice: number | null } {
   return struckPricePromotion(struck, price);
-}
-
-/**
- * The bare form, for callers that only want the products. The crawler uses the
- * detailed form so it can fail on a collapsed yield.
- */
-export function parseAuchanTiles(html: string): SearchHit[] {
-  return parseAuchanTilesDetailed(html).hits;
 }
 
 /**

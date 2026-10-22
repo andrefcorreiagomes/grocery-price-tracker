@@ -2,6 +2,8 @@ import { scrapeContinente } from "../continente";
 import { failedPageVerdict, fetchHtml } from "../http";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult, CrawlProgress } from "./types";
+import { productIdFromUrl } from "./product-id";
+import { topSection } from "../../lib/store-sections";
 
 /**
  * The COMPLIANT Continente crawler: one request per product page.
@@ -86,17 +88,6 @@ export interface ProductCrawlResult {
 }
 
 /**
- * The product id a Continente URL ends with: `...-2597619.html` gives
- * `2597619`.
- *
- * Not every id is numeric, which cost us 170 of the 101,398 published URLs when
- * this only matched digits. Variant SKUs append a suffix and percent-encode the
- * separating hyphen so the id survives (`...-glade-4505195%2D1.html` is
- * `4505195-1`), and curated products carry a word id (`...-t%C3%A1bua1.html` is
- * `tábua1`). Taking the last hyphen-separated segment and decoding it handles
- * all three, and matches the id the listing tiles report for the same products.
- */
-/**
  * The address to store for a product after fetching it: where it now answers,
  * when Continente has moved it, so the next crawl goes straight there instead
  * of through a redirect. Only when the id in it is unchanged - Continente's
@@ -112,15 +103,7 @@ export function shelfOf(pageShelf: string | null, target: ProductTarget): string
   return pageShelf ?? target.categoryPath ?? null;
 }
 
-export function productIdFromUrl(url: string): string | null {
-  const tail = url.match(/-([^-/]+)\.html$/)?.[1];
-  if (!tail) return null;
-  try {
-    return decodeURIComponent(tail);
-  } catch {
-    return tail;
-  }
-}
+export { productIdFromUrl };
 
 export interface SitemapResult {
   /** every published product URL, keyed by the id embedded in it */
@@ -244,11 +227,6 @@ export async function discoverProductUrls(): Promise<SitemapResult> {
   }
 
   return { urls, lastmod, files: maps.length, perFile, unparseable, unparseableSamples };
-}
-
-/** Top segment of a category path ("Frescos/Frutas/..." gives "Frescos"). */
-function topSection(path: string | null): string {
-  return path?.split("/")[0].trim() || "(sem categoria)";
 }
 
 /**

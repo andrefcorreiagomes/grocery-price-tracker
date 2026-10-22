@@ -40,6 +40,7 @@ import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import type { DailyReport, GridHealthExtras, ProductNote } from "../scrapers/crawl/daily-report";
 import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
+import { SAMPLE } from "../scrapers/crawl/types";
 
 /**
  * The nightly Auchan run: the one command a scheduler calls.
@@ -64,8 +65,6 @@ import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "
 const STORE = "AUCHAN" as const;
 /** The nightly always walks the union of root and the departments. */
 const MODE: AuchanCrawlMode = "full";
-/** Examples carried per list in the report. */
-const SAMPLE = 12;
 
 async function main() {
   requireCrawlerContact();
@@ -221,7 +220,7 @@ async function main() {
     // Guard 1: an implausible fraction of the whole catalogue confirmed dead at
     // once is a site fault, not turnover. Freeze delisting so an unattended
     // schedule cannot wipe the catalogue over three such nights.
-    catastrophe = churnCatastropheReason({ dead: confirmedDead.length, attempted: live, complete });
+    catastrophe = churnCatastropheReason({ dead: confirmedDead.length, attempted: live, complete, store: STORE });
     if (catastrophe) {
       console.log(`  !! ${catastrophe}`);
       await touchChecked(STORE, [...confirmedDead, ...unavailable, ...unreachable, ...alive], seenAt);
@@ -385,6 +384,7 @@ async function main() {
     changed: saved.prices.changed,
     priced: saved.prices.changed + saved.prices.unchanged,
     complete,
+    store: STORE,
   });
   if (priceStorm) {
     report = escalate(
@@ -428,8 +428,8 @@ async function main() {
     report = escalate(report, "FAIL", reason);
   }
 
-  // Reported, not warned about: the listing walk records no promotion state for
-  // Auchan yet, so the line says so plainly (promo-watch.ts).
+  // The promotions the walk read from the tiles' crossed-out prices, counted
+  // so that a broken marker shows as a sudden drop (promo-watch.ts).
   const promotions = await tallyPromotions(STORE, seenAt);
   report = { ...report, promotions };
   const promotionProblem = promotionWarning(promotions);

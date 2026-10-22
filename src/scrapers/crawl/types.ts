@@ -1,5 +1,12 @@
 import type { SearchHit } from "../search/types";
 
+/**
+ * Examples carried per list in the crawl reports; the counts are always exact,
+ * the samples are not. One number for every report since 22 October 2026
+ * (code review L3); four files each had a copy.
+ */
+export const SAMPLE = 12;
+
 /** One crawlable store category: the store's grid id plus a human label. */
 export interface CrawlCategory {
   cgid: string;

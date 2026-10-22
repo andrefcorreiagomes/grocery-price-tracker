@@ -1,8 +1,25 @@
 import { CUT_WORDS, FOOD_TYPES, type FoodType } from "../../data/food-types";
+import {
+  CHOCOLATES_SHELF,
+  COATED,
+  COOKED,
+  GENERIC_MIX,
+  MIX_WORDS,
+  NAME_STOPWORDS,
+  NOT_PREPARED_SHELF,
+  NOT_SNACK_SHELF,
+  OPEN_SHELF,
+  OPEN_SHELF_UNLESS_CHOCOLATES,
+  PREPARED_SHELF,
+  SAUCE_WORD,
+  SCAN_STOPS,
+  SNACK_NAME,
+  SNACK_SHELF,
+} from "../../data/classifier-words";
 import { CATEGORIES } from "../../data/food-tree";
 import { isFoodSection } from "./store-sections";
 import { HOUSE_LABELS } from "./candidates";
-import { normalizeName, stripAccents } from "./matching";
+import { foldPlural, normalizeName, stripAccents } from "./text";
 
 /**
  * Deciding what KIND of food a product is, so "where are potatoes cheapest" has
@@ -17,49 +34,12 @@ import { normalizeName, stripAccents } from "./matching";
  * are testable without a database.
  */
 
-/** Words that lead a name but say nothing about what the food IS. */
-const STOPWORDS = new Set([
-  "de", "da", "do", "das", "dos", "e", "com", "sem", "em", "para", "a", "o", "as", "os",
-  "bio", "biologico", "biologica", "selecao", "seleccao", "especial", "nacional",
-  "fresco", "fresca", "embalada", "embalado", "granel", "pack", "kg", "gr", "un",
-  "congelado", "congelada", "ultracongelado", "ultracongelada",
-  // "Mini Rissóis de Carne" are rissóis: a size is never the food. Approved in
-  // review batch 1, 20 October 2026.
-  "mini",
-]);
-
+// The word lists are data, beside the kinds (data/classifier-words.ts).
+const STOPWORDS = new Set(NAME_STOPWORDS);
 const CUT_SET = new Set(CUT_WORDS);
-
-/** Words after which the read past a cut word stops: packing and fillings. */
-const SCAN_STOPS = new Set(["azeite", "oleo", "recheado", "escabeche", "proteina"]);
-
-/**
- * Shelves of PREPARED food: cold cuts, ready meals, savoury snacks, take-away.
- * A cut word there does not lead to the raw animal - "Peito de Frango Fatias
- * Finas" on a cold-cuts shelf is chicken ham, "Caldeirada de Bacalhau" on a
- * ready-meals shelf is a fish stew, "Pataniscas" are fritters. The hand check
- * of 20 October 2026 found 10 of 102 cut-word decisions wrong, nearly all of
- * them this. Read on the product's own shelf and the one above, as in step 3.
- */
-const PREPARED_SHELF =
-  /charcutaria|fiambre|refeic|refeicoes|salgados|petiscos|take.away|gastronomia|preparados.de.peixe|frango assado/;
-
-/** Coated or dipped: "Pedaços de Ananás Cobertos com Chocolate" is a dessert. */
-const COATED = /\bcobert[oa]s?\b|\bpanad[oa]s?\b/;
-
-/**
- * Cooking words: "Entrecosto de Porco com Molho Barbecue Slow Cooked" is a
- * cooked dish, not raw pork. "Para assar" and "para fritar" (raw, for roasting
- * or frying) do not match, and neither does "grelhada": "Grelhada Mista de
- * Porco" is a raw mixed-grill pack. 20 October 2026.
- */
-const COOKED = /slow.?cook|\bcozinhad[oa]s?\b|\bassad[oa]s?\b|\bfrit[oa]s?\b|\bconfitad[oa]s?\b/;
-
-/** The cut words that name a mixture rather than a part of one food. */
-const MIX_WORDS = new Set(["mix", "mistura"]);
-
-/** General words that make a mix a mixture: "Mix Frutas", "Mistura Ervas". */
-const GENERIC_MIX = new Set(["fruta", "fruto", "legume", "erva", "cereal", "especiaria", "tempero", "pequeno", "salada"]);
+const SCAN_STOP_SET = new Set(SCAN_STOPS);
+const MIX_SET = new Set(MIX_WORDS);
+const GENERIC_MIX_SET = new Set(GENERIC_MIX);
 
 /**
  * What a cut word may still lead to on a prepared-food shelf: the cold cuts and
@@ -82,20 +62,6 @@ for (const type of FOOD_TYPES) {
 }
 
 export const FOOD_TYPE_BY_ID = new Map(FOOD_TYPES.map((t) => [t.id, t]));
-
-/**
- * Portuguese plurals are overwhelmingly a trailing "s", and the stores disagree
- * about number for the same product. Mirrors the folding in candidates.ts, with
- * the two irregular endings that matter here.
- */
-export function foldPlural(token: string): string {
-  if (token.length >= 5 && token.endsWith("oes")) return token.slice(0, -3) + "ao";
-  // pães -> pão. Without it "paes" lost only its s and became "pae", so "PÃES
-  // GARCIA CACETE" was not bread.
-  if (token.length >= 4 && token.endsWith("aes")) return token.slice(0, -3) + "ao";
-  if (token.length >= 5 && token.endsWith("ais")) return token.slice(0, -3) + "al";
-  return token.length >= 4 && token.endsWith("s") ? token.slice(0, -1) : token;
-}
 
 /**
  * Is this product in a food section of its store? Decided by
@@ -136,30 +102,16 @@ function resolve(head: string, name: string, fromShelf = false): FoodType | null
   return null;
 }
 
-/** Shelf words meaning "and others": the shelf holds more than the food it names. */
-// Snacks, appetisers, desserts, tropical fruit and flavoured drinks are open
-// sets too: the hand check of 20 October 2026 found pork scratchings on a
-// "snacks e pipocas" shelf filed as popcorn, a quince on "banana e frutos
-// tropicais" filed as banana, and a crème liégeois on "gelatinas e
-// sobremesas" filed as jelly. "Snacks de Chocolate" is not open - it says
-// what the snacks are - so "snacks" counts only when no "de" follows.
-// "Especialidades" alone or after "e" ("Queijos e Especialidades") is open;
-// "massas-especialidades", the shelf Auchan moved its specialty pastas to on
-// 22 October 2026, names pasta - and three verified pastas lost their kind.
-const OPEN_SHELF =
-  /(?:^|\be[\s-]+)especialidades\b|\b(outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?|tropica(?:l|is)|aromatizad[oa]s?)\b|\bsnacks?\b(?![\s-]+de\b)/;
-
 /**
- * Does this shelf name an open set? One exception, from the data: Auchan's
- * "bombons-e-snacks" holds chocolate bars and boxes of chocolates (Kit Kat,
- * Kinder, Lindt - 204 products), so "snacks" beside "bombons" is not open.
+ * Does this shelf name an open set ("and others")? The rules and the one
+ * exception, a chocolates shelf, are in data/classifier-words.ts. Until
+ * 22 October 2026 the first list was written twice here, once inside the other.
  */
 function isOpenShelf(segment: string): boolean {
   const s = stripAccents(segment).toLowerCase();
-  if (/\bbombo/.test(s) && !/(?:^|\be[\s-]+)especialidades\b|\b(outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?)\b/.test(s)) {
-    return false;
-  }
-  return OPEN_SHELF.test(s);
+  if (OPEN_SHELF.test(s)) return true;
+  if (CHOCOLATES_SHELF.test(s)) return false;
+  return OPEN_SHELF_UNLESS_CHOCOLATES.test(s);
 }
 
 /** Words of a category path, accent-free and split on punctuation and hyphens. */
@@ -245,41 +197,34 @@ export function explainFoodType(
   const leaf = shelf.split(/[/>]/).pop() ?? "";
   // Cold cuts, ready meals and cooked dishes are not the raw meat or fish their
   // name starts from. Read on the whole path: "Charcutaria e Queijos/Enchidos/
-  // Paio" puts the cold-cuts word three levels up. Smoked salmon sits among the
-  // cold cuts but is still salmon, kept apart by its "fumado" label.
+  // Paio" puts the cold-cuts word three levels up.
   const prepared =
-    (PREPARED_SHELF.test(shelf) && !/salmao fumado/.test(shelf)) || COOKED.test(plain);
-  // On a snack shelf a cut word leads nowhere real: "Tiras de Fruta Morango"
-  // is a fruit-leather snack, not strawberries.
+    (PREPARED_SHELF.test(shelf) && !NOT_PREPARED_SHELF.test(shelf)) || COOKED.test(plain);
   const snackShelf =
-    (/\bsnacks?\b|aperitivo/.test(leaf) && !/snacks? de\b/.test(leaf)) || /\btiras de fruta\b/.test(plain);
+    (SNACK_SHELF.test(leaf) && !NOT_SNACK_SHELF.test(leaf)) || SNACK_NAME.test(plain);
   // "Mix de Frutos Secos sem Sal" is not salt: a word after "sem" (without) is
   // never the food. "sem" itself is a stopword, so it is read off the name.
   const without = new Set([...plain.matchAll(/\bsem ([a-z]+)/g)].map((m) => foldPlural(m[1])));
   // A mix lists its foods with "e" or commas: "Mix Framboesa e Mirtilo". Without
   // a list it names one food, described: "Mistura de Pimentas em Grão" is
   // pepper (not chickpeas, "grão"), "Mix Salsichas Frescas de Porco" sausages.
-  const isMix = MIX_WORDS.has(tokens[0]) && /,|\be\b/.test(plain);
+  const isMix = MIX_SET.has(tokens[0]) && /,|\be\b/.test(plain);
   // A cooking word refuses raw kinds whichever step would give them: "Piano de
   // Bovino Slow Cooked" on a beef shelf is not raw beef. 20 October 2026.
   let refused = COOKED.test(plain);
   // "Mix Frutas ...", "Mix Pequeno Almoço ...": a mix named by a general word
   // is a mixture whatever follows, list or not.
-  if (MIX_WORDS.has(tokens[0]) && GENERIC_MIX.has(tokens[1] ?? "")) {
+  if (MIX_SET.has(tokens[0]) && GENERIC_MIX_SET.has(tokens[1] ?? "")) {
     return { id: null, step: null, why: "a mix of several foods" };
   }
   if (CUT_SET.has(tokens[0]) && !snackShelf && !COATED.test(plain)) {
     const found = new Set<string>();
     for (const token of tokens.slice(1)) {
-      // What follows these is the packing or the filling, not the food:
-      // "Filetes de Anchova em Óleo" is not cooking oil, "Filetes Recheados
-      // com Tomate" is not tomato. 17 October 2026.
-      if (SCAN_STOPS.has(token)) break;
+      // What follows these is the packing, the filling or the sauce, not the
+      // food (data/classifier-words.ts).
+      if (SCAN_STOP_SET.has(token)) break;
       if (without.has(token)) continue;
-      // From "molho" on comes the sauce the product is in, not the product:
-      // "Pernil Assado com Molho de Cerveja" is not beer, and "Bifes de Soja
-      // Molho Tomate" is not tomato sauce.
-      if (token === "molho") break;
+      if (token === SAUCE_WORD) break;
       const later = resolve(token, plain);
       if (later) {
         // On a prepared shelf, or with a cooking word, only a cold cut or a

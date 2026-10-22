@@ -3,9 +3,8 @@ import type { Metadata } from "next";
 import CabazBuilder, { type CabazBuilderProduct } from "@/components/CabazBuilder";
 import { parseSelection } from "@/lib/cabaz";
 import { getBasketLines, getFreshness } from "@/lib/grupos";
-import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
-import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
+import PricesCollected from "@/components/PricesCollected";
 
 // Always read the latest prices from the database rather than a build-time snapshot.
 export const dynamic = "force-dynamic";
@@ -27,11 +26,8 @@ export default async function CabazPage({
   const [lines, freshness] = await Promise.all([getBasketLines(), getFreshness()]);
 
   // Every price shown is current: the catalogue drops a product two weeks after
-  // its chain last saw it (STALE_AFTER_DAYS). So each price is dated with its
-  // chain's latest crawl, and the basket is given no "latest day" to call any
-  // price stale against - the chains crawl on different days.
-  const crawled = new Map(freshness.map((f) => [f.store, f.lastSeenAt]));
-
+  // its chain last saw it (STALE_AFTER_DAYS), and each chain's date is in the
+  // footer.
   const products: CabazBuilderProduct[] = lines.map((line) => ({
     id: line.id,
     name: line.name,
@@ -40,19 +36,7 @@ export default async function CabazPage({
     categoryLabel: line.categoryLabel,
     kindId: line.kindId,
     kindLabel: line.kindLabel,
-    listings: line.cells.map((cell, i) =>
-      cell.kind === "not-stocked"
-        ? undefined
-        : {
-            packageSize: 1,
-            productName: cell.productName,
-            promotion: cell.kind === "price" ? cell.promotion : null,
-            snapshots:
-              cell.kind === "price"
-                ? [{ date: crawled.get(STORE_ORDER[i]) ?? new Date(), price: cell.unitPrice }]
-                : [],
-          }
-    ),
+    cells: line.cells,
   }));
 
   return (
@@ -68,16 +52,10 @@ export default async function CabazPage({
         o leite meio-gordo, o congelado com o congelado.
       </p>
 
-      <CabazBuilder products={products} latestScrapeDate={null} initialSelection={parseSelection(itens)} />
+      <CabazBuilder products={products} initialSelection={parseSelection(itens)} />
 
       <p className={styles.freshness}>
-        Preços recolhidos:{" "}
-        {freshness.map((f, i) => (
-          <span key={f.store}>
-            {i > 0 && " · "}
-            {STORE_LABELS[f.store as Store]} {f.lastSeenAt.toLocaleDateString("pt-PT")}
-          </span>
-        ))}
+        <PricesCollected freshness={freshness} />
       </p>
     </main>
   );

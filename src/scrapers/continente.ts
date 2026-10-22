@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
-import { detached, finiteOrNull, PageReadError, type ScrapeResult } from "./types";
+import { detached, finiteOrNull, PageReadError, sellablePrice, type ScrapeResult } from "./types";
 import { sectionKey } from "../lib/store-sections";
 
 interface SchemaProduct {
@@ -35,7 +35,8 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   // before "ean=" is a semicolon, not an "&", and a plain /[?&]ean=/ misses
   // every one of them - measured, 0 of 124 products until this was allowed for.
   const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
-  const price = Number(product.offers.price);
+  // 0 or unreadable: listed, not for sale now (sellablePrice, the rule at every store).
+  const price = sellablePrice(Number(product.offers.price));
 
   // Scoped to the product's own price box: the page has exactly one, while
   // carousels of other products elsewhere carry their own per-kilo prices.
@@ -80,7 +81,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
  * whether or not there is a promotion - so only `pre_discount_price`
  * discriminates. Continente publishes no end date, hence `promoEndsAt: null`.
  */
-function parsePromotion(html: string, price: number): Pick<
+function parsePromotion(html: string, price: number | null): Pick<
   ScrapeResult,
   "onPromotion" | "regularPrice" | "promoEndsAt"
 > {
@@ -91,7 +92,8 @@ function parsePromotion(html: string, price: number): Pick<
 
   // a "regular" price at or below the sale price means the wrong number was
   // picked up, so treat it as no promotion rather than recording nonsense
-  if (regularPrice === null || regularPrice <= price) {
+  // ...and a product not for sale now is on no promotion
+  if (price === null || regularPrice === null || regularPrice <= price) {
     return { onPromotion: false, regularPrice: null, promoEndsAt: null };
   }
   return { onPromotion: true, regularPrice, promoEndsAt: null };

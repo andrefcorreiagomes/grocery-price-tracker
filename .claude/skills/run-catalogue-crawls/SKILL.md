@@ -18,24 +18,25 @@ description.
 
 | Store | Command | Saves | Report | Time (3 Oct 2026) |
 |---|---|---|---|---|
-| Auchan | `npm run crawl:auchan:nightly` | every batch | yes, with verdict | 39 min |
-| Pingo Doce | `npm run crawl:pingodoce:nightly` (called `crawl:pingodoce:products` before 4 Oct 2026) | every batch | no - prints counts and warnings only | 2 h 52 min, 10,224 requests |
-| Continente | `npm run crawl:continente:nightly` | every 500 products (~8 min) | yes, and a crash report if it dies | ~5 h refresh + up to 3,000 never-seen products (~50 min) |
+| Auchan | `npm run crawl:auchan:nightly` | every batch | yes, with verdict | 80-86 min (21-22 Oct) |
+| Pingo Doce | `npm run crawl:pingodoce:nightly` (called `crawl:pingodoce:products` before 4 Oct 2026) | every batch | yes, with verdict (since 22 Oct 2026) | about 3 h, about 10,200 requests |
+| Continente | `npm run crawl:continente:nightly` | every 500 products (~8 min) | yes | about 5 h 45 min with up to 3,000 never-seen products |
+
+All three write a crash report if they die. Normally all three run inside
+`npm run nightly`, which also does everything after them (see docs/operations.md).
 
 **Do not use for a full unattended run:**
 
-- `crawl:continente:products` - holds everything in memory and saves only at
-  the end. Since 4 Oct 2026 it refuses to run without `--limit`, and refuses
-  a limit above 2,000 (about 35 minutes, the most acceptable to lose), and
-  points to the nightly command. Use it only for a test slice.
+- `crawl:continente:products` and `crawl:continente` - deleted on 22 Oct 2026
+  (code review M10). For a Continente test slice use
+  `crawl:continente:nightly -- --limit=20 --budget=20`.
 - `crawl:auchan` and `crawl:all` - deleted on 4 Oct 2026. Both read Auchan and
   saved only at the end. If an old note mentions them, use
   `crawl:auchan:nightly`.
-- `crawl:continente` and `crawl:pingodoce` - despite the names, these are now
-  short coverage checks (about a dozen and about twenty requests): they compare
-  each store's published product counts with the catalogue. They used to be
-  listing-grid crawlers, which those stores' robots.txt forbids. Useful, but
-  they collect no prices.
+- `crawl:pingodoce` - despite the name, a short coverage check (about twenty
+  requests): it compares Pingo Doce's published product counts with the
+  catalogue. It used to be a listing-grid crawler, which Pingo Doce's
+  robots.txt forbids. Useful, but it collects no prices.
 
 When in doubt about any command, read its code: how it saves, what it
 requests, how long it takes. Do not choose from the header comment alone.
@@ -48,7 +49,7 @@ requests, how long it takes. Do not choose from the header comment alone.
    every crawl command stops at once without it (before any request or
    database write). Never put an address in the code instead.
 3. **Re-check robots.txt** for the three stores and compare with the last saved
-   copy in `logs/robots-*.txt`. If a rule changed, stop and tell the user.
+   copy in `data/robots-*.txt` (in `logs/` until 22 October 2026). If a rule changed, stop and tell the user.
 4. **Tell the user the plan in numbers**: which commands, in what order, the
    expected duration of each, and the finish time.
 5. **Keep the computer awake.** The app's own keep-awake lets go a few minutes
@@ -58,7 +59,8 @@ requests, how long it takes. Do not choose from the header comment alone.
    Sleep still sleeps; say so.
 6. **One at a time.** SQLite accepts one writer. Never run two crawls together,
    and never query the database while a crawl runs - not even to check
-   progress. `verify:nightly` writes test rows, so it waits too.
+   progress. `verify:nightly` runs on a copy of the database since 22 October
+   2026, but the copy is read from it, so it waits too.
 
 ## During
 
@@ -70,8 +72,8 @@ requests, how long it takes. Do not choose from the header comment alone.
 ## After
 
 1. `npm run backfill:sizes`, then `npm run classify:food` - offline, minutes.
-2. Read `reports/latest.md` and each store's report in `reports/`; for Pingo
-   Doce, the end of its log. Explain every WARN or FAIL to the user in plain
+2. Read each store's report in `reports/` (`reports/latest.md` holds only the
+   last store to finish). Explain every WARN or FAIL to the user in plain
    words.
 3. `npm run verify:nightly` and `npm run validate:comparisons`.
 4. Read the last section of `validate:comparisons`, the **known store errors**

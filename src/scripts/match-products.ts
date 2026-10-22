@@ -1,5 +1,7 @@
 import { prisma } from "../lib/db";
-import { classifyCandidate, matchableEan, parseSize, type Candidate, type Rung } from "../lib/matching";
+import { classifyCandidate, type Candidate, type Rung } from "../lib/matching";
+import { matchableEan } from "../lib/barcodes";
+import { parseSize } from "../lib/sizes";
 import { STORE_LIST } from "../lib/stores";
 import { isOwnBrand } from "../lib/candidates";
 import { buildGroups, HIDDEN_FLAGS, reconcileGroups, type GroupFlag, type GroupLink, type GroupMemberInput, type ProductGroupResult } from "../lib/grouping";

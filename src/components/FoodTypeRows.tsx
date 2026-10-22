@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { STORE_LABELS } from "@/lib/stores";
+import { STORE_LABELS, STORE_ORDER, storeCountWord } from "@/lib/stores";
 import type { Store } from "@/lib/stores";
 import type { IndexEntry } from "@/lib/grupos";
 import { euros } from "@/lib/money";
@@ -46,8 +46,8 @@ export default function FoodTypeRows({ rows }: { rows: IndexEntry[] }) {
                   was cheaper. Three names do not fit a phone row. */}
               {t.winners.length === 0
                 ? "—"
-                : t.winners.length === 3
-                  ? "As três"
+                : t.winners.length === STORE_ORDER.length
+                  ? `As ${storeCountWord()}`
                   : t.winners.map((w) => STORE_LABELS[w as Store]).join(" · ")}
             </span>
           </Link>

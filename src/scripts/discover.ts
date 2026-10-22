@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "../lib/db";
 import { STORE_ORDER } from "../lib/stores";
-import { matchesTerm, stripAccents } from "../lib/matching";
+import { matchesTerm, stripAccents } from "../lib/text";
 
 /**
  * Find a product across the three chains by searching OUR OWN catalogue.
@@ -19,7 +19,7 @@ import { matchesTerm, stripAccents } from "../lib/matching";
  * depth, results come with sizes and barcodes, and a URL in the results is one
  * a crawler actually reached rather than one reconstructed from a name.
  *
- * Matching is by whole words - see `matchesTerm` in src/lib/matching.ts.
+ * Matching is by whole words - see `matchesTerm` in src/lib/text.ts.
  *
  * Writes every hit to logs/discover-<term>.json - the record a proposed group
  * is checked against - and prints a table per store. The catalogue is only as

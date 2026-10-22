@@ -9,7 +9,6 @@
  *
  * Kept free of the Prisma client so that modules with no business touching the
  * database - the cabaz maths, any future pure helper - can import it.
- * queries.ts re-exports the labels and order, so existing imports keep working.
  */
 
 export interface StoreInfo {
@@ -58,6 +57,16 @@ export const STORE_LABELS = Object.fromEntries(STORE_LIST.map((s) => [s.id, s.na
   Store,
   string
 >;
+
+/**
+ * How many stores the site compares, as the Portuguese word for it, feminine
+ * like "cadeias" and "lojas": "três" today. Every page sentence that counts the
+ * stores takes it from here, so a store added to STORE_LIST changes no text by
+ * hand (code review M11).
+ */
+export function storeCountWord(n: number = STORE_LIST.length): string {
+  return ["zero", "uma", "duas", "três", "quatro", "cinco", "seis", "sete", "oito"][n] ?? String(n);
+}
 
 /** True for a string that names one of the stores. */
 export function isStore(value: string): value is Store {

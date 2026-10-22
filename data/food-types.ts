@@ -9,8 +9,9 @@
  * and products are too fine.
  *
  * Seeded by taking the head noun of 38,688 food-section product names: every
- * type below appeared in at least two stores with 20+ products. Sweets and
- * snacks were left out on purpose.
+ * type below appeared in at least two stores with 20+ products. Sweets,
+ * desserts and drinks have kinds too, set aside from the site for now
+ * (`hidden`, below).
  *
  * Curated data, like HOUSE_LABELS in src/lib/candidates.ts - the judgement is
  * meant to live in one readable place rather than be spread through code.
@@ -123,20 +124,6 @@ export const CUT_WORDS: readonly string[] = [
   "strogonoff", "jardineira", "caldeirada", "feijoada", "bifana", "rojao",
   "patanisca", "moqueca", "carpaccio", "tataki", "roti", "tartaro",
   "grelhada", "panado", "panadinho", "empanada", "cordon",
-];
-
-/**
- * Animals a cut resolves to. REFERENCE ONLY, for the same reason as CUT_WORDS:
- * the scan now accepts any food type after the head, not only an animal, which
- * is what lets "Miolo de Amêndoa" reach `amendoa`.
- */
-export const ANIMALS: readonly string[] = [
-  "frango", "galinha", "peru", "pato", "porco", "suino", "leitao", "vaca",
-  "bovino", "novilho", "vitela", "borrego", "cordeiro", "cabrito", "coelho",
-  "bacalhau", "salmao", "atum", "pescada", "dourada", "robalo", "sardinha",
-  "carapau", "cavala", "polvo", "lula", "choco", "pota", "camarao", "gamba",
-  "ameijoa", "mexilhao", "linguado", "corvina", "tamboril", "perca", "truta",
-  "peixe", "marisco", "sapateira", "santola", "lagosta",
 ];
 
 // Which store sections hold food is decided in data/store-sections.ts.

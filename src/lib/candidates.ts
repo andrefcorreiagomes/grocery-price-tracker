@@ -1,5 +1,4 @@
-import { nameTokens, normalizeName, stripAccents } from "./matching";
-
+import { foldPlural, jaccard, nameTokens, normalizeBrand, normalizeName } from "./text";
 /**
  * Candidate generation: given the whole catalogue, produce the pairs of
  * products, at different stores, that are worth comparing.
@@ -84,21 +83,6 @@ export const HOUSE_LABELS: Record<string, readonly string[]> = {
 };
 
 /**
- * Accent-free, lowercase, and stripped of everything that is not a letter or
- * digit.
- *
- * Deliberately NOT `normalizeName`, which replaces punctuation with a space:
- * that turns Pingo Doce's "L'Or" into "l or" while Continente's "LOr" becomes
- * "lor", and the two would never block together. Removing punctuation outright
- * makes both "lor". The stores really do spell the same brand differently.
- */
-export function normalizeBrand(brand: string | null | undefined): string {
-  return stripAccents(String(brand ?? ""))
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/**
  * Is this the store's own label? House brands are skipped for brand blocking:
  * "Continente" and "Auchan" are different companies, not a shared brand, so
  * their own-brand products can only be matched on their names. This is a fifth
@@ -111,21 +95,13 @@ export function isHouseBrand(brand: string | null | undefined, store: string): b
 }
 
 /**
- * Portuguese plurals are overwhelmingly a trailing "s", and the stores disagree
- * about number for the same product - "Bifes de Peru" against "BIFE DE PERU"
- * scored 0.40 on that alone. Folding is applied to both sides, so it can only
- * make genuinely similar names compare closer. Short tokens are left alone,
- * where a trailing "s" is more likely to be part of the word.
- */
-function foldPlural(token: string): string {
-  return token.length >= 4 && token.endsWith("s") ? token.slice(0, -1) : token;
-}
-
-/**
  * The tokens a product is compared on: its name, minus its own chain's labels,
  * with plurals folded. Both adjustments were measured against the 95 hand-made
  * groups rather than assumed - together they take name-only recall from 64% to
- * 83%.
+ * 83%. Plurals matter because the stores disagree about number for the same
+ * product: "Bifes de Peru" against "BIFE DE PERU" scored 0.40 on that alone.
+ * Folding is applied to both sides, so it can only bring genuinely similar
+ * names closer.
  */
 export function productTokens(name: string, store: string): Set<string> {
   let normalized = normalizeName(name);
@@ -152,14 +128,6 @@ export function isOwnBrand(brand: string | null | undefined, store: string): boo
 export function blockableBrand(entry: CatalogueEntry): string | null {
   if (isOwnBrand(entry.brand, entry.store)) return null;
   return normalizeBrand(entry.brand);
-}
-
-/** Jaccard overlap of two prepared token sets. */
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let shared = 0;
-  for (const token of a) if (b.has(token)) shared++;
-  return shared / (a.size + b.size - shared);
 }
 
 /**

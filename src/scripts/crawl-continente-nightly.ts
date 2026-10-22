@@ -22,7 +22,7 @@ import {
   type CheckResult,
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { buildDailyReport, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
+import { buildDailyReport, mergeResultsByLabel, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
@@ -48,6 +48,7 @@ import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
 import type { SearchHit } from "../scrapers/search/types";
+import { topSection } from "../lib/store-sections";
 
 /**
  * The nightly Continente run: the one command a scheduler calls.
@@ -76,10 +77,6 @@ const STORE = "CONTINENTE" as const;
 
 /** Verdicts re-checked per night, on top of the backlog budget. */
 const RECHECK_PER_NIGHT = 300;
-
-function topSection(path: string | null | undefined): string {
-  return (path ?? "").split("/")[0].trim() || "(sem categoria)";
-}
 
 /** data/store-sections.ts, applied to what the product page says. */
 const isFood = (path: string | null, name: string) => keepInCatalogue(STORE, path, name).keep;
@@ -318,6 +315,7 @@ async function main() {
     dead: refresh.dead.length,
     attempted: queue.length,
     complete,
+    store: STORE,
   });
   // Guard 1b: the same freeze when an implausible share of products we hold as
   // food suddenly reads as non-food - the store renamed its shelves (as on 18
@@ -326,6 +324,7 @@ async function main() {
   const nonFoodCatastrophe = nonFoodCatastropheReason({
     nonFood: refresh.nonFood.length,
     attempted: queue.length,
+    store: STORE,
   });
   const catastrophe = churnCatastrophe ?? nonFoodCatastrophe;
 
@@ -594,6 +593,7 @@ async function main() {
       name: c.name,
     })),
     droppedFromSitemapCount: droppedFromSitemap.length,
+    deadStillListed: sitemapTrusted ? refresh.dead.filter((d) => published.has(d.storeProductId)).length : null,
     delistedNow: delistedNotes,
     delistedNowCount: delisted.length,
     recategorised: refresh.nonFood.slice(0, SAMPLE).map((n) => ({
@@ -605,16 +605,21 @@ async function main() {
     unreachable: refresh.unreachable.length + (examine?.unreachable.length ?? 0),
   };
 
-  const allResults = [...refresh.results, ...(examine?.results ?? [])];
+  // One list per section: refreshing and examining both group by section, and
+  // joined end to end they printed Mercearia and Laticínios twice.
+  const allResults = mergeResultsByLabel([...refresh.results, ...(examine?.results ?? [])]);
   const rotationOnly = await buildRotationReport({
     store: STORE,
     complete,
     seenAt,
     refreshed: total,
     dead: refresh.dead.length,
+    // The product's name, with the reason beside it; until 22 October 2026 the
+    // reason stood in for the name, and the same error line repeated 12 times.
     deadSamples: refresh.dead.slice(0, SAMPLE).map((d) => ({
       storeProductId: d.storeProductId,
-      name: d.reason.slice(0, 60),
+      name: before.byStoreProductId.get(d.storeProductId)?.name ?? d.storeProductId,
+      detail: d.reason.startsWith("Continente: could not find") ? "no product on the page" : d.reason.slice(0, 40),
     })),
     nonFood: refresh.nonFood.length,
     prices: saved.prices,

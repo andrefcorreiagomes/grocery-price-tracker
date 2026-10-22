@@ -1,5 +1,6 @@
 import type { ProductNote } from "./daily-report";
 import { DEAD_NIGHTS_BEFORE_DELISTING, MAX_SHARE_MISSING } from "./product-checks";
+import { BRAKES } from "./brakes";
 
 /**
  * What only Pingo Doce's crawl can say about itself, for its daily report.
@@ -27,9 +28,9 @@ export const MAX_UNREACHABLE_SHARE = 0.01;
  * reader cannot understand ALSO counts as gone, so a change to the page's
  * markup would make nearly every page "gone" at once - and three such nights
  * would delist the whole store. Above this share, none of tonight's dead pages
- * is counted.
+ * is counted. Kept with the other stores' brakes in brakes.ts.
  */
-export const MAX_SHARE_DEAD_PAGES = 0.05;
+export const MAX_SHARE_DEAD_PAGES = BRAKES.PINGO_DOCE.deadPages;
 
 export interface PingoDoceExtras {
   // the sitemap
@@ -61,8 +62,14 @@ export interface PingoDoceExtras {
   // products leaving
   /** held products the sitemap no longer lists */
   missingFromSitemap: number;
-  /** false when too many vanished at once to believe the list */
+  /** false when the list looked broken tonight (sitemap-trust.ts); none counted as gone */
   sitemapBelieved: boolean;
+  /** why it was not believed, in words; null when it was */
+  sitemapDistrust: string | null;
+  /** set on the night a suspicious list, seen three nights running, became the new normal */
+  sitemapAccepted: string | null;
+  /** why the sitemap index was not used tonight; null when it was */
+  sitemapIndexProblem: string | null;
   /** pages that said the product is gone (404/410, or no product on the page) */
   deadPages: number;
   /** false when so many pages said gone that the page reader is suspect */
@@ -73,6 +80,12 @@ export interface PingoDoceExtras {
   stoppedBySection: number;
   /** held mixed-aisle products whose name is no longer recognised as food */
   stoppedByName: number;
+  /** why too many products left food at once to believe it; nothing was stopped */
+  nonFoodRefused: string[];
+  /** why too many prices moved at once to believe it; null on a normal night */
+  priceStorm: string | null;
+  /** food departments whose own product count could not be read tonight */
+  departmentsUnread: string[];
 }
 
 const pct = (n: number, of: number) => `${of === 0 ? "0" : ((100 * n) / of).toFixed(1)}%`;
@@ -90,6 +103,8 @@ export function pingoDoceProblems(x: PingoDoceExtras): { fails: string[]; warnin
   const fails: string[] = [];
   const warnings: string[] = [];
 
+  for (const refused of x.nonFoodRefused) fails.push(refused);
+  if (x.priceStorm) fails.push(x.priceStorm);
   if (!x.deadPagesBelieved) {
     fails.push(
       `${x.deadPages.toLocaleString()} of ${x.targets.toLocaleString()} pages (${pct(x.deadPages, x.targets)}) said the product is gone, ` +
@@ -98,14 +113,25 @@ export function pingoDoceProblems(x: PingoDoceExtras): { fails: string[]; warnin
   }
   if (!x.sitemapBelieved) {
     warnings.push(
-      `${x.missingFromSitemap.toLocaleString()} held products are missing from the sitemap, more than ${MAX_SHARE_MISSING * 100}% of the range - ` +
-        `the list was not believed and none was counted as gone tonight`
+      `the sitemap was not believed tonight (${x.sitemapDistrust ?? "no reason recorded"}), so none of the ` +
+        `${x.missingFromSitemap.toLocaleString()} held products missing from it was counted as gone`
     );
+  }
+  if (x.sitemapAccepted) {
+    warnings.push(`sitemap baseline moved: ${x.sitemapAccepted}`);
+  }
+  if (x.sitemapIndexProblem) {
+    warnings.push(`${x.sitemapIndexProblem} - a new product file would be missed`);
   }
   if (x.unknownSections.length > 0) {
     warnings.push(
       `${x.unknownSections.length} department(s) in the sitemap are not known, so their products were never crawled: ` +
         x.unknownSections.map((s) => `${s.section} (${s.count})`).join(", ")
+    );
+  }
+  if (x.departmentsUnread.length > 0) {
+    warnings.push(
+      `the store's own count could not be read for ${x.departmentsUnread.length} department(s): ${x.departmentsUnread.join(", ")}`
     );
   }
   if (x.unparseable > 0) {
@@ -158,7 +184,7 @@ export function pingoDoceLines(x: PingoDoceExtras): { reached: string[]; leaving
 
   const leaving = [
     `  missing from the sitemap: ${x.missingFromSitemap.toLocaleString()}` +
-      (x.sitemapBelieved ? "" : "   NOT BELIEVED tonight - too many at once, none counted"),
+      (x.sitemapBelieved ? "" : "   NOT BELIEVED tonight, none counted - see the warning above"),
     `  pages that said gone:     ${x.deadPages.toLocaleString()}` +
       (x.deadPagesBelieved ? "" : "   NOT BELIEVED tonight - too many at once, none counted"),
     `  delisted this run (third night): ${x.delistedNow.toLocaleString()}`,
@@ -176,8 +202,9 @@ export const LEAVING_NOTE =
   "absence from the sitemap counts a night, and so does a page that says the product is gone. " +
   `${DEAD_NIGHTS_BEFORE_DELISTING} nights in a row delist it; one bad night cannot. Nothing is deleted: ` +
   "the row and its price history stay. Either count is ignored for the night when an implausible " +
-  "share arrives at once, because that means a broken list or a broken page reader, not a store " +
-  "emptying its shelves.";
+  `share arrives at once (more than ${MAX_SHARE_MISSING * 100}% of the range missing from the list, or of ` +
+  "the pages saying gone), because that means a broken list or a broken page reader, not a store " +
+  "emptying its shelves. A list that looks the same three nights running is believed again, as at Continente.";
 
 /** The note under "Sitemap and product pages" for this store. */
 export const REACHED_NOTE =

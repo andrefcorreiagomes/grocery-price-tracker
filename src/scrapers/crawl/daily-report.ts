@@ -3,7 +3,7 @@ import type { Store } from "@/lib/stores";
 import { megabytes, totalStats, type HostStats } from "../http";
 import type { CategoryAudit } from "./continente-categories";
 import type { PriceHistorySummary } from "./price-history";
-import type { CategoryResult } from "./types";
+import { SAMPLE, type CategoryResult } from "./types";
 
 /**
  * The report a crawl writes about itself.
@@ -27,8 +27,6 @@ const PRICE_MOVE = 0.5;
 const PRICE_ABSURD = 5;
 /** Request time this much worse than last run suggests throttling. */
 const SLOWDOWN = 2;
-/** Examples carried per list; the counts are always exact, the samples are not. */
-const SAMPLE = 12;
 
 /**
  * Take examples from across the sections rather than the first N encountered.
@@ -296,6 +294,26 @@ export interface BeforeSnapshot {
   >;
 }
 
+/**
+ * One result per section label, products joined in order and counts added.
+ * For a crawl that collects in passes (Continente refreshes, then examines),
+ * each pass grouping by section on its own.
+ */
+export function mergeResultsByLabel(results: CategoryResult[]): CategoryResult[] {
+  const byLabel = new Map<string, CategoryResult>();
+  for (const r of results) {
+    const was = byLabel.get(r.category.label);
+    if (!was) {
+      byLabel.set(r.category.label, { ...r, products: [...r.products] });
+      continue;
+    }
+    was.products.push(...r.products);
+    if (r.expected !== undefined) was.expected = (was.expected ?? 0) + r.expected;
+    if (r.duplicates !== undefined) was.duplicates = (was.duplicates ?? 0) + r.duplicates;
+  }
+  return [...byLabel.values()];
+}
+
 export async function snapshotBefore(store: Store): Promise<BeforeSnapshot> {
   const rows = await prisma.catalogueProduct.findMany({
     where: { store },
@@ -442,21 +460,25 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   const absurdCount = absurd.length;
 
   // --- what the crawl did not see -------------------------------------------
+  // Products still tracked, or delisted by this very run. Until 22 October 2026
+  // every unseen row counted, so "already missing before this run" was mostly
+  // products delisted weeks earlier (864 at Continente that day).
   const missingRows = await prisma.catalogueProduct.findMany({
-    where: { store, lastSeenAt: { lt: seenAt } },
+    where: { store, lastSeenAt: { lt: seenAt }, OR: [{ delistedAt: null }, { delistedAt: { gte: seenAt } }] },
     select: { storeProductId: true, name: true, lastSeenAt: true, categoryPath: true },
     orderBy: { lastSeenAt: "desc" },
   });
   const disappearedNow = missingRows.filter((r) => previousCutoff === undefined || r.lastSeenAt >= previousCutoff);
   const stillMissing = missingRows.length - disappearedNow.length;
 
-  // --- data quality ---------------------------------------------------------
+  // --- data quality: products still on sale ----------------------------------
+  const live = { store, delistedAt: null };
   const [total, missingPrice, missingBrand, missingCategory, missingUrl] = await Promise.all([
-    prisma.catalogueProduct.count({ where: { store } }),
-    prisma.catalogueProduct.count({ where: { store, price: null } }),
-    prisma.catalogueProduct.count({ where: { store, OR: [{ brand: null }, { brand: "" }] } }),
-    prisma.catalogueProduct.count({ where: { store, categoryPath: null } }),
-    prisma.catalogueProduct.count({ where: { store, url: "" } }),
+    prisma.catalogueProduct.count({ where: live }),
+    prisma.catalogueProduct.count({ where: { ...live, price: null } }),
+    prisma.catalogueProduct.count({ where: { ...live, OR: [{ brand: null }, { brand: "" }] } }),
+    prisma.catalogueProduct.count({ where: { ...live, categoryPath: null } }),
+    prisma.catalogueProduct.count({ where: { ...live, url: "" } }),
   ]);
 
   // --- what this does to the live site --------------------------------------

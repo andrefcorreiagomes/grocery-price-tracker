@@ -1,14 +1,27 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { prisma } from "../lib/db";
-import { failedPageVerdict, HttpError, NetworkError } from "../scrapers/http";
+import {
+  afterRefusal,
+  failedPageVerdict,
+  fetchHtml,
+  HttpError,
+  httpStats,
+  NetworkError,
+  REFUSALS,
+  setHttpTimingForChecks,
+  StoreRefusingError,
+  stoppedStores,
+} from "../scrapers/http";
 import { PageReadError } from "../scrapers/types";
 import { fetchProducts } from "../scrapers/crawl/continente-products";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import {
   BATCH,
   clearChecks,
+  DEAD_NIGHTS_BEFORE_DELISTING,
   delistedRecheckDue,
+  recordDead,
   fillBarcodes,
   forEachBatch,
   recordRecategorised,
@@ -19,6 +32,8 @@ import {
 import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "./classify-food-types";
 import { buildGroups, shownOnSite } from "../lib/grouping";
 import { auchanBarcodeFromHtml } from "../scrapers/auchan";
+import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { cheapestPerStore } from "../lib/comparison";
 
 /**
  * The first three fixes of the code review of 22 October 2026
@@ -325,6 +340,19 @@ function verifyGroupRules() {
   const organic = only(buildGroups([m("co1", "CONTINENTE", "5601252106677"), m("co2", "CONTINENTE", "5601252117734"), m("au", "AUCHAN", "5601252106677")], [link("co1", "au"), link("co2", "au")]));
   check("Gallo's regular and organic oil at one store: kept off the site", organic.flags.includes("duplicate-store") && !shownOnSite(JSON.stringify(organic.flags)));
 
+  // Gallo #27: Continente lists the regular and the organic oil under one name;
+  // Auchan's regular bottle shares the regular one's barcode and was refused
+  // against the organic one.
+  const gallo = buildGroups(
+    [m("co-reg", "CONTINENTE", "5601252106677"), m("co-bio", "CONTINENTE", "5601252117734"), m("au", "AUCHAN", "5601252106677"), m("pd", "PINGO_DOCE")],
+    [link("co-reg", "au"), link("co-reg", "pd"), link("co-bio", "pd"), link("pd", "au")],
+    [{ aId: "co-bio", bId: "au" }]
+  );
+  check("a refused group keeps the part a shared barcode proves", gallo.length === 1 && gallo[0].emit && gallo[0].productIds.join(",") === "au,co-reg,pd",
+    gallo.map((g) => `${g.productIds.join(",")} ${g.emit} ${g.flags.join(",")}`).join(" | "));
+  check("that part is shown, at all three chains, marked as trimmed", shownOnSite(JSON.stringify(gallo[0].flags)) && gallo[0].storeCount === 3 && gallo[0].flags.includes("trimmed"));
+  check("with no shared barcode nothing proves a part: still refused", chained.emit === false && !chained.flags.includes("trimmed"));
+
   check("a group with no flags is shown", shownOnSite(null));
   check("a group a person confirmed is still shown", shownOnSite(JSON.stringify(["weak-links-only"])));
   check("unreadable flags are not shown", !shownOnSite("{not json"));
@@ -371,10 +399,132 @@ async function verifyBarcodesKept() {
   await cleanup();
 }
 
+async function verifyNotForSale() {
+  console.log("\n  H7: listed but not for sale - kept, no current price, never gone");
+  await cleanup();
+  const hit = (price: number | null) => ({
+    id: `${PREFIX}nfs`, name: "Bolo de Arroz", price, brand: "Pingo Doce", category: "Padaria e Pastelaria/Bolos", url: "https://example.invalid/n",
+  });
+  const first = await openCatalogueWriter("PINGO_DOCE");
+  await first.save([hit(null)], "Padaria e Pastelaria");
+  const row = () => prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: "PINGO_DOCE", storeProductId: `${PREFIX}nfs` } },
+    select: { unavailableAt: true, price: true, deadCount: true, delistedAt: true },
+  });
+  const saved = await row();
+  check("saved without a price: marked unavailable, not gone", saved?.unavailableAt !== null && saved?.price === null && saved?.delistedAt === null);
+  const back = await openCatalogueWriter("PINGO_DOCE");
+  await back.save([hit(1.49)], "Padaria e Pastelaria");
+  check("saved again with a price: available again", (await row())?.unavailableAt === null && (await row())?.price === 1.49);
+
+  await prisma.catalogueProduct.update({
+    where: { store_storeProductId: { store: "PINGO_DOCE", storeProductId: `${PREFIX}nfs` } },
+    data: { deadCount: 2 },
+  });
+  await recordUnavailable("PINGO_DOCE", [`${PREFIX}nfs`], new Date());
+  const out = await row();
+  check("a page that says out of stock removes the current price", out?.price === null && out?.unavailableAt !== null);
+  check("and resets the gone-night count, because the page answered", out?.deadCount === 0, `count ${out?.deadCount}`);
+  await cleanup();
+
+  const p = (store: string, price: number | null, packageSize: number | null) => ({
+    storeProductId: `${store}-${price}`, store, name: "Batata", brand: null, price, packageSize, unit: packageSize ? "kg" : null,
+  });
+  const cells = cheapestPerStore([p("CONTINENTE", 1.2, 1), p("PINGO_DOCE", null, 1), p("AUCHAN", 2.4, null)], "batata", "kg");
+  check("a store whose only product is unavailable reads as not selling it", cells.get("PINGO_DOCE")?.kind === "not-stocked");
+  check("a priced product without a size still reads as no size", cells.get("AUCHAN")?.kind === "no-size");
+  check("a priced, sized product is compared", cells.get("CONTINENTE")?.kind === "price");
+}
+
+/**
+ * L6: a store that refuses everything is paused, then left alone. Run against
+ * a server on this computer (its own port, so the other checks are untouched),
+ * with the waits shortened to milliseconds.
+ */
+async function verifyRefusals() {
+  console.log("\n  L6: a store that keeps refusing is paused, then left alone");
+  check("one refused page: carry on", afterRefusal(1) === "carry on");
+  check(`${REFUSALS.pagesBeforePause} in a row: pause`, afterRefusal(REFUSALS.pagesBeforePause) === "pause");
+  const all = REFUSALS.pagesBeforePause * (REFUSALS.pausesMs.length + 1);
+  check(`${all} in a row, through every pause: stop`, afterRefusal(all) === "stop" && afterRefusal(all - REFUSALS.pagesBeforePause) === "pause");
+
+  let hits = 0;
+  let answering = false;
+  const server = createServer((_req, res) => {
+    hits++;
+    if (answering) res.writeHead(200, { "Content-Type": "text/html" }).end("<html>ok</html>");
+    else res.writeHead(503, { "Retry-After": "0" }).end("busy");
+  });
+  const base = await new Promise<string>((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`))
+  );
+  setHttpTimingForChecks({ minDelayMs: 1, pausesMs: [5, 5, 5] });
+  const verdicts: string[] = [];
+  try {
+    // 19 refused, then one answer: the count starts again.
+    for (let i = 0; i < REFUSALS.pagesBeforePause - 1; i++) await fetchHtml(`${base}/p${i}`).catch(() => {});
+    answering = true;
+    await fetchHtml(`${base}/ok`);
+    answering = false;
+    for (let i = 0; i < all; i++) {
+      await fetchHtml(`${base}/q${i}`).catch((e: Error) => verdicts.push(e.name));
+    }
+    check("a page that answers resets the count, so the store was still asked",
+      verdicts.length === all && !verdicts.slice(0, all - 1).includes("StoreRefusingError"), verdicts.slice(-2).join());
+    const before = hits;
+    let refusedError: unknown = null;
+    await fetchHtml(`${base}/after`).catch((e) => (refusedError = e));
+    check("after every pause, the store is asked nothing more this run",
+      refusedError instanceof StoreRefusingError && hits === before && stoppedStores().some((h) => base.endsWith(h)));
+    check("and a refused page is never \"gone\"", failedPageVerdict(refusedError) === "unreachable");
+    const counted = httpStats().find((h) => base.endsWith(h.host))?.requests;
+    check("L5: every request sent is counted, refused and retried ones too", counted === hits, `${counted} counted, ${hits} received`);
+
+    // L9: Pingo Doce's progress line counts pages attempted, read or not.
+    const seen: number[] = [];
+    const targets = Array.from({ length: 100 }, (_, i) => ({
+      storeProductId: `${PREFIX}l9-${i}`, url: `${base}/l9/${i}`, section: "mercearia", categoryPath: "Mercearia",
+    }));
+    const run = await fetchPingoDoceProducts(targets, { onProgress: (p) => seen.push(p.page) });
+    check("L9: 100 pages that all failed still print the progress line", seen.join() === "100" && run.fetched === 0, seen.join());
+  } finally {
+    setHttpTimingForChecks({ minDelayMs: 1_000, pausesMs: REFUSALS.pausesMs });
+    server.close();
+  }
+}
+
+/** M5: why a product left is recorded beside when, and cleared when it returns. */
+async function verifyDelistReason() {
+  console.log("\n  M5: why a product left is recorded");
+  await cleanup();
+  const ids = ["gone", "moved", "back"].map((s) => `${PREFIX}why-${s}`);
+  for (const id of ids) {
+    await prisma.catalogueProduct.create({
+      data: { store: STORE, storeProductId: id, name: "Atum", url: "https://example.invalid/w", price: 1.5, categoryPath: "Mercearia/Conservas" },
+    });
+  }
+  const why = async (id: string) =>
+    prisma.catalogueProduct.findUnique({
+      where: { store_storeProductId: { store: STORE, storeProductId: id } },
+      select: { delistedAt: true, delistReason: true },
+    });
+  for (let night = 0; night < DEAD_NIGHTS_BEFORE_DELISTING; night++) await recordDead(STORE, [ids[0], ids[2]], new Date());
+  const gone = await why(ids[0]);
+  check("three dead nights: delisted as gone", gone?.delistedAt !== null && gone?.delistReason === "gone", String(gone?.delistReason));
+  await recordRecategorised(STORE, [ids[1]], new Date());
+  check("moved to a non-food shelf: delisted as not food", (await why(ids[1]))?.delistReason === "not-food");
+  const writer = await openCatalogueWriter(STORE);
+  await writer.save([{ id: ids[2], name: "Atum", price: 1.5, brand: "Bom Petisco", category: "Mercearia/Conservas", url: "https://example.invalid/w" }], "Mercearia");
+  const back = await why(ids[2]);
+  check("a product seen again is no longer delisted, and has no reason", back?.delistedAt === null && back?.delistReason === null);
+  await cleanup();
+}
+
 export async function verifyCrawlSafety(): Promise<number> {
   failures = 0;
   try {
     await verifyFailedPages();
+    await verifyRefusals();
     await verifyBatching();
     await verifyKindsKept();
     await verifyMovedOut();
@@ -382,6 +532,8 @@ export async function verifyCrawlSafety(): Promise<number> {
     verifyGroupRules();
     verifyRecheckSchedule();
     await verifyBarcodesKept();
+    await verifyNotForSale();
+    await verifyDelistReason();
   } finally {
     await cleanup();
   }

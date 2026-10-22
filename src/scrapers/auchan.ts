@@ -1,6 +1,6 @@
-import { parseSize } from "../lib/matching";
+import { parseSize } from "../lib/sizes";
 import { extractLdJsonBlocks, fetchHtml, HttpError } from "./http";
-import { PageReadError, validDateOrNull, type ScrapeResult } from "./types";
+import { PageReadError, sellablePrice, validDateOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -111,7 +111,7 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
   return {
     name,
     brand: product.brand?.name ?? null,
-    price: Number(product.offers.price),
+    price: sellablePrice(Number(product.offers.price)),
     ean: product.gtin ?? null,
     categoryPath: null,
     // Auchan writes the size into the product name itself - "BACON EXTRA CUBOS

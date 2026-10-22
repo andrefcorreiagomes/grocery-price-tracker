@@ -446,8 +446,10 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
   earlier price above today's, at Pingo Doce as at Auchan
   (`src/scrapers/struck-price.ts`); a price below the recommended price
   ("PVPR") is not one, by the user's decision. Checks on pieces of saved pages
-  in `src/scripts/verify-store-pages.ts` (section 20). Still open: the enrich
-  script's Auchan promotions.
+  in `src/scripts/verify-store-pages.ts` (section 20).
+- **M12, the enrich script: a mistake in this review.** `enrich-candidates`
+  reads Auchan's product pages for barcodes and sizes, and never writes a
+  promotion. Nothing to fix.
 
 - **H6** on 22 October 2026, after the user approved the checked sample
   ("Matching Sample, 22 October"): matching runs every night; a group holding
@@ -459,6 +461,128 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
   (`npm run barcodes:auchan`).
 - **H7** on 22 October 2026: a product no longer sold is looked at again 7 and
   30 days after it was delisted, then every 90 days (`delistedRecheckDue`).
+  And one rule for "listed but not for sale" at every store: kept, with no
+  current price, never counted as gone; the comparisons treat a store with
+  only such products as not selling the food. Still to measure: whether
+  Continente's sitemap still lists the products its pages answer "gone"
+  (the report's new line `answered "gone" but still in the sitemap`).
+- **H6, improved** on 22 October 2026: a group holding a refused pair keeps
+  its core of products sharing one barcode, when there is one, instead of
+  being dropped whole (flag `trimmed`). Example: the Gallo olive oil group.
+- **M1** on 22 October 2026: each point of M1, with checks in
+  `src/scripts/verify-reports.ts` (section 21).
+- **M3** on 22 October 2026: Pingo Doce's product files are read from its
+  sitemap index (one more request a night; if the index fails, the two known
+  files are read and the report says so), and its list is judged by
+  Continente's rule, so a suspicion expires after three equal nights.
+- **M4** on 22 October 2026: the three brakes of every store in one table,
+  `src/scrapers/crawl/brakes.ts`. Pingo Doce gained the non-food brake and the
+  price brake. Its price limit is 60%, not 30%. Measured that evening: its
+  runs of 3, 18 and 21 October moved 31%, 25% and 27% of its prices, each
+  days or weeks after the run before; the run of 22 October, one night
+  after, moved 0.5%. The big moves are mostly cuts of 25-35% and rises of
+  25-50% - promotions starting and ending. (An earlier version of this note
+  gave the three high figures to 18, 21 and 22 October; that was wrong.)
+- **M6** on 22 October 2026: the basket works on the basket lines directly;
+  the out-of-date-price feature is gone; checks in
+  `src/scripts/verify-basket.ts` (section 22). The two-or-three-stores rule is
+  unchanged, waiting for the user's decision.
+- **M7** on 22 October 2026: the database is the one `DATABASE_URL` names, and
+  `npm run verify:nightly` runs the checks on a copy
+  (`src/scripts/verify-on-copy.ts`; `verify:nightly:here` runs them on the
+  database itself).
+- **M8** on 22 October 2026: one plural rule, one brand rule and one
+  name-overlap score. "L'Or" and "LOr" are now one brand when a match is
+  confirmed. `matching.ts` is split by what it does: `text.ts` (names and
+  brands), `sizes.ts`, `barcodes.ts`, and `matching.ts` (scoring a pair).
+  Not done: the store page readers still read sizes in their own code
+  (`page-size.ts`); bringing all five size readers into one is larger, and
+  waits.
+- **M9** on 22 October 2026: `sellablePrice` in `src/scrapers/types.ts` is the
+  rule at all three readers (a price of 0 or one cent is no price); the
+  history charts skip such prices.
+- **M10** on 22 October 2026: `crawl:continente` and
+  `crawl:continente:products` deleted; Pingo Doce's own department counts are
+  read by its nightly (19 requests) and compared night over night.
+- **M11** on 22 October 2026: `storeCountWord` in `src/lib/stores.ts`.
+- **M13** on 22 October 2026: both one-page-per-product readers are checked on
+  whole pages, rebuilt from the markup their comments quote (pieces of real
+  pages would be better); the basket has checks; `verify-matching.ts` is split
+  into four files by subject (matching, comparisons, kinds of food, crawl
+  checks). The split found that it counted each failure twice in its total.
+- **M14** on 22 October 2026: `src/lib/dates.ts`, Lisbon dates everywhere.
+- **M15** on 22 October 2026: the classifier's word lists are in
+  `data/classifier-words.ts`, and the "open shelf" list is written once.
+
+- **L1, L2** on 22 October 2026: the out-of-date comments corrected (some had
+  already been fixed with the other findings); the three explanations moved
+  above their functions. Two figures were not re-measured and are given
+  loosely: Pingo Doce names carrying a size ("well under 1%"; the files said
+  14 and 29 of 7,191) and its run ("about three hours", 172 minutes on
+  21 October).
+- **L3** on 22 October 2026: one `productIdFromUrl` (`product-id.ts`), one
+  `topSection` (`store-sections.ts`), one `SAMPLE` (crawl `types.ts`), one
+  `PLACEHOLDER_PRICE`, one "Preços recolhidos" line (`PricesCollected`), one
+  comparison name (`comparisonName`). The second `findClosingBrace` went with
+  M10.
+- **L4** on 22 October 2026: `ANIMALS`, `NON_PRODUCT_SITEMAP` (its lesson kept
+  as a comment by the index reader), `parseAuchanTiles` and `resetHttpStats`
+  removed; Pingo Doce's barcode search was already gone. The
+  `FoodTypeCategory` table waits (see "Still to do").
+- **L5** on 22 October 2026: every request sent is counted. From then on the
+  request totals are slightly higher than in earlier runs, for that reason.
+- **L7** on 22 October 2026: the robots.txt copies are in `data/`, which git
+  keeps.
+- **L11** on 22 October 2026: the imports of `backfill-sizes.ts` are in order.
+  `prisma` and `tsx` stay where they are: the nightly runs scripts with `tsx`
+  and the database is migrated with `prisma` on the computer that runs it, so
+  they are needed there and not only while developing.
+- **L6** on 22 October 2026: after 20 refused pages in a row a store is left
+  alone for 5 minutes, then 10, then 15; after 80 it is asked nothing more that
+  run (`REFUSALS` in `src/scrapers/http.ts`). Checked against a server on this
+  computer.
+- **L8** on 22 October 2026: the nightly removes logs older than 90 days,
+  never the robots.txt copies; reports are kept for good (the user's choice).
+- **L9** on 22 October 2026: Pingo Doce's progress line counts pages
+  attempted, read or not.
+
+## Still to do (22 October 2026)
+
+Waiting for the Auchan barcode reader to finish (about 21:50), because each
+needs the database or Auchan:
+
+1. DONE. The reader ended at 21:52: 15,880 pages, 14,178 barcodes, 1,702
+   pages without one, none unreadable.
+2. DONE 21:55. M5: the `delistReason` column added (backup
+   `backups/dev-2026-10-22-before-delist-reason.db`). The migration filled
+   "replaced" (130) and "gone" (467); the other 1,385 delisted products had
+   fewer than three dead nights, the only way to "gone", and a random 25 of
+   them were all supplements, sports protein, Easter sweets, nappies and the
+   like, so they were filled as "not-food".
+3. DONE. M15: all 47,102 products get the same kind with the old and the new
+   word lists.
+4. DONE. Pingo Doce's prices: see M4 above - a quarter change after a change
+   of promotions, 0.5% from one night to the next.
+5. M2: read Auchan's second product sitemap file (1 request, allowed by the
+   user), then propose whether the nightly should use the sitemap.
+6. The basket and "Indisponível": look at the pages in the browser, with
+   screenshots for the user.
+7. The full checks (`npm run verify:nightly`), types and style; then commit
+   and push (allowed by the user once the checks pass).
+
+After tonight's run (00:05, 23 October):
+
+8. Read the reports, in particular: Continente's `answered "gone" but still
+   in the sitemap`; Pingo Doce's index and its 19 department counts, read for
+   the first time; that no brake fired wrongly.
+9. L4: remove the retired `FoodTypeCategory` table (needs a migration).
+   L10: the egg and capsule count using the kind corrections; measure first
+   how many stored counts would change.
+10. Pingo Doce's price limit (60%, set from three nights): set it again once
+    there are more nights.
+11. Whole-page checks of the two page readers on pieces of real pages, the
+    next time pages are read anyway.
+12. Bring the five places that read sizes into one (rest of M8).
 
 ## Measured on 22 October, before the decisions above
 

@@ -8,8 +8,10 @@ import {
   MAX_SHARE_MISSING,
   missingFromList,
   recordDead,
-  stopTrackingLeftOut,
+  stopTrackingMovedOut,
 } from "../scrapers/crawl/product-checks";
+import { isPriceChurnStorm } from "../scrapers/crawl/reidentification";
+import { readPingoDoceDepartments } from "../scrapers/crawl/pingodoce";
 import { formatHttpStats, httpStats, requireCrawlerContact, wireBytesOf } from "../scrapers/http";
 import { compareWithBaseline, compareWithPrevious, previousRunFor, recordRun, rollingBaseline } from "../scrapers/crawl/history";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
@@ -21,6 +23,7 @@ import type { SearchHit } from "../scrapers/search/types";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { LeftOutTally, recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
+import { RUNS_BEFORE_ACCEPTING, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
 
 /**
  * Crawl Pingo Doce ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
@@ -28,7 +31,7 @@ import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/cr
  *   npm run crawl:pingodoce:nightly -- --dry               # sitemap only, no product fetches
  *   npm run crawl:pingodoce:nightly -- --limit=200         # a slice, stalest first
  *   npm run crawl:pingodoce:nightly -- --new               # only ids we have never seen
- *   npm run crawl:pingodoce:nightly                        # the whole food catalogue, ~2.5 h
+ *   npm run crawl:pingodoce:nightly                        # the whole food catalogue, ~3 h
  *
  * Pingo Doce used to be crawled through its listing grids (`npm run
  * crawl:pingodoce`), which robots.txt DISALLOWS on four separate rules; that
@@ -145,6 +148,24 @@ async function main() {
   const previousRun = await previousRunFor("PINGO_DOCE");
   const baseline = await rollingBaseline("PINGO_DOCE");
 
+  // The store's own count of each food department, from the department's first
+  // page: one request each, which robots.txt allows (the grids it disallows are
+  // the pages after the first). Compared night over night, as Continente's and
+  // Auchan's are; NOT against what we hold, because a department page counts
+  // products cross-listed from elsewhere. Until 22 October 2026 this ran only by
+  // hand (npm run crawl:pingodoce; code review M10). A department that cannot be
+  // read is recorded and the run continues.
+  const departmentCounts = fullRun ? await readPingoDoceDepartments() : [];
+  const publishedCounts = new Map(
+    departmentCounts.flatMap((c) => (c.published === null ? [] : [[c.department.slug, c.published] as const]))
+  );
+  const departmentsUnread = departmentCounts
+    .filter((c) => c.published === null)
+    .map((c) => `${c.department.label}${c.error ? ` (${c.error})` : ""}`);
+  if (fullRun) {
+    console.log(`\nthe store's own counts: ${publishedCounts.size} of ${departmentCounts.length} departments read`);
+  }
+
   const writer = await openCatalogueWriter("PINGO_DOCE");
   const seenAt = writer.seenAt;
   const started = Date.now();
@@ -155,7 +176,16 @@ async function main() {
 
   // Held products the sitemap files under a non-food section or a skipped
   // sub-section stop being tracked - no request needed, the URL settles it.
-  const stoppedBySection = await stopTrackingLeftOut("PINGO_DOCE", sitemap.excludedIds, new Date());
+  // Unless too many at once (the non-food brake, brakes.ts): that is the store
+  // renaming its sections or our reading breaking, so nothing is stopped.
+  const liveHeld = await prisma.catalogueProduct.count({ where: { store: "PINGO_DOCE", delistedAt: null } });
+  const nonFoodRefused: string[] = [];
+  const bySection = await stopTrackingMovedOut("PINGO_DOCE", sitemap.excludedIds, liveHeld, new Date());
+  if (bySection.refused) {
+    nonFoodRefused.push(`moved out of a food section: ${bySection.refused}`);
+    console.log(`  !! ${bySection.refused}`);
+  }
+  const stoppedBySection = bySection.stopped.length;
   if (stoppedBySection > 0) console.log(`  ${stoppedBySection} held product(s) are no longer in a food section; no longer tracked`);
 
   // A mixed-aisle product is kept only when its name is recognised as food,
@@ -183,7 +213,12 @@ async function main() {
   });
 
   const summary = writer.finish();
-  const stoppedByName = await stopTrackingLeftOut("PINGO_DOCE", leftOutIds, new Date());
+  const byName = await stopTrackingMovedOut("PINGO_DOCE", leftOutIds, liveHeld, new Date());
+  if (byName.refused) {
+    nonFoodRefused.push(`mixed-aisle names not recognised as food: ${byName.refused}`);
+    console.log(`\n!! ${byName.refused}`);
+  }
+  const stoppedByName = byName.stopped.length;
   if (stoppedByName > 0) {
     console.log(`\n${stoppedByName} held mixed-aisle product(s) not recognised as food; no longer tracked`);
   }
@@ -202,18 +237,56 @@ async function main() {
   ).map((r) => r.storeProductId);
   const heldSet = new Set(held);
   const absent = missingFromList(held, sitemap.allIds);
+  // Whether to believe the list, by the rule Continente uses (sitemap-trust.ts):
+  // a shrunken list, a lost file, or too many held products missing makes it
+  // suspect, and the same figures three nights running make it the new normal.
+  // Until 22 October 2026 the missing-products guard never expired (code
+  // review M3). Only a full run's verdict is recorded, so only full runs count.
+  const sitemapEntries = sitemap.perFile.reduce((n, f) => n + f.entries, 0);
+  const lastTrusted = await prisma.crawlRun.findFirst({
+    where: { store: "PINGO_DOCE", sitemapTrusted: true },
+    orderBy: { startedAt: "desc" },
+    select: { sitemapEntries: true, sitemapFiles: true, startedAt: true },
+  });
+  const recentRuns = await prisma.crawlRun.findMany({
+    where: {
+      store: "PINGO_DOCE",
+      sitemapEntries: { not: null },
+      ...(lastTrusted ? { startedAt: { gt: lastTrusted.startedAt } } : {}),
+    },
+    orderBy: { startedAt: "desc" },
+    take: RUNS_BEFORE_ACCEPTING,
+    select: { sitemapEntries: true, sitemapFiles: true, sitemapTrusted: true },
+  });
+  const trust = judgeSitemap({
+    entries: sitemapEntries,
+    files: sitemap.perFile.length,
+    error: null,
+    baseline:
+      lastTrusted?.sitemapEntries != null && lastTrusted.sitemapFiles != null
+        ? { entries: lastTrusted.sitemapEntries, files: lastTrusted.sitemapFiles }
+        : null,
+    // Runs from before the verdict was recorded say nothing either way, so they
+    // count as believed: they cannot help a suspicion expire.
+    recent: recentRuns.map((r) => ({ entries: r.sitemapEntries ?? 0, files: r.sitemapFiles ?? 0, trusted: r.sitemapTrusted ?? true })),
+    extraSuspicion: absent.believable
+      ? null
+      : `${absent.missing.length.toLocaleString()} of the ${held.length.toLocaleString()} products we hold are missing from it, more than ${MAX_SHARE_MISSING * 100}%`,
+  });
+  if (sitemap.indexProblem) console.log(`\nWARNING: ${sitemap.indexProblem}`);
+  if (trust.accepted) console.log(`\nsitemap: ${trust.accepted}`);
   const pageSaysGone = crawl.dead.map((d) => d.storeProductId).filter((id) => heldSet.has(id));
   // A page the reader cannot understand also counts as "gone", so a markup
   // change would make nearly every page gone at once, and three such nights
   // would delist the store. An implausible share is not counted (pingodoce-report.ts).
   const pagesBelieved = deadPagesBelievable(crawl.dead.length, targets.length);
   const deadTonight = [
-    ...new Set([...(absent.believable ? absent.missing : []), ...(pagesBelieved ? pageSaysGone : [])]),
+    ...new Set([...(trust.trusted ? absent.missing : []), ...(pagesBelieved ? pageSaysGone : [])]),
   ];
   const { delisted } = await recordDead("PINGO_DOCE", deadTonight, new Date());
   console.log(
     `\nno longer listed: ${absent.missing.length} held product(s) missing from the sitemap` +
-      (absent.believable ? "" : ` - more than ${MAX_SHARE_MISSING * 100}% of the range, so the list is not believed tonight`) +
+      (trust.trusted ? "" : ` - the list is not believed tonight: ${trust.distrust}`) +
       `; ${pageSaysGone.length} page(s) said gone` +
       (pagesBelieved ? "" : " - too many at once, so the pages are not believed tonight") +
       `; ${delisted.length} delisted after ${DEAD_NIGHTS_BEFORE_DELISTING} nights`
@@ -241,7 +314,12 @@ async function main() {
 
   // Read before this run is recorded below, since both compare against the
   // newest recorded run. The same figures as the record: every page read.
-  const runSections = crawl.results.map((r) => ({ cgid: r.category.cgid, label: r.category.label, collected: r.products.length }));
+  const runSections = crawl.results.map((r) => ({
+    cgid: r.category.cgid,
+    label: r.category.label,
+    collected: r.products.length,
+    expected: publishedCounts.get(r.category.label) ?? null,
+  }));
   const runTotal = runSections.reduce((n, r) => n + r.collected, 0);
   const drift = fullRun
     ? [...(await compareWithPrevious("PINGO_DOCE", runTotal, runSections)), ...compareWithBaseline(baseline, runTotal, runSections)]
@@ -282,8 +360,9 @@ async function main() {
         http: { ...stats, wireBytes: stats.wireBytes || null },
         seenAt: summary.seenAt,
         catalogueSizes: sizesNow,
-        sitemapEntries: sitemap.perFile.reduce((n, f) => n + f.entries, 0),
+        sitemapEntries,
         sitemapFiles: sitemap.perFile.length,
+        sitemapTrusted: trust.trusted,
         sitemapPerFile: sitemap.perFile,
         sitemapUnparseable: sitemap.unparseable,
         durationMs,
@@ -306,6 +385,16 @@ async function main() {
   const promotionProblem = promotionWarning(promotions);
   console.log(`\n${promotionLine(promotions)}`);
   if (promotionProblem) console.log(`WARN: ${promotionProblem}`);
+
+  // Too many prices moving at once means the wrong number is being read
+  // (brakes.ts). Pingo Doce had no such brake until 22 October 2026.
+  const priced = summary.prices.changed + summary.prices.unchanged;
+  const priceStorm = isPriceChurnStorm({ changed: summary.prices.changed, priced, complete: fullRun, store: "PINGO_DOCE" })
+    ? `${summary.prices.changed.toLocaleString()} of ${priced.toLocaleString()} prices moved this run - far more than ` +
+      `Pingo Doce's usual quarter, so the price reader is probably reading the wrong number. NOTE: prices are written ` +
+      `as the crawl runs, so these rows already exist and share this run's seenAt.`
+    : null;
+  if (priceStorm) console.log(`\nFAIL: ${priceStorm}`);
 
   if (!fullRun || !before) {
     console.log("\nA slice (--limit or --new): no report written - what changed and what disappeared mean nothing for a slice.");
@@ -331,13 +420,19 @@ async function main() {
     unreachable: crawl.unreachable.length,
     unreachableSamples: crawl.unreachable.slice(0, 5).map((u) => ({ storeProductId: u.storeProductId, name: u.reason })),
     missingFromSitemap: absent.missing.length,
-    sitemapBelieved: absent.believable,
+    sitemapBelieved: trust.trusted,
+    sitemapDistrust: trust.distrust,
+    sitemapAccepted: trust.accepted,
+    sitemapIndexProblem: sitemap.indexProblem,
     deadPages: crawl.dead.length,
     deadPagesBelieved: pagesBelieved,
     delistedNow: delisted.length,
     delistedSamples: delisted.slice(0, 12).map((id) => ({ storeProductId: id, name: names.get(id) ?? id })),
     stoppedBySection,
     stoppedByName,
+    nonFoodRefused,
+    priceStorm,
+    departmentsUnread,
   };
 
   // Only the products the catalogue kept: a mixed-aisle page whose name is not
@@ -351,7 +446,7 @@ async function main() {
     before,
     results: keptResults,
     audit: { unknown: [], missing: [] },
-    publishedCounts: new Map(),
+    publishedCounts,
     prices: summary.prices,
     http: httpStats(),
     drift,

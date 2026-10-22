@@ -1,8 +1,7 @@
 import FoodTypeFilter from "@/components/FoodTypeFilter";
 import { getComparableFoodTypes, getFreshness } from "@/lib/grupos";
-import { STORE_LABELS } from "@/lib/stores";
-import type { Store } from "@/lib/stores";
 import styles from "./page.module.css";
+import PricesCollected from "@/components/PricesCollected";
 
 // Prices change under us; read them live rather than from a build-time snapshot.
 export const dynamic = "force-dynamic";
@@ -33,14 +32,7 @@ export default async function GruposPage() {
           indicado não entra na comparação, porque sem o peso não há preço por quilo.
         </p>
         <p className={styles.freshness}>
-          Preços recolhidos:{" "}
-          {freshness.map((f, i) => (
-            <span key={f.store}>
-              {i > 0 && " · "}
-              {STORE_LABELS[f.store as Store]}{" "}
-              {f.lastSeenAt.toLocaleDateString("pt-PT")}
-            </span>
-          ))}
+          <PricesCollected freshness={freshness} />
         </p>
       </footer>
     </main>

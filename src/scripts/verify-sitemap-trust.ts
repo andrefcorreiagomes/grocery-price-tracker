@@ -61,5 +61,26 @@ export function verifySitemapTrust(): number {
   check("five consecutive outages are still distrusted",
     !judgeSitemap({ entries: 0, files: 0, error: "ECONNREFUSED", baseline: BASE, recent: outages }).trusted);
 
+  // Pingo Doce's own suspicion: too many held products missing from the list
+  // (code review M3, 22 October 2026).
+  console.log("\na suspicion only the store's crawl can see expires the same way");
+  const PD = { entries: 14_900, files: 2 };
+  const missing = "700 of the 9,000 products we hold are missing from it";
+  check("it distrusts a list that looks healthy by its size",
+    !judgeSitemap({ ...PD, error: null, baseline: PD, recent: [], extraSuspicion: missing }).trusted);
+  check("even on a first run, with nothing to compare against",
+    !judgeSitemap({ ...PD, error: null, baseline: null, recent: [], extraSuspicion: missing }).trusted);
+  const pdNights: SitemapObservation[] = [];
+  const pdVerdicts: boolean[] = [];
+  for (let night = 1; night <= RUNS_BEFORE_ACCEPTING; night++) {
+    const v = judgeSitemap({ ...PD, error: null, baseline: PD, recent: [...pdNights], extraSuspicion: missing });
+    pdVerdicts.push(v.trusted);
+    pdNights.unshift({ ...PD, trusted: v.trusted });
+  }
+  check(`the same list ${RUNS_BEFORE_ACCEPTING} nights running is accepted on the last`,
+    pdVerdicts.join() === [...Array(RUNS_BEFORE_ACCEPTING - 1).fill(false), true].join(), pdVerdicts.join());
+  check("believed nights before it do not count toward accepting it",
+    !judgeSitemap({ ...PD, error: null, baseline: PD, recent: [{ ...PD, trusted: true }, { ...PD, trusted: true }], extraSuspicion: missing }).trusted);
+
   return failures;
 }

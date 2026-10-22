@@ -66,6 +66,25 @@ export class PageReadError extends Error {
 }
 
 /**
+ * At or below this a store is not quoting a price. Pingo Doce publishes "0,00 €"
+ * for a product listed but not for sale, and one cent for a handful it cannot
+ * price; nothing in a supermarket costs a cent, and the cheapest real price in
+ * the catalogue is five.
+ */
+export const PLACEHOLDER_PRICE = 0.01;
+
+/**
+ * A price a shopper could pay, or null: the rule every reader applies, since
+ * 22 October 2026 (code review M9). Until then only Pingo Doce's did, and a zero
+ * read at Continente or Auchan would have become the cheapest product of its
+ * kind in every comparison. Null means "listed, not for sale now" - the product
+ * is kept, without a price.
+ */
+export function sellablePrice(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > PLACEHOLDER_PRICE ? value : null;
+}
+
+/**
  * These two guards exist because the types above are compile-time only.
  * `Number("abc")` is NaN and NaN *is* a `number`; `new Date("x")` is an Invalid
  * Date and still a `Date`. Both would satisfy the interface and land in the

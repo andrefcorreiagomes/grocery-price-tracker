@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getComparableFoodTypes } from "@/lib/grupos";
+import { storeCountWord } from "@/lib/stores";
 import styles from "./page.module.css";
 
 // Always read the latest prices from the database rather than a build-time snapshot.
@@ -32,14 +33,14 @@ export default async function Home() {
       <Link href="/grupos" className={styles.cabazCard}>
         <span className={styles.cabazTitle}>Onde é mais barato?</span>
         <span className={styles.cabazSubtitle}>
-          O preço de {foodCount} alimentos, das batatas ao azeite, nas três cadeias
+          O preço de {foodCount} alimentos, das batatas ao azeite, nas {storeCountWord()} cadeias
         </span>
       </Link>
 
       <Link href="/cabaz" className={styles.cabazCard}>
         <span className={styles.cabazTitle}>Montar o meu cabaz</span>
         <span className={styles.cabazSubtitle}>
-          Escolha vários produtos e compare o total nas três lojas
+          Escolha vários produtos e compare o total nas {storeCountWord()} lojas
         </span>
       </Link>
 

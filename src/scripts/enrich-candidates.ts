@@ -1,5 +1,7 @@
 import { prisma } from "../lib/db";
-import { classifyCandidate, matchableEan, parseSize, type Rung } from "../lib/matching";
+import { classifyCandidate, type Rung } from "../lib/matching";
+import { matchableEan } from "../lib/barcodes";
+import { parseSize } from "../lib/sizes";
 import { isOwnBrand } from "../lib/candidates";
 import { scrapeAuchan } from "../scrapers/auchan";
 import { scrapeContinente } from "../scrapers/continente";

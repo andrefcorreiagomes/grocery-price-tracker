@@ -3,15 +3,7 @@ import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit } from "./page-size";
 import { struckPricePromotion } from "./struck-price";
-import { detached, PageReadError, type ScrapeResult } from "./types";
-
-/**
- * At or below this, Pingo Doce is not quoting a price. It publishes "0,00 EUR"
- * for a product that is listed but not sellable, and one cent for a handful it
- * cannot price at all. Nothing in a supermarket costs a cent, and the next
- * cheapest real price in the catalogue is five, so the cut is unambiguous.
- */
-const PLACEHOLDER_PRICE = 0.01;
+import { detached, PageReadError, sellablePrice, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -61,7 +53,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   // a yogurt, a tin of frankfurters - and nothing in a supermarket costs a
   // cent. The next cheapest real price is EUR 0.05, so the two groups do not
   // overlap and the cut is unambiguous.
-  const price = parsed <= PLACEHOLDER_PRICE ? null : parsed;
+  const price = sellablePrice(parsed);
 
   // "12,49 €/Kg" in the price itself means the price is already per kilo, and
   // the size label is what one item weighs. Read from `priceText`, the very
@@ -102,8 +94,8 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
  * by the unit price.
  *
  * This is the only place Pingo Doce gives a size at all: unlike Auchan it keeps
- * the size out of the product name (parseable from just 14 of its 7,191
- * catalogue names), and unlike Continente and Auchan it publishes no barcode.
+ * the size out of the product name (well under 1% of its names carry one),
+ * and unlike Continente and Auchan it publishes no barcode.
  * So this label is the ONLY evidence available for comparing a Pingo Doce
  * product against another store's, which is why it is worth parsing carefully.
  *

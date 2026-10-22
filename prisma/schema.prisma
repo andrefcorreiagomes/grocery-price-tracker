@@ -134,15 +134,16 @@ model CatalogueProduct {
   categoryPath   String? // the store's OWN path, e.g. "mercearia/conservas/..."; not the app taxonomy
   url            String // product page URL
 
-  // last-crawled listing price - feeds the matcher's unit-price guard, and is
-  // NOT authoritative price history (that stays in PriceSnapshot for tracked products)
+  // The latest price; null when the product is listed but not for sale. Its
+  // history is in CataloguePrice (PriceSnapshot belongs to the retired
+  // hand-picked products).
   price Float?
 
   // Size and barcode come from a product page, or - for Auchan - the size from
   // the store's own per-kilo figure on its listing tile. Otherwise the size is
   // read from the name by backfill:sizes.
   packageSize   Float? // total base quantity in `unit`, e.g. 0.4 for 400 g when unit is "kg"
-  unit          String? // "kg" or "l"
+  unit          String? // "kg", "l", or "un" (eggs, capsules: counted items)
   /// Where `packageSize` came from: "page" (a product page), "listing" (the
   /// store's own per-unit figure on a listing tile), or null (read from the
   /// name, or not known). "page" and "listing" are the store's own word and are
@@ -222,6 +223,17 @@ model CatalogueProduct {
   /// drops the product out of the nightly queue (re-checked at 90 days instead)
   /// and is what a user-facing catalogue would filter on later.
   delistedAt DateTime?
+
+  /// Why `delistedAt` was set, since 22 October 2026 (code review M5), when it
+  /// meant several things at once and the totals mixed them:
+  ///   "gone"      the store stopped listing it (three dead nights)
+  ///   "not-food"  still sold, but outside what we compare: a non-food shelf,
+  ///               a shelf data/store-sections.ts skips, or a name not food
+  ///   "replaced"  another product took over its id, or it returned under a
+  ///               new id with the same barcode
+  /// Cleared with `delistedAt`. Filled for older rows by the migration from
+  /// what they show (see its SQL); null where that could not tell.
+  delistReason String?
 
   /// Set when this row was reconciled to a SUCCESSOR id by barcode: the same
   /// product returned under a new storeProductId, and its price history was

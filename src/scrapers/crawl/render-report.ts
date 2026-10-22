@@ -141,13 +141,18 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     const pct = (n: number) => `${((100 * n) / Math.max(1, r.enrichment.total)).toFixed(1)}%`;
     lines.push(
       ...section(
-        "Rotation: is the whole catalogue being reached",
-        "This run refreshed a slice, not the whole catalogue, so per-section coverage would be " +
-          "meaningless - a run that deliberately fetched 25 products has not come up short by 3,295. " +
-          "What matters instead is whether every corner is still being reached. Products are fetched " +
-          "STALEST FIRST, so the oldest figure below is the worst case anywhere in the catalogue: if " +
-          "it keeps growing, the budget is too small for the catalogue's size and some products are " +
-          "being left behind.",
+        r.complete ? "Freshness: when each product was last confirmed" : "Rotation: is the whole catalogue being reached",
+        r.complete
+          ? "Counts the products on sale by when a crawl last saw each one. This run tried every one of " +
+            "them, so anything not confirmed today is a product it could not reach: a page that failed, " +
+            "a product missing from the store's list, or one the store has stopped selling but not yet " +
+            "for three nights. A figure that grows night after night is the thing to look into."
+          : "This run refreshed a slice, not the whole catalogue, so per-section coverage would be " +
+            "meaningless - a run that deliberately fetched 25 products has not come up short by 3,295. " +
+            "What matters instead is whether every corner is still being reached. Products are fetched " +
+            "STALEST FIRST, so the oldest figure below is the worst case anywhere in the catalogue: if " +
+            "it keeps growing, the budget is too small for the catalogue's size and some products are " +
+            "being left behind.",
         [
           `  refreshed this run:   ${r.refreshedThisRun.toLocaleString()} of ${r.enrichment.total.toLocaleString()}`,
           `  confirmed in the last day:    ${r.staleness.today.toLocaleString()}`,
@@ -161,23 +166,38 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
       )
     );
 
+    const coverage = [
+      `  products on sale with a barcode: ${r.enrichment.withBarcode.toLocaleString()} (${pct(r.enrichment.withBarcode)})`,
+      `  products on sale with a size:    ${r.enrichment.withSize.toLocaleString()} (${pct(r.enrichment.withSize)})`,
+    ];
+    // A grid crawl (Auchan) reads listing pages, not product pages: its dead
+    // pages are in the grid-health section, and only the coverage applies here.
     lines.push(
-      ...section(
-        "What only a product page can tell us",
-        "A listing crawl infers a product is gone from its absence, which is a guess - pagination " +
-          "flickers, and a product missing from one run is often back in the next. Here a delisted " +
-          "product answers with a dead page, which is a fact. Every fetch also carries the barcode and " +
-          "package size that no listing tile has, so enrichment coverage should climb run over run; if " +
-          "it stalls while products are being refreshed, the page parser has broken.",
-        [
-          `  answered with a dead page this run: ${r.deadPagesThisRun.toLocaleString()}`,
-          ...notes(r.deadSamples, "    "),
-          "",
-          `  catalogue with a barcode: ${r.enrichment.withBarcode.toLocaleString()} (${pct(r.enrichment.withBarcode)})`,
-          `  catalogue with a size:    ${r.enrichment.withSize.toLocaleString()} (${pct(r.enrichment.withSize)})`,
-        ],
-        explain
-      )
+      ...(report.gridHealth
+        ? section(
+            "Barcodes and sizes",
+            "How many of the products on sale carry a barcode and a pack size. The listing pages this " +
+              "store is read from carry neither barcode nor (always) a size; barcodes come from the " +
+              "product pages opened to check missing products, and from the barcode reader " +
+              "(npm run barcodes:auchan). A sudden fall means a reader broke.",
+            coverage,
+            explain
+          )
+        : section(
+            "What only a product page can tell us",
+            "A listing crawl infers a product is gone from its absence, which is a guess - pagination " +
+              "flickers, and a product missing from one run is often back in the next. Here a delisted " +
+              "product answers with a dead page, which is a fact. Every fetch also carries the barcode and " +
+              "package size that no listing tile has, so their coverage should hold or climb run over run; " +
+              "if it falls while products are being refreshed, the page parser has broken.",
+            [
+              `  answered with a dead page this run: ${r.deadPagesThisRun.toLocaleString()}`,
+              ...notes(r.deadSamples, "    "),
+              "",
+              ...coverage,
+            ],
+            explain
+          ))
     );
 
     lines.push(
@@ -185,11 +205,11 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         "Our catalogue against the store's own counts",
         "Read from each section's landing page, which robots.txt allows. A different question from " +
           "the rotation above: not whether our prices are fresh, but whether we know about the " +
-          "products at all. COMPARE THE TOTALS, NOT THE ROWS - the sections overlap, and we file each " +
-          "product under whichever section first listed it, so Bio e Saudável looks tiny (its products " +
-          "are filed under Frescos and Mercearia) while Frescos can exceed its own published count. " +
-          "Only a wide gap in the TOTAL means products we have genuinely never seen, and refreshing " +
-          "will never find those - that is what the discovery section below is for.",
+          "products at all. COMPARE THE TOTALS, NOT THE ROWS - a store lists one product in several " +
+          "sections and counts it in each, while we file it once, under the section its own page " +
+          "names, so a section can look smaller or larger than its own count. Only a wide gap in the " +
+          "TOTAL means products we have genuinely never seen, and refreshing will never find those - " +
+          "that is what the discovery section below is for.",
         (() => {
           const rows = r.sections.map(
             (x) =>
@@ -305,9 +325,20 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
               ? `${s.total.toLocaleString().padStart(8)}   (no previous run to compare)`
               : `${s.previousTotal.toLocaleString().padStart(8)} to ${s.total.toLocaleString().padStart(8)}` +
                 `   (${signedPercent(s.total, s.previousTotal)})`;
+          const why = s.delistedWhy
+            ? [
+                [s.delistedWhy.gone, "gone"],
+                [s.delistedWhy.notFood, "not food"],
+                [s.delistedWhy.replaced, "replaced"],
+                [s.delistedWhy.unknown, "reason not recorded"],
+              ]
+                .filter(([n]) => (n as number) > 0)
+                .map(([n, what]) => `${(n as number).toLocaleString()} ${what}`)
+                .join(", ")
+            : "";
           return (
             `  ${label} ${movement}` +
-            (s.delisted > 0 ? `, ${s.delisted.toLocaleString()} delisted` : "")
+            (s.delisted > 0 ? `, ${s.delisted.toLocaleString()} delisted` + (why ? ` (${why})` : "") : "")
           );
         }),
         explain
@@ -579,6 +610,10 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           `  no longer listed in the sitemap:      ${d.droppedFromSitemapCount.toLocaleString()}`,
           ...notes(d.droppedFromSitemap, "    "),
           "",
+          `  answered "gone" but still in the sitemap: ${
+            d.deadStillListed === null ? "not known (sitemap not trusted tonight)" : d.deadStillListed.toLocaleString()
+          }   (out of stock may look like gone here; this measures it)`,
+          "",
           `  could not be reached (not counted as gone): ${d.unreachable.toLocaleString()}`,
         ],
         explain
@@ -589,9 +624,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
   lines.push(
     ...section(
       "Did the crawl work",
-      "Each section is checked against the count the store publishes for itself. Sections overlap " +
-        "deliberately - Bio e Saudável is almost entirely products already counted in the other five - " +
-        "so `collected` plus `already counted` should equal `listed`. A real gap is marked SHORT. This " +
+      "What each section of the store gave this run. Where the store publishes its own count, it is " +
+        "shown beside it; sections can overlap, so `collected` plus `already counted` should equal " +
+        "`listed`. A real gap is marked SHORT. This " +
         "is the check that was missing when a crawl once collected less than half the Pingo Doce " +
         "catalogue and still exited successfully. Request time is compared with previous runs because " +
         "a crawl that suddenly slows is usually being throttled, and that is the warning that arrives " +
@@ -627,12 +662,17 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         "here is not the absolute number but whether it moved: five products without a category is " +
         "normal, five hundred means a parser broke.",
       [
-        `  ${report.quality.total} products; missing price ${report.quality.missingPrice}` +
-          // Pingo Doce keeps out-of-stock products as rows with no price.
-          (report.pingoDoce ? " (marked unavailable - kept with no price)" : "") +
-          ", " +
+        `  ${report.quality.total} products on sale; missing price ${report.quality.missingPrice}` +
+          // Every store keeps a product listed but not for sale as a row with
+          // no price, since 22 October 2026 (code review H7).
+          " (listed but not for sale - kept with no price), " +
           `brand ${report.quality.missingBrand}, category ${report.quality.missingCategory}, ` +
           `url ${report.quality.missingUrl}`,
+        // Its reader fills an empty brand with "Continente", the store's own
+        // range, so the count cannot rise there (code review M5).
+        ...(report.store === "CONTINENTE"
+          ? ["  (at Continente an empty brand is read as its own range, \"Continente\", so the brand count is always 0)"]
+          : []),
         // A missing promotion marker reads as "not on promotion", so the count
         // is the only sign the marker broke (promo-watch.ts).
         ...(report.promotions ? [`  ${promotionLine(report.promotions)}`] : []),

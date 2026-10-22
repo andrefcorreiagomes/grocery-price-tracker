@@ -3,6 +3,7 @@ import { failedPageVerdict } from "../http";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult, CrawlProgress } from "./types";
 import type { PingoDoceProductUrl } from "./pingodoce-sitemap";
+import { topSection } from "../../lib/store-sections";
 
 /**
  * The COMPLIANT Pingo Doce crawler: one request per product page.
@@ -16,13 +17,13 @@ import type { PingoDoceProductUrl } from "./pingodoce-sitemap";
  * The cost, measured:
  *
  *   listing grids      ~30 requests, ~2 min, 500 products per request, disallowed
- *   this one          9,059 requests, ~2.5 h, 1 product per request
+ *   this one          ~10,200 requests, ~3 h, 1 product per request (October 2026)
  *
  * What it buys, beyond compliance:
  *
  *   - the PACK SIZE, which is the whole reason Pingo Doce cannot currently take
  *     part in a per-kilo comparison. Its grid tiles carry no size and its names
- *     almost never do: 29 of 7,191 products have one. The product page has it
+ *     almost never do: well under 1% of its names. The product page has it
  *     for essentially all of them.
  *   - roughly 1,900 food products the grid crawl never reached at all.
  *
@@ -71,11 +72,6 @@ export interface PingoDoceCrawlResult {
   unreachable: DeadProduct[];
 }
 
-/** Top segment of a category path ("Talho/Porco" gives "Talho"). */
-function topSection(path: string): string {
-  return path.split("/")[0].trim() || "(sem categoria)";
-}
-
 /**
  * Fetch each target's product page and build catalogue rows from it.
  *
@@ -90,7 +86,7 @@ export async function fetchPingoDoceProducts(
     onProgress?: (p: CrawlProgress) => void;
     /**
      * Called with each batch as it is collected, so a long run is saved as it
-     * goes. A full pass takes about two and a half hours, and holding all of it
+     * goes. A full pass takes about three hours, and holding all of it
      * until the end means a dropped connection at hour two loses the night.
      */
     onBatch?: (products: SearchHit[]) => Promise<void>;
@@ -112,11 +108,26 @@ export async function fetchPingoDoceProducts(
     pending = [];
   };
 
+  // Every 100 pages ATTEMPTED, read or not (code review L9, 22 October 2026).
+  // It used to be printed only after a page that read, so a stretch of
+  // failures - exactly when someone watches the log - printed nothing, as at
+  // Continente until 19 October.
+  const progress = (i: number) => {
+    if ((i + 1) % 100 === 0) {
+      opts.onProgress?.({
+        category: { cgid: "produtos", label: "product pages" },
+        page: i + 1,
+        collected: fetched,
+      });
+    }
+  };
+
   for (const [i, target] of targets.entries()) {
     let product;
     try {
       product = await scrapePingoDoce(target.url);
     } catch (error) {
+      progress(i);
       const err = error as Error;
       // A 404, or a page that loaded with no product data on it, both mean the
       // store no longer sells this. Anything else - no answer at all included -
@@ -170,14 +181,7 @@ export async function fetchPingoDoceProducts(
     pending.push(hit);
 
     if (pending.length >= batchSize) await flush();
-
-    if ((i + 1) % 100 === 0) {
-      opts.onProgress?.({
-        category: { cgid: "produtos", label: "product pages" },
-        page: i + 1,
-        collected: fetched,
-      });
-    }
+    progress(i);
   }
 
   await flush();

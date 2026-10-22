@@ -1,4 +1,5 @@
 import type { ProductNote } from "./daily-report";
+import { SAMPLE } from "./types";
 
 /**
  * What a nightly run learned beyond today's prices: which published ids it had
@@ -89,6 +90,15 @@ export interface DiscoveryExtras {
   /** at this run's rate, nights until nothing is unexamined */
   nightsToComplete: number | null;
 
+  /**
+   * Of the pages that answered "gone" tonight, how many the sitemap still
+   * lists; null when the sitemap was not trusted. A measurement, not a rule
+   * (code review H7, 22 October 2026): Continente answers "out of stock" the
+   * way it answers "gone", by sending the visitor to its home page, and if the
+   * sitemap keeps listing products that are only out of stock, this count is
+   * what will show it.
+   */
+  deadStillListed: number | null;
   /** products we hold that the sitemap no longer lists - an early warning */
   droppedFromSitemap: ProductNote[];
   droppedFromSitemapCount: number;
@@ -107,8 +117,8 @@ export interface DiscoveryExtras {
   unreachable: number;
 }
 
-/** Examples carried per list, matching the other reports. */
-export const SAMPLE = 12;
+/** Examples carried per list: the one number of every report (types.ts). */
+export { SAMPLE };
 
 export function nightsToComplete(remaining: number, perNight: number): number | null {
   if (remaining <= 0) return 0;

@@ -1,4 +1,4 @@
-import { sizesMatch, type ParsedSize } from "./matching";
+import { sizesMatch, type ParsedSize } from "./sizes";
 
 /**
  * Turning confirmed pairs into product GROUPS.
@@ -69,6 +69,8 @@ export interface GroupLink {
  *   barcode-unconfirmed   a store that publishes barcodes has a product here
  *                         whose barcode is unknown, or two known barcodes differ
  *   weak-links-only       held together only by links a person confirmed
+ *   trimmed               cut down to the part a shared barcode proves, after
+ *                         holding a refused pair (barcodeCore)
  *   oversized, size-spread, refused-pair   not emitted
  */
 export type GroupFlag =
@@ -77,7 +79,8 @@ export type GroupFlag =
   | "weak-links-only"
   | "oversized"
   | "size-spread"
-  | "refused-pair";
+  | "refused-pair"
+  | "trimmed";
 
 /**
  * The flags that keep a group off the site. Decided with the user on 22 October
@@ -230,63 +233,126 @@ export function buildGroups(
 
   const results: ProductGroupResult[] = [];
 
-  for (const [root, productIds] of byRoot) {
+  for (const [root, ids] of byRoot) {
     // A product with no confirmed pair is not a group of one; it is unmatched.
-    if (productIds.length < 2) continue;
-
-    const group = productIds.map((id) => byId.get(id) as GroupMemberInput);
-    const stores = [...new Set(group.map((m) => m.store))];
-    const flags: GroupFlag[] = [];
-
-    // Two products from one store are the same product listed twice only when
-    // a barcode says so; otherwise two different products may have been joined
-    // (strawberry with strawberry-and-kiwi yoghurt, Gallo's regular olive oil
-    // with its organic one - both in the sample of 22 October 2026).
-    if (!sameProductTwiceAtMost(group)) flags.push("duplicate-store");
-
-    // Every barcode we know must agree, and a store that publishes barcodes
-    // must have shown us its product's. Pingo Doce publishes none, so its place
-    // rests on brand, size and name. 5 of 24 Continente-Auchan pairs matched on
-    // name alone carried different barcodes in that sample.
-    const known = new Set(group.map((m) => m.barcode).filter((b): b is string => !!b));
-    const missing = group.some((m) => m.barcodeExpected && !m.barcode);
-    if (known.size > 1 || missing) flags.push("barcode-unconfirmed");
-
-    // How this component is held together: every link inside it.
+    if (ids.length < 2) continue;
     const inside = linksByRoot.get(root) ?? [];
-    const strong = inside.length > 0 && inside.every((l) => STRONG_RUNGS.has(l.rung));
-    if (!strong) flags.push("weak-links-only");
-
-    const oversized = group.length > stores.length * OVERSIZE_FACTOR;
-    if (oversized) flags.push("oversized");
-
-    const spreadOk = sizeSpreadOk(group);
-    if (!spreadOk) flags.push("size-spread");
-
-    // Two of its products were examined as a pair and REFUSED, yet chaining
-    // joined them through a third: Continente and Auchan refused for different
-    // barcodes, each matched to Pingo Doce on name. 72 such groups on 22
-    // October 2026. A group holding a refused pair is not a group.
-    const holdsRefused = productIds.some((a, i) => productIds.slice(i + 1).some((b) => refusedKey.has(`${a}|${b}`)));
-    if (holdsRefused) flags.push("refused-pair");
-
-    results.push({
-      productIds: [...productIds].sort(),
-      stores: stores.sort(),
-      storeCount: stores.length,
-      memberCount: group.length,
-      strong,
-      flags,
-      // A duplicate store, an unconfirmed barcode or a weak link is worth
-      // flagging, and the group is kept so a person can look (the site hides the
-      // first two: HIDDEN_FLAGS). An oversized component, a size spread or a
-      // refused pair means the chaining above has fused things that are not one
-      // product, so it is not a group at all.
-      emit: !oversized && spreadOk && !holdsRefused,
-    });
+    const judged = judge(ids, inside, byId, refusedKey);
+    if (!judged.flags.includes("refused-pair")) {
+      results.push(judged);
+      continue;
+    }
+    // A refused pair inside: keep the part a shared barcode proves, if one does.
+    const core = barcodeCore(ids, inside, byId, refusedKey);
+    if (core === null) {
+      results.push(judged);
+      continue;
+    }
+    const kept = new Set(core);
+    const trimmed = judge(core, inside.filter((l) => kept.has(l.aId) && kept.has(l.bId)), byId, refusedKey);
+    trimmed.flags.push("trimmed");
+    results.push(trimmed);
   }
 
   return results;
+}
+
+/**
+ * The part of a component that a shared barcode proves, when the component
+ * holds a refused pair - or null when nothing proves which part is right.
+ *
+ * Measured on 22 October 2026: Continente lists Gallo's regular and organic
+ * "Azeite Virgem Extra Suave" under one name; Auchan's regular bottle shares
+ * the regular one's barcode and was refused against the organic one, so the
+ * whole group of four was refused and the real three-chain group lost. Here
+ * the barcode held by two or more of the products (and by more than any other)
+ * marks the real product; products with another barcode go, products with
+ * none (Pingo Doce) stay if the links still reach them, and the result must
+ * hold no refused pair. A component where no barcode is shared - Continente's
+ * and Auchan's Post Scriptum, one barcode each - has no proven part, and stays
+ * refused.
+ */
+function barcodeCore(
+  ids: string[],
+  inside: GroupLink[],
+  byId: Map<string, GroupMemberInput>,
+  refusedKey: Set<string>
+): string[] | null {
+  const counts = new Map<string, number>();
+  for (const id of ids) {
+    const b = byId.get(id)?.barcode;
+    if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
+  }
+  const ranked = [...counts].sort((a, b) => b[1] - a[1]);
+  if (ranked.length === 0 || ranked[0][1] < 2 || ranked[1]?.[1] === ranked[0][1]) return null;
+  const barcode = ranked[0][0];
+  const keep = ids.filter((id) => {
+    const b = byId.get(id)?.barcode;
+    return !b || b === barcode;
+  });
+  const anchor = keep.find((id) => byId.get(id)?.barcode === barcode) as string;
+  const part = [...components(keep.map((id) => byId.get(id) as GroupMemberInput), inside).values()].find((c) => c.includes(anchor));
+  if (!part || part.length < 2) return null;
+  if (part.some((a, i) => part.slice(i + 1).some((b) => refusedKey.has(`${a}|${b}`)))) return null;
+  return part;
+}
+
+/** Every guard, applied to one set of products held together by `inside`. */
+function judge(
+  productIds: string[],
+  inside: GroupLink[],
+  byId: Map<string, GroupMemberInput>,
+  refusedKey: Set<string>
+): ProductGroupResult {
+  const group = productIds.map((id) => byId.get(id) as GroupMemberInput);
+  const stores = [...new Set(group.map((m) => m.store))];
+  const flags: GroupFlag[] = [];
+
+  // Two products from one store are the same product listed twice only when
+  // a barcode says so; otherwise two different products may have been joined
+  // (strawberry with strawberry-and-kiwi yoghurt, Gallo's regular olive oil
+  // with its organic one - both in the sample of 22 October 2026).
+  if (!sameProductTwiceAtMost(group)) flags.push("duplicate-store");
+
+  // Every barcode we know must agree, and a store that publishes barcodes
+  // must have shown us its product's. Pingo Doce publishes none, so its place
+  // rests on brand, size and name. 5 of 24 Continente-Auchan pairs matched on
+  // name alone carried different barcodes in that sample.
+  const known = new Set(group.map((m) => m.barcode).filter((b): b is string => !!b));
+  const missing = group.some((m) => m.barcodeExpected && !m.barcode);
+  if (known.size > 1 || missing) flags.push("barcode-unconfirmed");
+
+  // How this component is held together: every link inside it.
+  const strong = inside.length > 0 && inside.every((l) => STRONG_RUNGS.has(l.rung));
+  if (!strong) flags.push("weak-links-only");
+
+  const oversized = group.length > stores.length * OVERSIZE_FACTOR;
+  if (oversized) flags.push("oversized");
+
+  const spreadOk = sizeSpreadOk(group);
+  if (!spreadOk) flags.push("size-spread");
+
+  // Two of its products were examined as a pair and REFUSED, yet chaining
+  // joined them through a third: Continente and Auchan refused for different
+  // barcodes, each matched to Pingo Doce on name. 72 such groups on 22
+  // October 2026. A group holding a refused pair is not a group.
+  const holdsRefused = productIds.some((a, i) => productIds.slice(i + 1).some((b) => refusedKey.has(`${a}|${b}`)));
+  if (holdsRefused) flags.push("refused-pair");
+
+  return {
+    productIds: [...productIds].sort(),
+    stores: stores.sort(),
+    storeCount: stores.length,
+    memberCount: group.length,
+    strong,
+    flags,
+    // A duplicate store, an unconfirmed barcode or a weak link is worth
+    // flagging, and the group is kept so a person can look (the site hides the
+    // first two: HIDDEN_FLAGS). An oversized component, a size spread or a
+    // refused pair means the chaining above has fused things that are not one
+    // product, so it is not a group at all.
+    emit: !oversized && spreadOk && !holdsRefused,
+  };
 }
 
 /**

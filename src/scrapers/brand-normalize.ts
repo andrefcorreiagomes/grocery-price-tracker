@@ -3,8 +3,8 @@
  * leaving brand empty (Continente's convention) - "Nossa Peixaria" (fresh
  * fish counter) and "Nosso Talho" (fresh meat counter) are Pingo Doce's own
  * in-house programs, not independent companies, same as "Pingo Doce" itself.
- * Add to this list as more in-house labels turn up during curation that
- * don't already match the "Nosso(a) ___" pattern below.
+ * Add to this list as more in-house labels turn up that don't already match
+ * the "Nosso(a) ___" pattern below.
  */
 const PINGO_DOCE_HOUSE_LABELS = new Set(["pingo doce", "nossa peixaria", "nosso talho"]);
 
@@ -16,9 +16,9 @@ const PINGO_DOCE_HOUSE_LABELS = new Set(["pingo doce", "nossa peixaria", "nosso 
  * string added to the list above first.
  *
  * Plurals and a leading definite article both occur in the wild and the
- * original singular-only pattern missed them: the orange curation turned up
- * "Os Nossos Frescos" (Our Fresh Produce), and the already-tracked azeite is
- * branded "As Nossas Planícies" (Our Plains). Hence the optional "O/A/Os/As"
+ * original singular-only pattern missed them: Pingo Doce's oranges carry
+ * "Os Nossos Frescos" (Our Fresh Produce), and an olive oil is branded "As
+ * Nossas Planícies" (Our Plains). Hence the optional "O/A/Os/As"
  * prefix and the optional plural "s".
  */
 const OUR_SOMETHING_PATTERN = /^(?:[oa]s?\s+)?noss[ao]s?\s+\S/i;

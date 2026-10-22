@@ -72,6 +72,75 @@ function isLocal(host: string): boolean {
  */
 const MIN_DELAY_MS = 1_000;
 
+/**
+ * Backing off when a store refuses (code review L6, 22 October 2026).
+ *
+ * A page is REFUSED when every attempt at it got "busy" (503), "too many
+ * requests" (429), another server error, or no answer. One such page is a
+ * hiccup; many in a row mean the store wants us to stop, and until then the
+ * crawler went on all night at one page a second, three attempts each. Now,
+ * per store: after `pagesBeforePause` refused pages in a row the crawler waits
+ * the next of `pausesMs`; when the pauses are used up and refusals continue,
+ * it sends that store nothing more for the rest of the run. Any page that
+ * answers - even "not found" - resets the count.
+ *
+ * Stopping cannot delist anything: a refused page is "could not tell", never
+ * "gone" (`failedPageVerdict`). Pingo Doce's worst night so far had 126 pages
+ * answering 503 (1.2%), spread over the night.
+ */
+export const REFUSALS = {
+  pagesBeforePause: 20,
+  pausesMs: [5 * 60_000, 10 * 60_000, 15 * 60_000],
+};
+
+/** Waits shortened by the checks, which run against a server on this computer. */
+const timing = { minDelayMs: MIN_DELAY_MS, pausesMs: REFUSALS.pausesMs };
+export function setHttpTimingForChecks(t: { minDelayMs: number; pausesMs: number[] }): void {
+  timing.minDelayMs = t.minDelayMs;
+  timing.pausesMs = t.pausesMs;
+}
+
+/** What to do after a page is refused, given how many in a row now. Pure, for the checks. */
+export function afterRefusal(inARow: number, pauses = REFUSALS.pausesMs.length): "carry on" | "pause" | "stop" {
+  if (inARow === 0 || inARow % REFUSALS.pagesBeforePause !== 0) return "carry on";
+  return inARow / REFUSALS.pagesBeforePause > pauses ? "stop" : "pause";
+}
+
+const refusedInARow = new Map<string, number>();
+const pausedUntil = new Map<string, number>();
+const stoppedHosts = new Set<string>();
+
+/** The store refused so many pages in a row that this run asks it nothing more. */
+export class StoreRefusingError extends Error {
+  constructor(host: string) {
+    super(`${host} refused ${REFUSALS.pagesBeforePause * (REFUSALS.pausesMs.length + 1)} pages in a row; no more requests to it this run`);
+    this.name = "StoreRefusingError";
+  }
+}
+
+/** Hosts this run has stopped asking, for the reports. */
+export function stoppedStores(): string[] {
+  return [...stoppedHosts];
+}
+
+function pageAnswered(host: string): void {
+  refusedInARow.set(host, 0);
+}
+
+function pageRefused(host: string): void {
+  const inARow = (refusedInARow.get(host) ?? 0) + 1;
+  refusedInARow.set(host, inARow);
+  const next = afterRefusal(inARow, timing.pausesMs.length);
+  if (next === "stop") {
+    stoppedHosts.add(host);
+    console.log(`  !! ${host} refused ${inARow} pages in a row, through every pause - no more requests to it this run`);
+  } else if (next === "pause") {
+    const ms = timing.pausesMs[inARow / REFUSALS.pagesBeforePause - 1];
+    pausedUntil.set(host, Date.now() + ms);
+    console.log(`  !! ${host} refused ${inARow} pages in a row - pausing ${(ms / 60_000).toFixed(0)} min before asking again`);
+  }
+}
+
 /** Attempts per URL, including the first. */
 const MAX_ATTEMPTS = 3;
 
@@ -81,7 +150,12 @@ export function sleep(ms: number): Promise<void> {
 
 export interface HostStats {
   host: string;
-  /** requests that returned a body, i.e. not counting retried attempts */
+  /**
+   * Requests sent: every attempt, whether it got a page, a "not found", a
+   * refusal or no answer. Until 22 October 2026 only those that returned a
+   * page were counted, so the reports understated the load a little (code
+   * review L5); runs from before then are not quite comparable.
+   */
   requests: number;
   /** attempts that failed and were retried (429, 5xx, socket errors) */
   retries: number;
@@ -128,10 +202,6 @@ function statsFor(host: string): HostStats {
 /** Snapshot of per-host totals, busiest first. */
 export function httpStats(): HostStats[] {
   return [...stats.values()].sort((a, b) => b.fetchMs - a.fetchMs);
-}
-
-export function resetHttpStats(): void {
-  stats.clear();
 }
 
 /** Compressed bytes transferred, or null when nothing was requested. */
@@ -209,9 +279,15 @@ function hostOf(url: string): string {
 function takeTurn(host: string): Promise<void> {
   const previous = hostChains.get(host) ?? Promise.resolve();
   const turn = previous.then(async () => {
+    // A pause after many refusals (REFUSALS) holds every caller for this host.
+    const paused = (pausedUntil.get(host) ?? 0) - Date.now();
+    if (paused > 0) {
+      statsFor(host).waitMs += paused;
+      await sleep(paused);
+    }
     const waited = Date.now() - (lastRequestAt.get(host) ?? 0);
-    if (waited < MIN_DELAY_MS) {
-      const holdBack = MIN_DELAY_MS - waited;
+    if (waited < timing.minDelayMs) {
+      const holdBack = timing.minDelayMs - waited;
       statsFor(host).waitMs += holdBack;
       await sleep(holdBack);
     }
@@ -282,7 +358,7 @@ function retryAfterMs(res: RawResponse, attempt: number): number {
     const seconds = Number.parseInt(header, 10);
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
   }
-  return MIN_DELAY_MS * 2 ** attempt; // 2s, 4s
+  return timing.minDelayMs * 2 ** attempt; // 2s, 4s
 }
 
 export async function fetchHtml(url: string): Promise<string> {
@@ -301,11 +377,14 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
   const host = hostOf(url);
   // Also checked here, for any script that reaches a store without calling it first.
   const agent = isLocal(host) ? CRAWLER_NAME : requireCrawlerContact();
+  if (stoppedHosts.has(host)) throw new StoreRefusingError(host);
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     await takeTurn(host);
     const startedAt = Date.now();
+    // Every request sent counts, answered or not (code review L5).
+    statsFor(host).requests++;
     let res: RawResponse;
     try {
       res = await rawGet(url, {
@@ -317,13 +396,13 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
       statsFor(host).fetchMs += Date.now() - startedAt;
       statsFor(host).retries++;
       lastError = new NetworkError(url, error instanceof Error ? error.message : String(error));
-      if (attempt < MAX_ATTEMPTS - 1) await sleep(MIN_DELAY_MS * 2 ** attempt);
+      if (attempt < MAX_ATTEMPTS - 1) await sleep(timing.minDelayMs * 2 ** attempt);
       continue;
     }
 
     if (res.ok) {
+      pageAnswered(host);
       const entry = statsFor(host);
-      entry.requests++;
       entry.bytes += res.body.length;
       entry.wireBytes += res.wireBytes;
       entry.fetchMs += Date.now() - startedAt;
@@ -337,6 +416,7 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
     // A 404 means the listing is gone; retrying cannot help and the caller
     // needs to hear about it straight away. It is not counted as a retry.
     if (!isRetryable(res.status)) {
+      pageAnswered(host);
       throw new HttpError(res.status, url);
     }
 
@@ -346,6 +426,7 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
     if (attempt < MAX_ATTEMPTS - 1) await sleep(retryAfterMs(res, attempt));
   }
 
+  pageRefused(host);
   throw lastError ?? new NetworkError(url, "no attempt was made");
 }
 
