@@ -11,6 +11,7 @@
     "match": "tsx src/scripts/match-products.ts",
     "sections:check": "tsx src/scripts/check-sections.ts",
     "enrich": "tsx src/scripts/enrich-candidates.ts",
+    "barcodes:auchan": "tsx src/scripts/read-auchan-barcodes.ts",
     "backfill:prices": "tsx src/scripts/backfill-price-history.ts",
     "crawl:continente": "tsx src/scripts/crawl-continente.ts",
     "crawl:continente:products": "tsx src/scripts/crawl-continente-products.ts",

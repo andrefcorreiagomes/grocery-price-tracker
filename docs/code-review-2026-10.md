@@ -449,7 +449,18 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
   in `src/scripts/verify-store-pages.ts` (section 20). Still open: the enrich
   script's Auchan promotions.
 
-## Measured, waiting for a decision
+- **H6** on 22 October 2026, after the user approved the checked sample
+  ("Matching Sample, 22 October"): matching runs every night; a group holding
+  a pair the matcher refused is not built; a group is shown only when no store
+  has two products in it not proven the same by a shared barcode, and every
+  barcode in it is known and agrees (Pingo Doce, which publishes none, joins on
+  brand, size and name). The barcodes of 1,085 Auchan products in such groups
+  were read once with permission; each night reads up to 300 more
+  (`npm run barcodes:auchan`).
+- **H7** on 22 October 2026: a product no longer sold is looked at again 7 and
+  30 days after it was delisted, then every 90 days (`delistedRecheckDue`).
+
+## Measured on 22 October, before the decisions above
 
 - **H6.** Rebuilding the groups on a copy of the database (22 October 2026,
   about 3 minutes, no store requests): the 922 groups would become 2,861, of

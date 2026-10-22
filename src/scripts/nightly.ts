@@ -49,10 +49,23 @@ const STORES = [
   { id: "CONTINENTE", name: "Continente", file: "continente", robots: "https://www.continente.pt/robots.txt", script: "crawl:continente:nightly" },
 ];
 
-/** The steps after the crawls: offline, in this order. */
-const AFTER = [
+/**
+ * The steps after the crawls, in this order. All offline but one:
+ * `barcodes:auchan` reads a few Auchan product pages, so it runs only on a
+ * night Auchan itself was crawled (its robots.txt checked and unchanged).
+ *
+ * Matching runs every night since 22 October 2026 (the user's decision, code
+ * review finding H6): candidates, then the matcher, then the barcodes of Auchan
+ * products in groups not yet confirmed, then the matcher again so those
+ * barcodes count tonight rather than tomorrow.
+ */
+const AFTER: { script: string; what: string; log?: string; needs?: string }[] = [
   { script: "backfill:sizes", what: "pack sizes filled in" },
   { script: "classify:food", what: "kinds of food written" },
+  { script: "candidates", what: "match candidates rebuilt" },
+  { script: "match", what: "identical products grouped", log: "match-1" },
+  { script: "barcodes:auchan", what: "Auchan barcodes read", needs: "AUCHAN" },
+  { script: "match", what: "identical products grouped again, with the new barcodes", log: "match-2" },
   { script: "review:kinds", what: "uncertain kinds counted" },
   { script: "verify:nightly", what: "automatic checks, including the verified kinds" },
   { script: "validate:comparisons", what: "comparison check" },
@@ -178,8 +191,19 @@ async function main() {
 
   // 4. after the crawls ----------------------------------------------------
   for (const a of AFTER) {
-    const r = await run(a.script, a.script.replace(":", "-"));
+    if (a.needs && !toCrawl.some((s) => s.id === a.needs)) {
+      steps.push({ name: a.script, ok: true, minutes: 0, note: `skipped: ${a.needs} was not crawled tonight` });
+      continue;
+    }
+    const r = await run(a.script, a.log ?? a.script.replace(":", "-"));
     let note = a.what;
+    if (a.script === "match") {
+      const built = readFileSync(r.log, "utf8").match(/3\. group: ([\d,]+) group/)?.[1];
+      if (built) note = `${built} groups of identical products (${a.log === "match-2" ? "after the barcodes" : "first pass"})`;
+    }
+    if (a.script === "barcodes:auchan") {
+      note = readFileSync(r.log, "utf8").match(/^barcodes: .*$/m)?.[0] ?? a.what;
+    }
     if (a.script === "review:kinds") {
       const text = readFileSync(r.log, "utf8");
       const review = text.match(/^review\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/m);

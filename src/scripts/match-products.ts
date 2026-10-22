@@ -1,7 +1,8 @@
 import { prisma } from "../lib/db";
-import { classifyCandidate, parseSize, type Candidate, type Rung } from "../lib/matching";
+import { classifyCandidate, matchableEan, parseSize, type Candidate, type Rung } from "../lib/matching";
+import { STORE_LIST } from "../lib/stores";
 import { isOwnBrand } from "../lib/candidates";
-import { buildGroups, reconcileGroups, type GroupLink, type GroupMemberInput, type ProductGroupResult } from "../lib/grouping";
+import { buildGroups, HIDDEN_FLAGS, reconcileGroups, type GroupFlag, type GroupLink, type GroupMemberInput, type ProductGroupResult } from "../lib/grouping";
 import type { MatchVerdict } from "@/generated/prisma/client";
 
 /**
@@ -259,6 +260,7 @@ async function main() {
   });
 
   const linkedIds = new Set(confirmed.flatMap((d) => [d.aId, d.bId]));
+  const publishesBarcodes = new Set<string>(STORE_LIST.filter((s) => s.barcodeSource !== null).map((s) => s.id));
   const members: GroupMemberInput[] = [...linkedIds]
     .map((id) => byId.get(id))
     .filter((p): p is ProductRow => p !== undefined && p.delistedAt === null)
@@ -267,10 +269,18 @@ async function main() {
       store: p.store,
       size:
         p.packageSize !== null && p.unit ? parseSize(`${p.packageSize} ${p.unit}`) : parseSize(p.name),
+      barcode: matchableEan(p.ean),
+      barcodeExpected: publishesBarcodes.has(p.store),
     }));
 
   const links: GroupLink[] = confirmed.map((d) => ({ aId: d.aId, bId: d.bId, rung: d.rung }));
-  const groups = buildGroups(members, links);
+  // Pairs refused on evidence, so chaining through a third product cannot join
+  // them anyway (buildGroups).
+  const refused = await prisma.matchDecision.findMany({
+    where: { verdict: "REJECTED", retiredAt: null },
+    select: { aId: true, bId: true },
+  });
+  const groups = buildGroups(members, links, refused);
   const emitted = groups.filter((g) => g.emit);
 
   // Carry existing groups on rather than wiping them, so a group keeps its id
@@ -347,7 +357,7 @@ async function main() {
   if (flagged.size > 0) {
     console.log("   guard flags:");
     for (const [f, n] of [...flagged].sort((a, b) => b[1] - a[1])) {
-      console.log(`     ${f.padEnd(18)} ${n.toLocaleString().padStart(7)}` + (f === "oversized" || f === "size-spread" ? "  (not emitted)" : ""));
+      console.log(`     ${f.padEnd(18)} ${n.toLocaleString().padStart(7)}` + (f === "oversized" || f === "size-spread" || f === "refused-pair" ? "  (not emitted)" : HIDDEN_FLAGS.has(f as GroupFlag) ? "  (kept, not shown on the site)" : ""));
     }
   }
   const rejected = groups.length - emitted.length;

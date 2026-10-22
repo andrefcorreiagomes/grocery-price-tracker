@@ -22,8 +22,14 @@ In order (`src/scripts/nightly.ts`):
    is saved and the summary says so, for a person to read first.
 3. **The crawls, one after another:** Auchan, Pingo Doce, Continente. About
    1½, 3 and 6 hours, so roughly ten hours in all.
-4. **Afterwards, offline:** pack sizes, kinds of food, the count of uncertain
-   kinds, the automated checks (`verify:nightly`) and the comparison check.
+4. **Afterwards:** pack sizes, kinds of food, then the groups of identical
+   products: match candidates, the matcher, the barcodes of up to 300 Auchan
+   products in groups not yet confirmed (the one step after the crawls that
+   reads store pages, and only on a night Auchan was crawled), and the matcher
+   again. Then the count of uncertain kinds, the automated checks
+   (`verify:nightly`) and the comparison check. A group of identical products
+   appears on the site only when no store has two unproven products in it and
+   every barcode in it is known and agrees (`src/lib/grouping.ts`).
 5. **A backup** of the database into `backups/`, keeping the last 7.
 6. **A summary** in `logs/nightly-<date>/summary.md`, with each step's full
    output beside it. The command exits with an error when any step needs a

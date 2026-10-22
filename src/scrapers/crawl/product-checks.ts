@@ -192,8 +192,8 @@ export async function staleChecks(
 }
 
 /**
- * Delisted products old enough to be worth asking again, on the same schedule.
- * They are excluded from the nightly queue - re-fetching a page we know is gone,
+ * Delisted products due a second look (delistedRecheckDue: 7 and 30 days after
+ * delisting, then every 90), oldest look first. They are excluded from the nightly queue - re-fetching a page we know is gone,
  * every night, forever, is the thing `lastCheckedAt` exists to prevent - but
  * they should not be abandoned entirely either.
  */
@@ -202,18 +202,43 @@ export async function staleDelisted(
   limit: number,
   now: Date
 ): Promise<{ storeProductId: string; url: string }[]> {
-  const cutoff = new Date(now.getTime() - RECHECK_AFTER_DAYS * 86_400_000);
+  // Read in full and decided here: the rule compares two dates of one row,
+  // which a database filter cannot. A few thousand rows at most.
   const rows = await prisma.catalogueProduct.findMany({
-    where: {
-      store,
-      delistedAt: { not: null },
-      OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: cutoff } }],
-    },
-    select: { storeProductId: true, url: true },
-    orderBy: { lastCheckedAt: "asc" },
-    take: limit,
+    where: { store, delistedAt: { not: null } },
+    select: { storeProductId: true, url: true, delistedAt: true, lastCheckedAt: true },
   });
-  return rows;
+  return rows
+    .filter((r) => delistedRecheckDue(r.delistedAt as Date, r.lastCheckedAt, now))
+    .sort((a, b) => (a.lastCheckedAt?.getTime() ?? 0) - (b.lastCheckedAt?.getTime() ?? 0))
+    .slice(0, limit)
+    .map((r) => ({ storeProductId: r.storeProductId, url: r.url }));
+}
+
+/** Days after delisting on which a product is looked at again, before the RECHECK_AFTER_DAYS rhythm. */
+export const EARLY_RECHECK_DAYS = [7, 30];
+
+/**
+ * Is a delisted product due a second look?
+ *
+ * Once 7 days after it was delisted, once at 30, then every RECHECK_AFTER_DAYS
+ * (90). Decided with the user on 22 October 2026, after Continente's "Queijo
+ * Grana Padano Continente" was delisted that night - three nights its page sent
+ * the visitor to the home page - and was on sale again, in stock, the same day.
+ * Continente answers "not for sale right now" the way it answers "gone", and
+ * seasonal fruit (watermelon, peaches) leaves and returns; under the 90-day
+ * rule alone, a product back in stock stayed off the site for three months.
+ * Pingo Doce and Auchan need none of this: they read their whole store every
+ * night, so a product that returns is seen again at once.
+ */
+export function delistedRecheckDue(delistedAt: Date, lastCheckedAt: Date | null, now: Date): boolean {
+  const day = 86_400_000;
+  if (lastCheckedAt === null) return true;
+  for (const d of EARLY_RECHECK_DAYS) {
+    const at = delistedAt.getTime() + d * day;
+    if (now.getTime() >= at && lastCheckedAt.getTime() < at) return true;
+  }
+  return lastCheckedAt.getTime() < now.getTime() - RECHECK_AFTER_DAYS * day;
 }
 
 /**

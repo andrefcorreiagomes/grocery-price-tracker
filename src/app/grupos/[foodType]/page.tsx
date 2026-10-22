@@ -153,13 +153,13 @@ function NamedBlock({ named, unit, showUnit }: { named: NamedGroups; unit: strin
   return (
     <section className={styles.group}>
       <h3>
-        O mesmo produto em duas cadeias
+        O mesmo produto em várias cadeias
         {showUnit && <span className={styles.unitWord}> ({UNIT_WORDS[unit]})</span>}
       </h3>
       <p className={styles.note}>
-        Produtos que confirmámos ser exactamente o mesmo artigo em duas cadeias.
-        Nenhum aparece nas três, porque o Pingo Doce não publica código de barras
-        e sem ele não é possível ter a certeza.
+        Produtos que confirmámos ser exactamente o mesmo artigo em duas ou três
+        cadeias: entre o Continente e o Auchan pelo código de barras, e no Pingo
+        Doce, que não publica códigos de barras, pela marca, pelo tamanho e pelo nome.
         {named.comparable > 0 && " Ordenados pela maior diferença de preço."}
       </p>
       {named.shown.map((g) => (
@@ -180,7 +180,7 @@ function NamedBlock({ named, unit, showUnit }: { named: NamedGroups; unit: strin
           {/* igual -> iguais, not "igualis": Portuguese -al pluralises to
               -ais. Written out rather than assembled from a stem. */}
           {named.found === 1 ? "Encontrámos 1 produto igual" : `Encontrámos ${named.found} produtos iguais`}{" "}
-          em duas cadeias, mas nenhum pode ser comparado: numa das lojas falta o
+          em mais de uma cadeia, mas nenhum pode ser comparado: numa das lojas falta o
           peso, e sem peso não há preço ao quilo.
         </p>
       )}

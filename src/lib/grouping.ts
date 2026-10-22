@@ -37,6 +37,20 @@ export interface GroupMemberInput {
   store: string;
   /** parsed package size, when known; null is "unknown", never "matches" */
   size: ParsedSize | null;
+  /** the product's usable barcode, when known */
+  barcode?: string | null;
+  /**
+   * Whether its store publishes barcodes at all (Continente and Auchan do,
+   * Pingo Doce does not). A missing barcode from such a store is something not
+   * yet read, not something that cannot be known.
+   */
+  barcodeExpected?: boolean;
+}
+
+/** A pair the matcher examined and refused, e.g. same size with different barcodes. */
+export interface RefusedPair {
+  aId: string;
+  bId: string;
 }
 
 export interface GroupLink {
@@ -46,11 +60,41 @@ export interface GroupLink {
   rung: string;
 }
 
+/**
+ * What a guard found. Two of them keep a group off the site while it is kept
+ * for review (HIDDEN_FLAGS); three stop it being a group at all (see `emit`).
+ *
+ *   duplicate-store       one store has two products in it, not proven the same
+ *                         product by a shared barcode
+ *   barcode-unconfirmed   a store that publishes barcodes has a product here
+ *                         whose barcode is unknown, or two known barcodes differ
+ *   weak-links-only       held together only by links a person confirmed
+ *   oversized, size-spread, refused-pair   not emitted
+ */
 export type GroupFlag =
   | "duplicate-store"
+  | "barcode-unconfirmed"
   | "weak-links-only"
   | "oversized"
-  | "size-spread";
+  | "size-spread"
+  | "refused-pair";
+
+/**
+ * The flags that keep a group off the site. Decided with the user on 22 October
+ * 2026, from a sample of 60 rebuilt groups checked against the stores' own
+ * pages: every wrong group carried one of these, or a refused pair.
+ */
+export const HIDDEN_FLAGS: ReadonlySet<GroupFlag> = new Set(["duplicate-store", "barcode-unconfirmed"]);
+
+/** May a group with these stored flags (JSON, as in ProductGroup.flags) appear on the site? */
+export function shownOnSite(storedFlags: string | null): boolean {
+  if (!storedFlags) return true;
+  try {
+    return !(JSON.parse(storedFlags) as string[]).some((f) => HIDDEN_FLAGS.has(f as GroupFlag));
+  } catch {
+    return false; // unreadable flags prove nothing, so the group is not shown
+  }
+}
 
 export interface ProductGroupResult {
   productIds: string[];
@@ -137,6 +181,21 @@ export function sizeSpreadOk(members: GroupMemberInput[]): boolean {
 }
 
 /**
+ * At most one product per store - or two or more that share one barcode, which
+ * is one product the store lists twice (Pingo Doce lists the same Evian twice).
+ */
+function sameProductTwiceAtMost(group: GroupMemberInput[]): boolean {
+  const byStore = new Map<string, GroupMemberInput[]>();
+  for (const m of group) byStore.set(m.store, [...(byStore.get(m.store) ?? []), m]);
+  for (const list of byStore.values()) {
+    if (list.length < 2) continue;
+    const codes = new Set(list.map((m) => m.barcode ?? null));
+    if (codes.has(null) || codes.size > 1) return false;
+  }
+  return true;
+}
+
+/**
  * Build groups from confirmed pairs.
  *
  * `members` must already be filtered to products that are live and eligible;
@@ -146,10 +205,12 @@ export function sizeSpreadOk(members: GroupMemberInput[]): boolean {
  */
 export function buildGroups(
   members: GroupMemberInput[],
-  links: GroupLink[]
+  links: GroupLink[],
+  refused: RefusedPair[] = []
 ): ProductGroupResult[] {
   const byId = new Map(members.map((m) => [m.productId, m]));
   const byRoot = components(members, links);
+  const refusedKey = new Set(refused.flatMap((r) => [`${r.aId}|${r.bId}`, `${r.bId}|${r.aId}`]));
 
   // Which component each product landed in, so links can be bucketed by
   // component in ONE pass. Filtering all links per component instead is
@@ -177,7 +238,19 @@ export function buildGroups(
     const stores = [...new Set(group.map((m) => m.store))];
     const flags: GroupFlag[] = [];
 
-    if (stores.length < group.length) flags.push("duplicate-store");
+    // Two products from one store are the same product listed twice only when
+    // a barcode says so; otherwise two different products may have been joined
+    // (strawberry with strawberry-and-kiwi yoghurt, Gallo's regular olive oil
+    // with its organic one - both in the sample of 22 October 2026).
+    if (!sameProductTwiceAtMost(group)) flags.push("duplicate-store");
+
+    // Every barcode we know must agree, and a store that publishes barcodes
+    // must have shown us its product's. Pingo Doce publishes none, so its place
+    // rests on brand, size and name. 5 of 24 Continente-Auchan pairs matched on
+    // name alone carried different barcodes in that sample.
+    const known = new Set(group.map((m) => m.barcode).filter((b): b is string => !!b));
+    const missing = group.some((m) => m.barcodeExpected && !m.barcode);
+    if (known.size > 1 || missing) flags.push("barcode-unconfirmed");
 
     // How this component is held together: every link inside it.
     const inside = linksByRoot.get(root) ?? [];
@@ -190,6 +263,13 @@ export function buildGroups(
     const spreadOk = sizeSpreadOk(group);
     if (!spreadOk) flags.push("size-spread");
 
+    // Two of its products were examined as a pair and REFUSED, yet chaining
+    // joined them through a third: Continente and Auchan refused for different
+    // barcodes, each matched to Pingo Doce on name. 72 such groups on 22
+    // October 2026. A group holding a refused pair is not a group.
+    const holdsRefused = productIds.some((a, i) => productIds.slice(i + 1).some((b) => refusedKey.has(`${a}|${b}`)));
+    if (holdsRefused) flags.push("refused-pair");
+
     results.push({
       productIds: [...productIds].sort(),
       stores: stores.sort(),
@@ -197,10 +277,12 @@ export function buildGroups(
       memberCount: group.length,
       strong,
       flags,
-      // A duplicate store or a weak link is worth flagging but still usable. An
-      // oversized component or a size spread means the chaining above has fused
-      // things that are not one product, so it must not be shown at all.
-      emit: !oversized && spreadOk,
+      // A duplicate store, an unconfirmed barcode or a weak link is worth
+      // flagging, and the group is kept so a person can look (the site hides the
+      // first two: HIDDEN_FLAGS). An oversized component, a size spread or a
+      // refused pair means the chaining above has fused things that are not one
+      // product, so it is not a group at all.
+      emit: !oversized && spreadOk && !holdsRefused,
     });
   }
 

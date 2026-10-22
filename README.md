@@ -73,14 +73,20 @@ first version of the site compared. It was retired with them on 21 October
 | Products assigned a kind of food | **36,066** (80%), and 6,475 of them a cut or variety (sub-kind) as well |
 | Kinds of food defined so far | **252**, in 15 categories, from *alheira* and *farinheira* to *tremoço* and *requeijão*; sweets, desserts and drinks are set aside for now |
 | Kinds of food compared on the site | **214**, in 605 comparisons (same cut or variety, sold the same way), each priced at two chains or more, using only products seen by their chain's crawls within the last 14 days |
-| Identical products matched across two chains | **908** |
-| Figures from | the nightly crawls of 22 October 2026 |
+| Identical products shown on the site | **2,187** groups: 1,827 at two chains and 360 at all three |
+| Figures from | the nightly crawls of 22 October 2026; identical products matched again the same day |
 
 Since the previous figures (17 October 2026), the share of products with a
 kind fell from 82% to 80%. That fall is corrections, not losses: 363 jams had
 been counted as honey and 173 savoury snacks as popcorn, and they now have no
-kind until kinds of their own are added. The identical products fell from 916
-to 908 because one side of 14 matched pairs is no longer sold.
+kind until kinds of their own are added.
+
+The identical products rose from 908 groups, all at two chains, to 2,187, 360
+of them at all three. Matching had last run on 17 October; it now runs every
+night. Before it was turned on, 60 groups were checked against the stores' own
+pages, which showed three ways a group went wrong, and each is now refused or
+kept off the site (see "What the figures count"). A further 481 groups are
+kept for review and not shown.
 
 The list of kinds of food is still being extended, and both counts grow with
 it. The database itself is not published.
@@ -93,9 +99,12 @@ What the figures count:
   kind with a price and a known size, so a price per kilo or litre exists for
   every chain.
 - **Identical products**: the same item, for example the same brand and pack,
-  at two chains. Matches are pairs, not triples, because Pingo Doce does not
-  publish barcodes, and without a barcode two listings cannot be confirmed as
-  the same item.
+  at two or three chains. Continente and Auchan are matched by barcode. Pingo
+  Doce publishes no barcodes, so it is matched on brand, pack size and a very
+  similar name. A group is shown only when no chain has two products in it that
+  a barcode does not prove are one, every barcode in it is known and agrees, and
+  no two of its products were refused as a pair: a refused pair could otherwise
+  be joined through a third product, matched to each on name.
 
 Prices are kept as a history: a new entry is saved only when a price changes.
 The history starts on 19 August 2026.
@@ -239,7 +248,7 @@ stores include in their pages.
 | `src/scrapers/crawl/` | the catalogue crawler for each chain |
 | `src/scrapers/http.ts` | the shared fetcher: pace, retries, `Retry-After` |
 | `src/lib/matching.ts` | reading sizes and normalising product names |
-| `data/food-types.ts` | the 233 kinds of food |
+| `data/food-types.ts` | the 252 kinds of food |
 | `data/food-tree.ts` | the categories, the sub-kinds (cuts and varieties) and the labels (frozen, tinned, organic…) |
 | `data/store-sections.ts` | which of each store's sections hold food, decided in one place |
 | `src/lib/comparison.ts` | the comparison rules, including the three cell states |

@@ -15,6 +15,7 @@ import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type Tr
 import { STORE_ORDER } from "./stores";
 import { unitPrice } from "./pricing";
 import { promotionOf, type Promotion } from "./promotion";
+import { shownOnSite } from "./grouping";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -422,9 +423,9 @@ export interface NamedGroups {
  * The confirmed same-product groups from the matching layer, which has already
  * decided the members are one product. Here they are only priced.
  *
- * Every group today spans exactly TWO chains, because Pingo Doce publishes no
- * barcode and so cannot be matched with certainty. That is not hidden: the
- * third chain renders "not stocked" rather than disappearing from the row.
+ * A group spans two or three chains. Continente and Auchan are matched by
+ * barcode; Pingo Doce publishes none, so it joins on brand, size and name. A
+ * chain not in a group renders "not stocked" rather than disappearing.
  */
 export async function getNamedGroups(
   foodTypeId: string,
@@ -443,13 +444,20 @@ export async function getNamedGroups(
 
   const byId = new Map(rows.map((r) => [r.id, r]));
 
+  // Only groups that are current and passed every check the site needs
+  // (shownOnSite: no store with two unproven products, every barcode agreeing
+  // and known). Decided with the user on 22 October 2026.
+  const shown = new Set(
+    (await prisma.productGroup.findMany({ where: { retiredAt: null }, select: { id: true, flags: true } }))
+      .filter((g) => shownOnSite(g.flags))
+      .map((g) => g.id)
+  );
   // Every membership, then matched in memory rather than `where productId in
-  // [...]`. The whole table is 1,936 rows, so reading it costs nothing, and it
-  // avoids handing SQLite an IN clause of 7,472 ids for a food type as large as
-  // `vinho`.
-  const allMemberships = await prisma.productGroupMember.findMany({
-    select: { groupId: true, productId: true },
-  });
+  // [...]`: reading the whole table costs little, and it avoids handing SQLite
+  // an IN clause of thousands of ids for a food type as large as `vinho`.
+  const allMemberships = (
+    await prisma.productGroupMember.findMany({ select: { groupId: true, productId: true } })
+  ).filter((m) => shown.has(m.groupId));
   const groupIds = new Set(
     allMemberships.filter((m) => byId.has(m.productId)).map((m) => m.groupId)
   );

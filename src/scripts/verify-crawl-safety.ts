@@ -8,6 +8,7 @@ import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import {
   BATCH,
   clearChecks,
+  delistedRecheckDue,
   forEachBatch,
   recordRecategorised,
   recordUnavailable,
@@ -15,6 +16,7 @@ import {
   touchChecked,
 } from "../scrapers/crawl/product-checks";
 import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "./classify-food-types";
+import { buildGroups, shownOnSite } from "../lib/grouping";
 
 /**
  * The first three fixes of the code review of 22 October 2026
@@ -289,6 +291,57 @@ async function verifyKindWrites() {
   await cleanup();
 }
 
+function verifyGroupRules() {
+  console.log("\n  H6: which groups of identical products may be built and shown");
+  const m = (productId: string, store: string, barcode: string | null = null) => ({
+    productId, store, size: null, barcode, barcodeExpected: store !== "PINGO_DOCE",
+  });
+  const link = (aId: string, bId: string) => ({ aId, bId, rung: "exact" });
+  const only = (groups: ReturnType<typeof buildGroups>) => groups[0];
+
+  // Wine #30 of the sample: Continente and Auchan refused (different barcodes),
+  // each matched to Pingo Doce on name.
+  const wine = [m("co", "CONTINENTE", "5608309023253"), m("pd", "PINGO_DOCE"), m("au", "AUCHAN", "5010867770744")];
+  const chained = only(buildGroups(wine, [link("pd", "co"), link("pd", "au")], [{ aId: "co", bId: "au" }]));
+  check("a group holding a refused pair is not built", chained.emit === false && chained.flags.includes("refused-pair"), chained.flags.join(","));
+  const unrefused = only(buildGroups(wine, [link("pd", "co"), link("pd", "au")]));
+  check("without the refusal it would be built", unrefused.emit === true);
+
+  const agree = only(buildGroups([m("co", "CONTINENTE", "1"), m("pd", "PINGO_DOCE"), m("au", "AUCHAN", "1")], [link("co", "pd"), link("pd", "au")]));
+  check("Continente and Auchan sharing a barcode, Pingo Doce by name: shown", agree.emit && shownOnSite(JSON.stringify(agree.flags)), agree.flags.join(","));
+  const unread = only(buildGroups([m("co", "CONTINENTE", "1"), m("au", "AUCHAN", null)], [link("co", "au")]));
+  check("an Auchan barcode not yet read keeps the group off the site", unread.flags.includes("barcode-unconfirmed") && !shownOnSite(JSON.stringify(unread.flags)));
+  const differ = only(buildGroups([m("co", "CONTINENTE", "1"), m("au", "AUCHAN", "2")], [link("co", "au")]));
+  check("two different barcodes keep it off the site", differ.flags.includes("barcode-unconfirmed"));
+  const coPd = only(buildGroups([m("co", "CONTINENTE", "1"), m("pd", "PINGO_DOCE")], [link("co", "pd")]));
+  check("a Continente-Pingo Doce pair rests on brand, size and name: shown", shownOnSite(JSON.stringify(coPd.flags)), coPd.flags.join(","));
+
+  const twice = only(buildGroups([m("pd1", "PINGO_DOCE"), m("pd2", "PINGO_DOCE"), m("co", "CONTINENTE", "7")], [link("pd1", "co"), link("pd2", "co")]));
+  check("two Pingo Doce products in one group, unproven: kept off the site", twice.flags.includes("duplicate-store") && !shownOnSite(JSON.stringify(twice.flags)));
+  const listedTwice = only(buildGroups([m("co1", "CONTINENTE", "7"), m("co2", "CONTINENTE", "7"), m("pd", "PINGO_DOCE")], [link("co1", "pd"), link("co2", "pd")]));
+  check("one product a store lists twice (same barcode) is not a duplicate", !listedTwice.flags.includes("duplicate-store"), listedTwice.flags.join(","));
+  const organic = only(buildGroups([m("co1", "CONTINENTE", "5601252106677"), m("co2", "CONTINENTE", "5601252117734"), m("au", "AUCHAN", "5601252106677")], [link("co1", "au"), link("co2", "au")]));
+  check("Gallo's regular and organic oil at one store: kept off the site", organic.flags.includes("duplicate-store") && !shownOnSite(JSON.stringify(organic.flags)));
+
+  check("a group with no flags is shown", shownOnSite(null));
+  check("a group a person confirmed is still shown", shownOnSite(JSON.stringify(["weak-links-only"])));
+  check("unreadable flags are not shown", !shownOnSite("{not json"));
+}
+
+function verifyRecheckSchedule() {
+  console.log("\n  H7: a product no longer sold is looked at again after 7 and 30 days");
+  const day = 86_400_000;
+  const delisted = new Date("2026-10-22T03:00:00Z");
+  const at = (days: number) => new Date(delisted.getTime() + days * day);
+  check("not the next day", !delistedRecheckDue(delisted, delisted, at(1)));
+  check("on day 7", delistedRecheckDue(delisted, delisted, at(7)));
+  check("once only: not again on day 8 after the day-7 look", !delistedRecheckDue(delisted, at(7), at(8)));
+  check("again on day 30", delistedRecheckDue(delisted, at(7), at(30)));
+  check("then not until 90 days after the last look", !delistedRecheckDue(delisted, at(30), at(100)) && delistedRecheckDue(delisted, at(30), at(121)));
+  check("a night missed is caught up: day 7's look still happens on day 9", delistedRecheckDue(delisted, delisted, at(9)));
+  check("never looked at: due", delistedRecheckDue(delisted, null, at(1)));
+}
+
 export async function verifyCrawlSafety(): Promise<number> {
   failures = 0;
   try {
@@ -297,6 +350,8 @@ export async function verifyCrawlSafety(): Promise<number> {
     await verifyKindsKept();
     await verifyMovedOut();
     await verifyKindWrites();
+    verifyGroupRules();
+    verifyRecheckSchedule();
   } finally {
     await cleanup();
   }
