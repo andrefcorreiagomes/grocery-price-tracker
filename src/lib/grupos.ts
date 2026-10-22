@@ -14,6 +14,7 @@ import { categoryOf } from "./food-tree";
 import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type TreeProduct } from "./comparison-groups";
 import { STORE_ORDER } from "./stores";
 import { unitPrice } from "./pricing";
+import { promotionOf, type Promotion } from "./promotion";
 
 /**
  * Reading the catalogue for the comparison pages.
@@ -53,7 +54,7 @@ async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
     where: { foodType: foodTypeId, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, subKind: true, labels: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true,
     },
   });
 }
@@ -168,7 +169,7 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
     where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, foodType: true, subKind: true, labels: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true,
     },
   });
   const byType = new Map<string, TreeProduct[]>();
@@ -182,7 +183,7 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
 
 /** One store's answer for a basket line, small enough to send to the browser. */
 export type BasketCell =
-  | { kind: "price"; unitPrice: number; productName: string }
+  | { kind: "price"; unitPrice: number; productName: string; promotion: Promotion | null }
   | { kind: "not-stocked" }
   | { kind: "no-size"; productName: string };
 
@@ -234,7 +235,9 @@ export async function getBasketLines(): Promise<BasketLine[]> {
           kindLabel: type.label,
           cells: STORE_ORDER.map((store): BasketCell => {
             const cell = g.cheapest.get(store) as Cell;
-            if (cell.kind === "price") return { kind: "price", unitPrice: cell.unitPrice, productName: cell.product.name };
+            if (cell.kind === "price") {
+              return { kind: "price", unitPrice: cell.unitPrice, productName: cell.product.name, promotion: promotionOf(cell.product) };
+            }
             if (cell.kind === "no-size") return { kind: "no-size", productName: cell.example.name };
             return { kind: "not-stocked" };
           }),
@@ -433,7 +436,7 @@ export async function getNamedGroups(
     where: { foodType: foodTypeId, delistedAt: null, ...current },
     select: {
       id: true, storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
     },
   });
   if (rows.length === 0) return { shown: [], comparable: 0, found: 0 };
@@ -464,7 +467,7 @@ export async function getNamedGroups(
       where: { id: { in: otherIds.slice(i, i + 500) }, delistedAt: null, ...current },
       select: {
         id: true, storeProductId: true, store: true, name: true, brand: true,
-        price: true, packageSize: true, unit: true,
+        price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
       },
     });
     for (const o of others) byId.set(o.id, o);

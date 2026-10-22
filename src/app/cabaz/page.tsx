@@ -46,6 +46,7 @@ export default async function CabazPage({
         : {
             packageSize: 1,
             productName: cell.productName,
+            promotion: cell.kind === "price" ? cell.promotion : null,
             snapshots:
               cell.kind === "price"
                 ? [{ date: crawled.get(STORE_ORDER[i]) ?? new Date(), price: cell.unitPrice }]

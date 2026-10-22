@@ -38,6 +38,7 @@ import {
   type ComparableProduct,
 } from "../lib/comparison";
 import { euros } from "../lib/money";
+import { promotionOf } from "../lib/promotion";
 import { promotionLine, promotionWarning } from "../scrapers/crawl/promo-watch";
 import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
@@ -1908,6 +1909,54 @@ function verifyFoodTree(): number {
   check("porco preto is a label on pork and charcutaria", labelsOf("porco", "Lombo de Porco Preto").includes("porco-preto") &&
     labelsOf("chourico", "Chouriço de Porco Preto").includes("porco-preto") && !labelsOf("pao", "Pão Alentejano").includes("porco-preto"));
   check("Pingo Doce's \"Livre\" milk is lactose-free", labelsOf("leite", "Bebida de Leite UHT Livre Meio Gordo").includes("sem-lactose"));
+
+  // The read-through of every comparison's cheapest products, 21 October 2026.
+  check("free-range eggs are not lactose-free", !labelsOf("ovo", "Ovos de Ar Livre Classe M/L").includes("sem-lactose"));
+  check("a frozen shelf makes a product frozen, though its name does not say so",
+    labelsOf("espinafre", "ESPINAFRES AUCHAN FOLHAS PORÇÕES 1KG", "congelados/legumes-e-fruta/legumes").includes("congelado") &&
+    !labelsOf("espinafre", "Espinafres Embalados", "Frutas e Vegetais/Legumes").includes("congelado"));
+  check("fruit in syrup and peeled tomatoes are tinned",
+    labelsOf("pessego", "Pêssego em Calda").includes("lata") && labelsOf("tomate", "Tomate Pelado Inteiro").includes("lata") &&
+    !labelsOf("tomate", "Tomate Chucha Continente").includes("lata"));
+  check("a breaded fillet with garlic is not tinned fish",
+    !labelsOf("filete-panado", "Filetes de Pescada com Salsa e Alho Continente").includes("lata") &&
+    labelsOf("sardinha", "Sardinhas com Alho Ramirez").includes("lata"));
+  check("fragrant rice is not smoked", !labelsOf("arroz", "Arroz Thai Perfumado Caçarola").includes("fumado") &&
+    labelsOf("salmao", "Salmão Fumado da Noruega").includes("fumado"));
+  check("M/GORDO is semi-skimmed milk", subKindOf("leite", "LEITE UHT GRESSO M/GORDO PACK POUPANÇA 8 X1L") === "meio-gordo");
+  check("Granarolo is a brand, not grana", subKindOf("queijo", "Queijo Ricotta Proteína Granarolo") !== "parmesao" &&
+    subKindOf("queijo", "Queijo Grana Padano DOP 16 Meses") === "parmesao");
+  check("a cheese spread is a spread whatever the cheese", subKindOf("queijo", "Creme de Queijo para Barrar Emmental Continente") === "barrar");
+  check("Calorino is carolino, and plain long-grain is agulha", subKindOf("arroz", "Arroz Calorino") === "carolino" &&
+    subKindOf("arroz", "ARROZ LONGO COMUM POLEGAR 1KG") === "agulha" && subKindOf("arroz", "ARROZ CAROLINO AUCHAN EXTRA LONGO 1KG") === "carolino" &&
+    subKindOf("arroz", "Arroz Thai Jasmim Dragon Fortune") === "aromatico");
+  check("half-fat, salted and unsalted butter are apart", subKindOf("manteiga", "MANTEIGA MAGRA AUCHAN -50% DE GORDURAS 250G") === "magra" &&
+    subKindOf("manteiga", "Manteiga sem Sal") === "sem-sal" && subKindOf("manteiga", "Manteiga com Sal") === "com-sal");
+  check("white cane sugar is white", subKindOf("acucar", "Açúcar Branco de Cana Sidul") === "branco");
+  check("butter beans are not red beans", subKindOf("feijao", "Feijão Manteiga Cozido Continente") === "manteiga");
+  check("chocolate salame, coconut sweets and petit-suisse are not what they are named after",
+    c("Salame de Chocolate", "PINGO_DOCE", "Padaria e Pastelaria/Pastelaria") !== "salame" &&
+    c("CÔCOS DOCES DA PENHA 250G", "AUCHAN", "produtos-frescos/fruta") !== "coco" &&
+    c("Queijinho Petit Morango, Banana e Pêssego Continente", "CONTINENTE", "Laticínios e Ovos/Queijos") !== "queijo");
+  check("monkfish heads, roe and breaded shrimp are not the fish",
+    c("TAMBORIL CABEÇA KG", "AUCHAN", "produtos-frescos/peixaria/peixe-fresco") !== "tamboril" &&
+    c("CORVINA OVAS KG", "AUCHAN", "produtos-frescos/peixaria/peixe-fresco") !== "corvina" &&
+    c("Camarões Panados Continente", "CONTINENTE", "Congelados/Marisco") !== "camarao");
+  check("mince must say so", c("Carne para Cozido", "PINGO_DOCE", "Talho") !== "carne-picada" &&
+    c("Carne Picada de Novilho", "PINGO_DOCE", "Talho") === "carne-picada");
+  check("pizza dough is neither pasta nor pizza", c("Massa Fresca para Pizza Continente", "CONTINENTE", "Mercearia/Massas") !== "massa" &&
+    c("Massa para Pizza sem Glúten", "PINGO_DOCE", "Mercearia/Massas") !== "pizza");
+  check("coconut water is not water", c("Água de Coco", "PINGO_DOCE", "Águas, Sumos e Refrigerantes/Águas") !== "agua");
+
+  // Promotion marks (lib/promotion.ts), 21 October 2026.
+  const now = new Date("2026-10-21T20:00:00Z");
+  const promo = (over: object) => promotionOf({ price: 4.83, packageSize: 1, onPromotion: true, ...over }, now);
+  check("a Continente promotion shows the price before, per unit", promo({ price: 9.66, packageSize: 2, regularPrice: 11.72 })?.regularUnitPrice === 5.86);
+  check("a Pingo Doce promotion shows its end date", promo({ promoEndsAt: new Date("2026-10-26T00:00:00Z") })?.endsOn === "2026-10-26");
+  check("a promotion ending today still counts; one ended yesterday does not",
+    promo({ promoEndsAt: new Date("2026-10-21T00:00:00Z") }) !== null && promo({ promoEndsAt: new Date("2026-10-20T00:00:00Z") }) === null);
+  check("no marker, or an earlier price that is not higher, says nothing more",
+    promotionOf({ price: 4.83, packageSize: 1, onPromotion: null }, now) === null && promo({ regularPrice: 4.83 })?.regularUnitPrice === null);
 
   check("clementines and tangerines are different kinds", c("CLEMENTINA KG", "AUCHAN", "produtos-frescos/fruta") === "clementina" &&
     c("Mandarina Embalada", "PINGO_DOCE", "Frutas e Vegetais/Frutas") === "tangerina");

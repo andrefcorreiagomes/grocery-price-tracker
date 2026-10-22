@@ -1,5 +1,6 @@
 import { formatEuros, shownQuantity, type Cabaz, type CabazCell, type CellState } from "@/lib/cabaz";
 import { STORE_LABELS, STORE_ORDER } from "@/lib/stores";
+import { shortDay } from "@/lib/promotion";
 import styles from "./CabazTable.module.css";
 
 interface Props {
@@ -90,6 +91,16 @@ function Cell({ cell, quantity, allowStale, isLowest, store }: {
       {!withheld && cell.productName && (
         <div className={styles.productName} title={cell.productName}>
           {cell.productName}
+        </div>
+      )}
+      {/* Amber, apart from the green "cheapest": a price can be both. */}
+      {!withheld && cell.promotion && (
+        <div className={styles.promo}>
+          promoção
+          {cell.promotion.regularUnitPrice !== null && (
+            <s className={styles.promoDetail}>{formatEuros(cell.promotion.regularUnitPrice * shown)}</s>
+          )}
+          {cell.promotion.endsOn && <span className={styles.promoDetail}>até {shortDay(cell.promotion.endsOn)}</span>}
         </div>
       )}
     </td>

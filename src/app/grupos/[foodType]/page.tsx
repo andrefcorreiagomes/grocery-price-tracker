@@ -5,6 +5,7 @@ import type { ComparisonGroup } from "@/lib/comparison-groups";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
 import type { Cell } from "@/lib/comparison";
 import { euros } from "@/lib/money";
+import { promotionOf, shortDay, type Promotion } from "@/lib/promotion";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
       </div>
     );
   }
+  const promo = promotionOf(cell.product);
   return (
     <div className={`${styles.cell} ${best ? styles.best : ""}`}>
       <span className={styles.figure}>
@@ -45,7 +47,28 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
       {/* The product is NAMED on purpose: a number alone cannot tell you that
           the cheapest "queijo" is a children's dessert. */}
       <span className={styles.product}>{cell.product.name}</span>
+      {promo && <PromoMark promo={promo} unit={unit} />}
     </div>
+  );
+}
+
+/**
+ * The store marks this price as a promotion. Amber rather than another green:
+ * a price can be both the cheapest AND discounted, two different claims that
+ * must stay separately readable - and the word says it, not the colour alone.
+ */
+function PromoMark({ promo, unit }: { promo: Promotion; unit: string }) {
+  return (
+    <span className={styles.promo}>
+      promoção
+      {/* only Continente gives the price before; only Pingo Doce the end */}
+      {promo.regularUnitPrice !== null && (
+        <s className={styles.promoDetail}>
+          {euros(promo.regularUnitPrice)} €/{UNIT_LABEL[unit]}
+        </s>
+      )}
+      {promo.endsOn && <span className={styles.promoDetail}>até {shortDay(promo.endsOn)}</span>}
+    </span>
   );
 }
 

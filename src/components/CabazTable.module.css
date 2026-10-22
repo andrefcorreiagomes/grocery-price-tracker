@@ -93,6 +93,30 @@
   white-space: nowrap;
 }
 
+/* The store marks the price as a promotion: amber, apart from the green "cheapest". */
+.promo {
+  --promo-accent: #b45309;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--promo-accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .promo {
+    --promo-accent: #fbbf24;
+  }
+}
+
+.promoDetail {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
 .noSize {
   font-size: 0.8rem;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);

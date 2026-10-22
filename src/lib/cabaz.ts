@@ -1,4 +1,5 @@
 import { euros } from "./money";
+import type { Promotion } from "./promotion";
 import { unitPrice } from "./pricing";
 import { STORE_ORDER } from "./stores";
 import type { Store } from "@/lib/stores";
@@ -20,6 +21,8 @@ export interface CabazListing {
   snapshots: { date: Date; price: number }[];
   /** the product the price is for, shown under it; absent when not known */
   productName?: string;
+  /** set when the store marks that price as a promotion (lib/promotion.ts) */
+  promotion?: Promotion | null;
 }
 
 export interface CabazProduct {
@@ -55,6 +58,8 @@ export interface CabazCell {
   capturedOn: Date | null;
   /** the product behind the price, when the listing names one */
   productName: string | null;
+  /** the price is a promotion, per the store */
+  promotion: Promotion | null;
 }
 
 export interface CabazRow {
@@ -107,12 +112,12 @@ export function classifyCell(
   latestDay: string | null
 ): CabazCell {
   if (!listing) {
-    return { state: "noListing", unitPrice: null, capturedOn: null, productName: null };
+    return { state: "noListing", unitPrice: null, capturedOn: null, productName: null, promotion: null };
   }
   const productName = listing.productName ?? null;
   const snapshot = listing.snapshots[0];
   if (!snapshot) {
-    return { state: "neverPriced", unitPrice: null, capturedOn: null, productName };
+    return { state: "neverPriced", unitPrice: null, capturedOn: null, productName, promotion: null };
   }
   // latestDay is only null when the database holds no snapshots at all, in
   // which case we could not be looking at one - treat as current rather than
@@ -124,6 +129,7 @@ export function classifyCell(
     unitPrice: unitPrice(snapshot.price, listing.packageSize),
     capturedOn: snapshot.date,
     productName,
+    promotion: listing.promotion ?? null,
   };
 }
 
