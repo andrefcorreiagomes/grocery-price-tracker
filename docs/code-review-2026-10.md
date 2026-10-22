@@ -563,12 +563,18 @@ needs the database or Auchan:
    word lists.
 4. DONE. Pingo Doce's prices: see M4 above - a quarter change after a change
    of promotions, 0.5% from one night to the next.
-5. M2: read Auchan's second product sitemap file (1 request, allowed by the
-   user), then propose whether the nightly should use the sitemap.
-6. The basket and "Indisponível": look at the pages in the browser, with
-   screenshots for the user.
-7. The full checks (`npm run verify:nightly`), types and style; then commit
-   and push (allowed by the user once the checks pass).
+5. DONE. M2: Auchan's two product files list 61,996 products; 17,858 of our
+   18,390 Auchan products on sale (97.1%) are in them. The 532 that are not
+   were mostly last seen by our crawls on 31 August (seasonal fruit): still
+   counted as on sale in the catalogue, though the site hides them after 14
+   days. 345 of the 349 products delisted as not food are still listed, as
+   expected. Proposal to the user: read the sitemap nightly (3 requests).
+6. DONE. The basket and "Indisponível" checked in the browser; screenshots
+   sent. Seen there, not from today: the basket table is 27 pixels wider
+   than its box at a 1,024-pixel window, so the "remover" links are cut off;
+   and Auchan's "BACALHAU SECO IKROFF 36G" (a snack) is compared as dried cod
+   at EUR 63.61/kg - a kind to correct.
+7. DONE. 985 checks pass; committed and pushed 9509df3.
 
 After tonight's run (00:05, 23 October):
 
