@@ -2,6 +2,7 @@ import { prisma } from "../../lib/db";
 import type { Verdict } from "@/generated/prisma/client";
 import type { Store } from "@/lib/stores";
 import { nonFoodCatastropheReason } from "./reidentification";
+import { matchableEan } from "../../lib/matching";
 
 /**
  * The record of product ids we opened and decided not to keep.
@@ -337,6 +338,28 @@ export async function stopTrackingLeftOut(
       })
     ).count
   );
+}
+
+/**
+ * Keep barcodes read from product pages that a crawl opened for another reason
+ * (Auchan's check of products missing from its walk). Written only where no
+ * barcode is known: a known one that differs is the business of the identity
+ * checks in persist.ts, not of a side read. Returns how many were written.
+ */
+export async function fillBarcodes(
+  store: Store,
+  seen: { storeProductId: string; barcode: string }[],
+  checkedAt: Date
+): Promise<number> {
+  let filled = 0;
+  for (const s of seen) {
+    const { count } = await prisma.catalogueProduct.updateMany({
+      where: { store, storeProductId: s.storeProductId, eanNormalized: null },
+      data: { ean: s.barcode, eanNormalized: matchableEan(s.barcode), enrichedAt: checkedAt },
+    });
+    filled += count;
+  }
+  return filled;
 }
 
 /** The products among `ids` that we hold and still track, with their names. */

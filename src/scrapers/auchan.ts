@@ -61,22 +61,35 @@ export function auchanStatusFromHtml(html: string): "alive" | "unavailable" | "g
   return NOT_SELLABLE.test(String(product.offers?.availability ?? "")) ? "unavailable" : "alive";
 }
 
+/** The barcode in a product page's structured data (`gtin`), or null. */
+export function auchanBarcodeFromHtml(html: string): string | null {
+  const product = extractLdJsonBlocks(html).find(
+    (block): block is SchemaProduct =>
+      typeof block === "object" && block !== null && (block as SchemaProduct)["@type"] === "Product"
+  );
+  return product?.gtin ?? null;
+}
+
 /**
  * Fetch a product page and classify it, for phase 2's confirm-the-missing pass.
  * Lighter than `scrapeAuchan` - it needs only the verdict, not the full result -
  * and, unlike `scrapeAuchan`, it distinguishes "listed but unavailable" from
  * "could not tell", which is what stops out-of-stock products being re-fetched
  * every night.
+ *
+ * Also the page's barcode, which the listing tiles never carry. The page is
+ * read anyway, so keeping it costs nothing; until 22 October 2026 it was
+ * thrown away, about 600 pages a night.
  */
-export async function classifyAuchanPage(url: string): Promise<AuchanPageStatus> {
+export async function classifyAuchanPage(url: string): Promise<{ status: AuchanPageStatus; barcode: string | null }> {
   let html: string;
   try {
     html = await fetchHtml(url);
   } catch (error) {
-    if (error instanceof HttpError && (error.status === 404 || error.status === 410)) return "gone";
-    return "unreachable";
+    if (error instanceof HttpError && (error.status === 404 || error.status === 410)) return { status: "gone", barcode: null };
+    return { status: "unreachable", barcode: null };
   }
-  return auchanStatusFromHtml(html);
+  return { status: auchanStatusFromHtml(html), barcode: auchanBarcodeFromHtml(html) };
 }
 
 export async function scrapeAuchan(url: string): Promise<ScrapeResult> {

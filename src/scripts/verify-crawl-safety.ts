@@ -9,6 +9,7 @@ import {
   BATCH,
   clearChecks,
   delistedRecheckDue,
+  fillBarcodes,
   forEachBatch,
   recordRecategorised,
   recordUnavailable,
@@ -17,6 +18,7 @@ import {
 } from "../scrapers/crawl/product-checks";
 import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "./classify-food-types";
 import { buildGroups, shownOnSite } from "../lib/grouping";
+import { auchanBarcodeFromHtml } from "../scrapers/auchan";
 
 /**
  * The first three fixes of the code review of 22 October 2026
@@ -342,6 +344,33 @@ function verifyRecheckSchedule() {
   check("never looked at: due", delistedRecheckDue(delisted, null, at(1)));
 }
 
+async function verifyBarcodesKept() {
+  console.log("\n  Auchan: a product page opened to check a missing product keeps its barcode");
+  const page = (block: object) => `<script type="application/ld+json">${JSON.stringify(block)}</script>`;
+  check("the barcode is read from the page", auchanBarcodeFromHtml(page({ "@type": "Product", name: "X", gtin: "5601252106677" })) === "5601252106677");
+  check("a page without one gives none", auchanBarcodeFromHtml(page({ "@type": "Product", name: "X" })) === null);
+  check("Auchan's \"not found\" page gives none", auchanBarcodeFromHtml("<p>Não temos o que procura</p>") === null);
+
+  await cleanup();
+  const make = (n: string, ean: string | null) =>
+    prisma.catalogueProduct.create({
+      data: { store: "AUCHAN", storeProductId: `${PREFIX}b-${n}`, name: n, url: "https://example.invalid/b", ean, eanNormalized: ean ? ean.padStart(14, "0") : null },
+    });
+  await make("blank", null);
+  await make("known", "5601252106677");
+  const filled = await fillBarcodes("AUCHAN", [
+    { storeProductId: `${PREFIX}b-blank`, barcode: "5601252117734" },
+    { storeProductId: `${PREFIX}b-known`, barcode: "5601252117734" },
+  ], new Date());
+  const rows = new Map(
+    (await prisma.catalogueProduct.findMany({ where: { storeProductId: { startsWith: `${PREFIX}b-` } }, select: { storeProductId: true, eanNormalized: true } }))
+      .map((r) => [r.storeProductId.replace(`${PREFIX}b-`, ""), r.eanNormalized])
+  );
+  check("a missing barcode is filled in", rows.get("blank") === "05601252117734", String(rows.get("blank")));
+  check("a known barcode is never overwritten by a side read", rows.get("known") === "05601252106677" && filled === 1, `filled ${filled}`);
+  await cleanup();
+}
+
 export async function verifyCrawlSafety(): Promise<number> {
   failures = 0;
   try {
@@ -352,6 +381,7 @@ export async function verifyCrawlSafety(): Promise<number> {
     await verifyKindWrites();
     verifyGroupRules();
     verifyRecheckSchedule();
+    await verifyBarcodesKept();
   } finally {
     await cleanup();
   }

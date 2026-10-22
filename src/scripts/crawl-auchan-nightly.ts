@@ -7,6 +7,7 @@ import { recordSections, sectionLines, sectionProblems } from "../scrapers/crawl
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import {
+  fillBarcodes,
   forEachBatch,
   recordDead,
   recordUnavailable,
@@ -190,6 +191,7 @@ async function main() {
   const unavailable: string[] = [];
   const unreachable: string[] = [];
   const alive: string[] = [];
+  const barcodesSeen: { storeProductId: string; barcode: string }[] = [];
   let catastrophe: string | null = null;
 
   if (skipConfirmation) {
@@ -208,7 +210,8 @@ async function main() {
         (skippedUnavailable > 0 ? ` (${skippedUnavailable.toLocaleString()} known out of stock, rechecked later)` : "")
     );
     for (const m of toConfirm) {
-      const status = await classifyAuchanPage(m.url);
+      const { status, barcode } = await classifyAuchanPage(m.url);
+      if (barcode) barcodesSeen.push({ storeProductId: m.storeProductId, barcode });
       if (status === "gone") confirmedDead.push(m.storeProductId);
       else if (status === "unavailable") unavailable.push(m.storeProductId);
       else if (status === "alive") alive.push(m.storeProductId);
@@ -236,9 +239,13 @@ async function main() {
         });
       });
     }
+    // The pages were read anyway: keep the barcodes they carry (only where none
+    // is known), so a group of identical products needs no separate read.
+    const filled = await fillBarcodes(STORE, barcodesSeen, seenAt);
     console.log(
       `  ${confirmedDead.length.toLocaleString()} gone, ${alive.length.toLocaleString()} alive but missing` +
-        `, ${unavailable.length.toLocaleString()} out of stock, ${unreachable.length.toLocaleString()} unreachable`
+        `, ${unavailable.length.toLocaleString()} out of stock, ${unreachable.length.toLocaleString()} unreachable` +
+        `; ${filled.toLocaleString()} barcode(s) kept`
     );
   }
   // A partial walk is reported apart from a fired guard: both stop anything
