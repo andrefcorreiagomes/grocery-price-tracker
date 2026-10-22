@@ -501,6 +501,12 @@ function verifyFoodTypes(): number {
   check("\"L'Or\" and \"LOr\" are one brand when a match is confirmed", spelled.rung === same.rung && spelled.reason === same.reason,
     `${spelled.rung} (${spelled.reason}) against ${same.rung}`);
   check("and different brands are still different", classifyCandidate(cafe("L'Or"), cafe("Delta")).rung !== same.rung);
+  // A 36 g dried-fish snack is not cod or squid to cook (22 October 2026).
+  const shelf = "alimentação/sabores-do-mundo/cozinha-europa-do-leste";
+  check("Ikroff's dried-fish snacks get no fish kind, while dried cod still does",
+    classifyFoodType("BACALHAU SECO IKROFF BACALHAU 36G", "AUCHAN", shelf) === null &&
+    classifyFoodType("POTA SECA IKROFF 36G", "AUCHAN", shelf) === null &&
+    classifyFoodType("Bacalhau Graúdo 1ª Noruega Seco", "CONTINENTE", "Peixaria/Bacalhau Seco/Inteiro") === "bacalhau");
 
   // Products whose store publishes impossible data (data/store-errors.ts).
   console.log("\n  known store errors: kept out of comparisons, not deleted");

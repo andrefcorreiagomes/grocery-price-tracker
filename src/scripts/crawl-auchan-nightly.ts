@@ -9,6 +9,8 @@ import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/cr
 import {
   fillBarcodes,
   forEachBatch,
+  MAX_SHARE_MISSING,
+  missingFromList,
   recordDead,
   recordUnavailable,
   stopTrackingLeftOut,
@@ -41,6 +43,8 @@ import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-re
 import type { DailyReport, GridHealthExtras, ProductNote } from "../scrapers/crawl/daily-report";
 import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
 import { SAMPLE } from "../scrapers/crawl/types";
+import { missingProductVerdict, readAuchanSitemap } from "../scrapers/crawl/auchan-sitemap";
+import { RUNS_BEFORE_ACCEPTING, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
 
 /**
  * The nightly Auchan run: the one command a scheduler calls.
@@ -65,6 +69,69 @@ import { SAMPLE } from "../scrapers/crawl/types";
 const STORE = "AUCHAN" as const;
 /** The nightly always walks the union of root and the departments. */
 const MODE: AuchanCrawlMode = "full";
+
+interface SitemapState {
+  ids: Set<string>;
+  entries: number;
+  perFile: { url: string; entries: number }[];
+  trusted: boolean;
+  distrust: string | null;
+  accepted: string | null;
+}
+
+/**
+ * Read Auchan's own product list and decide whether to believe it tonight,
+ * by the rule the other two stores' lists are judged by (sitemap-trust.ts):
+ * a shrunken list, a lost file, or more than MAX_SHARE_MISSING of the products
+ * we hold missing from it make it suspect, and the same figures three nights
+ * running make it the new normal. A list that cannot be read is simply not
+ * used tonight; phase 2 then works as it did before the list was read.
+ */
+async function readAndJudgeSitemap(liveCount: number): Promise<SitemapState> {
+  let ids = new Set<string>();
+  let perFile: { url: string; entries: number }[] = [];
+  let error: string | null = null;
+  try {
+    ({ ids, perFile } = await readAuchanSitemap());
+  } catch (e) {
+    error = (e as Error).message.slice(0, 120);
+  }
+  const held = (
+    await prisma.catalogueProduct.findMany({ where: { store: STORE, delistedAt: null }, select: { storeProductId: true } })
+  ).map((r) => r.storeProductId);
+  const absent = error === null ? missingFromList(held, ids) : { missing: [], believable: true };
+  const lastTrusted = await prisma.crawlRun.findFirst({
+    where: { store: STORE, sitemapTrusted: true },
+    orderBy: { startedAt: "desc" },
+    select: { sitemapEntries: true, sitemapFiles: true, startedAt: true },
+  });
+  const recentRuns = await prisma.crawlRun.findMany({
+    where: { store: STORE, sitemapEntries: { not: null }, ...(lastTrusted ? { startedAt: { gt: lastTrusted.startedAt } } : {}) },
+    orderBy: { startedAt: "desc" },
+    take: RUNS_BEFORE_ACCEPTING,
+    select: { sitemapEntries: true, sitemapFiles: true, sitemapTrusted: true },
+  });
+  const entries = perFile.reduce((n, f) => n + f.entries, 0);
+  const verdict = judgeSitemap({
+    entries,
+    files: perFile.length,
+    error,
+    baseline:
+      lastTrusted?.sitemapEntries != null && lastTrusted.sitemapFiles != null
+        ? { entries: lastTrusted.sitemapEntries, files: lastTrusted.sitemapFiles }
+        : null,
+    recent: recentRuns.map((r) => ({ entries: r.sitemapEntries ?? 0, files: r.sitemapFiles ?? 0, trusted: r.sitemapTrusted ?? true })),
+    extraSuspicion: absent.believable
+      ? null
+      : `${absent.missing.length.toLocaleString()} of the ${liveCount.toLocaleString()} products we hold are missing from it, more than ${MAX_SHARE_MISSING * 100}%`,
+  });
+  console.log(
+    `\nAuchan's own product list: ${error ? `could not be read (${error})` : `${entries.toLocaleString()} addresses in ${perFile.length} file(s); ${absent.missing.length.toLocaleString()} of the products we hold are not in it`}` +
+      (verdict.trusted ? "" : ` - not believed tonight: ${verdict.distrust}`)
+  );
+  if (verdict.accepted) console.log(`  ${verdict.accepted}`);
+  return { ids, entries, perFile, trusted: verdict.trusted, distrust: verdict.distrust, accepted: verdict.accepted };
+}
 
 async function main() {
   requireCrawlerContact();
@@ -191,6 +258,8 @@ async function main() {
   const unreachable: string[] = [];
   const alive: string[] = [];
   const barcodesSeen: { storeProductId: string; barcode: string }[] = [];
+  const unlisted: string[] = [];
+  let sitemapState: SitemapState | null = null;
   let catastrophe: string | null = null;
 
   if (skipConfirmation) {
@@ -204,6 +273,11 @@ async function main() {
     // Not even the clock is touched: these products were never actually
     // attempted, and a skipped run should leave no trace that looks like one.
   } else {
+    // Auchan's own list of what it sells (auchan-sitemap.ts; code review M2),
+    // judged by the rule the other two stores' lists are (sitemap-trust.ts).
+    sitemapState = await readAndJudgeSitemap(live);
+    const listed = sitemapState.trusted ? sitemapState.ids : null;
+
     console.log(
       `\nphase 2: confirming ${toConfirm.length.toLocaleString()} products missing from the walk` +
         (skippedUnavailable > 0 ? ` (${skippedUnavailable.toLocaleString()} known out of stock, rechecked later)` : "")
@@ -211,9 +285,13 @@ async function main() {
     for (const m of toConfirm) {
       const { status, barcode } = await classifyAuchanPage(m.url);
       if (barcode) barcodesSeen.push({ storeProductId: m.storeProductId, barcode });
-      if (status === "gone") confirmedDead.push(m.storeProductId);
-      else if (status === "unavailable") unavailable.push(m.storeProductId);
-      else if (status === "alive") alive.push(m.storeProductId);
+      const verdict = missingProductVerdict(status, listed, m.storeProductId);
+      if (verdict === "gone") confirmedDead.push(m.storeProductId);
+      else if (verdict === "unlisted") {
+        confirmedDead.push(m.storeProductId);
+        unlisted.push(m.storeProductId);
+      } else if (verdict === "unavailable") unavailable.push(m.storeProductId);
+      else if (verdict === "alive") alive.push(m.storeProductId);
       else unreachable.push(m.storeProductId);
     }
 
@@ -242,7 +320,8 @@ async function main() {
     // is known), so a group of identical products needs no separate read.
     const filled = await fillBarcodes(STORE, barcodesSeen, seenAt);
     console.log(
-      `  ${confirmedDead.length.toLocaleString()} gone, ${alive.length.toLocaleString()} alive but missing` +
+      `  ${confirmedDead.length.toLocaleString()} gone (${unlisted.length.toLocaleString()} of them no longer in Auchan's own list)` +
+        `, ${alive.length.toLocaleString()} alive but missing` +
         `, ${unavailable.length.toLocaleString()} out of stock, ${unreachable.length.toLocaleString()} unreachable` +
         `; ${filled.toLocaleString()} barcode(s) kept`
     );
@@ -307,6 +386,15 @@ async function main() {
     unavailable: unavailable.length,
     unavailableSkipped: skippedUnavailable,
     unreachable: unreachable.length,
+    sitemap: sitemapState && {
+      entries: sitemapState.entries,
+      files: sitemapState.perFile.length,
+      trusted: sitemapState.trusted,
+      distrust: sitemapState.distrust,
+      accepted: sitemapState.accepted,
+      unlisted: unlisted.length,
+      unlistedSamples: unlisted.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),
+    },
     aliveButMissing: alive.length,
     aliveButMissingSamples: alive.slice(0, SAMPLE).map((id) => ({ storeProductId: id, name: nameOf.get(id) ?? id })),
     movedToNonFood: movedOut.stopped.length,
@@ -372,6 +460,16 @@ async function main() {
       tilesMalformed: walk.tilesMalformed,
       emptyCategory: walk.withoutCategory,
       durationMs: Date.now() - started,
+      // Recorded on a run that read the list, believed or not, so a lasting
+      // change can be told from a one-night glitch (sitemap-trust.ts).
+      ...(sitemapState
+        ? {
+            sitemapEntries: sitemapState.entries,
+            sitemapFiles: sitemapState.perFile.length,
+            sitemapTrusted: sitemapState.trusted,
+            sitemapPerFile: sitemapState.perFile,
+          }
+        : {}),
     });
   }
 
@@ -401,6 +499,12 @@ async function main() {
       "WARN",
       `${alive.length.toLocaleString()} product(s) were missing from the walk yet their pages still answer - the walk has a hole`
     );
+  }
+  if (sitemapState && !sitemapState.trusted) {
+    report = escalate(report, "WARN", `Auchan's own product list was not believed tonight (${sitemapState.distrust}), so no product counted a night for being absent from it`);
+  }
+  if (sitemapState?.accepted) {
+    report = escalate(report, "WARN", `Auchan's product list baseline moved: ${sitemapState.accepted}`);
   }
   for (const problem of sectionProblems(sectionChanges)) report = escalate(report, "WARN", problem);
   for (const s of segmentDiff.appeared) {

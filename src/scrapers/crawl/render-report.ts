@@ -470,6 +470,16 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           ...notes(g.aliveButMissingSamples, "    "),
           "",
           `  could not be reached (no claim made): ${g.unreachable.toLocaleString()}`,
+          // Auchan's own product list, since 22 October 2026 (code review M2).
+          ...(g.sitemap
+            ? [
+                "",
+                `  Auchan's own product list: ${g.sitemap.entries.toLocaleString()} addresses in ${g.sitemap.files} file(s)` +
+                  (g.sitemap.trusted ? "" : `   NOT BELIEVED tonight: ${g.sitemap.distrust}`),
+                `  missing from the walk and from that list (counted a dead night): ${g.sitemap.unlisted.toLocaleString()}`,
+                ...notes(g.sitemap.unlistedSamples, "    "),
+              ]
+            : []),
         ],
         explain
       )

@@ -2,6 +2,7 @@ import { fetchHtml } from "../http";
 import { sectionOf } from "../../lib/store-sections";
 import { SectionTally } from "./section-watch";
 import { productIdFromUrl } from "./product-id";
+import { productSitemapsFromIndex } from "./sitemap-index";
 
 /**
  * Discovery for the COMPLIANT Pingo Doce crawler: product URLs from the sitemap
@@ -45,19 +46,8 @@ const KNOWN_PRODUCT_SITEMAPS = [
   "https://www.pingodoce.pt/home/sitemap_1-product.xml",
 ];
 
-/**
- * The product files a sitemap index lists: the ones named `...-product.xml`.
- * Pure, so it is checked without a request.
- *
- * The index also lists `sitemap_2.xml`, which is NOT a product sitemap: its
- * 543 entries are category LISTING pages (`/produtos/limpeza/roupa/detergentes`,
- * no `.html`, no id). Filtering the index on the string "produtos" would sweep
- * them in as 543 products with unparseable ids.
- */
-export function productSitemapsFromIndex(xml: string): string[] {
-  const files = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, "&"));
-  return [...new Set(files.filter((url) => /-product\.xml(\?|$)/.test(url)))];
-}
+// Which files of the index hold products: shared with Auchan (sitemap-index.ts).
+export { productSitemapsFromIndex };
 
 /**
  * The product files to read tonight, from the index, or the known two with

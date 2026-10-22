@@ -279,6 +279,22 @@ export interface GridHealthExtras {
   /** held products the walk saw in a non-food section: no longer tracked */
   movedToNonFood: number;
   movedToNonFoodSamples: ProductNote[];
+  /**
+   * Auchan's own product list (auchan-sitemap.ts, since 22 October 2026); null
+   * on a run that did not get as far as reading it (a partial or frozen walk).
+   */
+  sitemap?: {
+    /** product addresses listed, and in how many files */
+    entries: number;
+    files: number;
+    /** believed tonight; when not, no product counted a night for being absent from it */
+    trusted: boolean;
+    distrust: string | null;
+    accepted: string | null;
+    /** missing from the walk and the list, page not "out of stock": counted a night */
+    unlisted: number;
+    unlistedSamples: ProductNote[];
+  } | null;
 }
 
 /**

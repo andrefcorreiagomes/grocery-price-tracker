@@ -471,13 +471,21 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
   being dropped whole (flag `trimmed`). Example: the Gallo olive oil group.
 - **M1** on 22 October 2026: each point of M1, with checks in
   `src/scripts/verify-reports.ts` (section 21).
+- **M2** on 22 October 2026, with the user's yes: Auchan's nightly reads its
+  sitemap index and two product files (3 requests,
+  `src/scrapers/crawl/auchan-sitemap.ts`), judged by the same trust rule as
+  the other two stores. A product missing from the walk and from that list,
+  whose page does not say "out of stock", counts a dead night. On 22 October
+  that described about 520 products held as on sale, most last seen by the
+  walk weeks before.
 - **M3** on 22 October 2026: Pingo Doce's product files are read from its
   sitemap index (one more request a night; if the index fails, the two known
   files are read and the report says so), and its list is judged by
   Continente's rule, so a suspicion expires after three equal nights.
 - **M4** on 22 October 2026: the three brakes of every store in one table,
   `src/scrapers/crawl/brakes.ts`. Pingo Doce gained the non-food brake and the
-  price brake. Its price limit is 60%, not 30%. Measured that evening: its
+  price brake. Its price limit is 30%, as at the other two (the user's
+  decision; it was 60% for a few hours, set from misread figures). Measured that evening: its
   runs of 3, 18 and 21 October moved 31%, 25% and 27% of its prices, each
   days or weeks after the run before; the run of 22 October, one night
   after, moved 0.5%. The big moves are mostly cuts of 25-35% and rises of
@@ -568,24 +576,28 @@ needs the database or Auchan:
    were mostly last seen by our crawls on 31 August (seasonal fruit): still
    counted as on sale in the catalogue, though the site hides them after 14
    days. 345 of the 349 products delisted as not food are still listed, as
-   expected. Proposal to the user: read the sitemap nightly (3 requests).
+   expected. Built the same evening, with the user's yes (see M2 above).
 6. DONE. The basket and "Indisponível" checked in the browser; screenshots
    sent. Seen there, not from today: the basket table is 27 pixels wider
    than its box at a 1,024-pixel window, so the "remover" links are cut off;
    and Auchan's "BACALHAU SECO IKROFF 36G" (a snack) is compared as dried cod
-   at EUR 63.61/kg - a kind to correct.
+   at EUR 63.61/kg - a kind to correct. Both fixed the same evening: the
+   table's side spacing is smaller and nothing is cut off; Ikroff's three
+   dried-fish snacks get no kind (in the database from the classification
+   of the night of 23 October).
 7. DONE. 985 checks pass; committed and pushed 9509df3.
 
 After tonight's run (00:05, 23 October):
 
 8. Read the reports, in particular: Continente's `answered "gone" but still
    in the sitemap`; Pingo Doce's index and its 19 department counts, read for
-   the first time; that no brake fired wrongly.
+   the first time; Auchan's own product list, read for the first time, and
+   how many products it counted a dead night (about 520 expected); that no
+   brake fired wrongly; that the Ikroff snacks lost their kind.
 9. L4: remove the retired `FoodTypeCategory` table (needs a migration).
    L10: the egg and capsule count using the kind corrections; measure first
    how many stored counts would change.
-10. Pingo Doce's price limit (60%, set from three nights): set it again once
-    there are more nights.
+10. DONE. Pingo Doce's price limit is back to 30% (the user, 22 October).
 11. Whole-page checks of the two page readers on pieces of real pages, the
     next time pages are read anyway.
 12. Bring the five places that read sizes into one (rest of M8).

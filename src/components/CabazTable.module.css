@@ -11,9 +11,12 @@
   border-collapse: collapse;
 }
 
+/* 0.7rem at the sides, not 0.9rem: with six columns the wider spacing made the
+   table 27px wider than the page at its full 900px, and the "remover" links
+   were cut off (22 October 2026). */
 .table th,
 .table td {
-  padding: 0.7rem 0.9rem;
+  padding: 0.7rem 0.7rem;
   text-align: left;
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
 }

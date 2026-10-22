@@ -426,11 +426,12 @@ function verifyStaleProducts(): number {
   // Every store has the same three brakes, each with its own limit (code
   // review M4, brakes.ts).
   console.log("\n  the brakes, one table for every store");
-  check("Pingo Doce's usual night (1,961 of 7,196 prices moved, 22 October) does not trip its price brake",
+  check("Pingo Doce's night of 22 October (33 of 7,207 prices moved) does not trip its price brake",
+    !isPriceChurnStorm({ changed: 33, priced: 7207, complete: true, store: "PINGO_DOCE" }));
+  check("nor its run after a change of promotions (1,961 of 7,196, 21 October)",
     !isPriceChurnStorm({ changed: 1961, priced: 7196, complete: true, store: "PINGO_DOCE" }));
-  check("but nearly every price moving does", isPriceChurnStorm({ changed: 6900, priced: 7196, complete: true, store: "PINGO_DOCE" }));
-  check("35% of prices moving passes at Pingo Doce but trips Continente's brake",
-    !isPriceChurnStorm({ changed: 2500, priced: 7196, complete: true, store: "PINGO_DOCE" }) &&
+  check("but 35% of prices moving does, at Pingo Doce as at Continente (30%, the user's decision)",
+    isPriceChurnStorm({ changed: 2500, priced: 7196, complete: true, store: "PINGO_DOCE" }) &&
     isPriceChurnStorm({ changed: 2500, priced: 7196, complete: true, store: "CONTINENTE" }));
   check("with no store given, Continente's limits apply",
     isPriceChurnStorm({ changed: 2500, priced: 7196, complete: true }) && PRICE_CHURN_LIMIT === BRAKES.CONTINENTE.priceChurn);

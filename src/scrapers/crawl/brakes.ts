@@ -45,11 +45,12 @@ export const BRAKES: Record<Store, Brakes> = {
     // after the one before), 25% (18 October, 15 days after), 27% (21 October,
     // 2 days after) - but 0.5% on 22 October, one night after. The big moves
     // are mostly cuts of 25-35% and rises of 25-50%: promotions starting and
-    // ending. So a night after a change of promotions can move a quarter of
-    // the prices. The limit sits well above that for now, agreed with the user
-    // on 22 October 2026, and is to be set again from more nights. A reader
-    // reading the wrong number would move nearly every price.
-    priceChurn: 0.6,
+    // ending. Night to night that is small, so the limit is the other stores'
+    // 30% (the user's decision, 22 October 2026; 60% for a few hours that day,
+    // set from figures misread as three consecutive nights). A run after
+    // several missed nights can come near it, as the 3 October one (31%) would
+    // have tripped it: a FAIL then means "look", and the prices are kept.
+    priceChurn: 0.3,
   },
   AUCHAN: {
     deadPages: 0.1,

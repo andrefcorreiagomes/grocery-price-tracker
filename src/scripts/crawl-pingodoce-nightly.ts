@@ -390,9 +390,10 @@ async function main() {
   // (brakes.ts). Pingo Doce had no such brake until 22 October 2026.
   const priced = summary.prices.changed + summary.prices.unchanged;
   const priceStorm = isPriceChurnStorm({ changed: summary.prices.changed, priced, complete: fullRun, store: "PINGO_DOCE" })
-    ? `${summary.prices.changed.toLocaleString()} of ${priced.toLocaleString()} prices moved this run - far more than ` +
-      `Pingo Doce's usual quarter, so the price reader is probably reading the wrong number. NOTE: prices are written ` +
-      `as the crawl runs, so these rows already exist and share this run's seenAt.`
+    ? `${summary.prices.changed.toLocaleString()} of ${priced.toLocaleString()} prices moved this run - more than ` +
+      `30%. After several missed nights a change of promotions can do this; otherwise the price reader is probably ` +
+      `reading the wrong number. NOTE: prices are written as the crawl runs, so these rows already exist and share ` +
+      `this run's seenAt.`
     : null;
   if (priceStorm) console.log(`\nFAIL: ${priceStorm}`);
 

@@ -330,7 +330,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // dishes - heads at EUR 5.99/kg were the cheapest "cod". The same reasoning
   // as salmon heads. Decided by hand, 17 October 2026.
   // Nor cod dishes: "Bacalhau com Natas" was cod. 21 October 2026.
-  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b|com natas|\ba bras\b|espiritual/i },
+  // Ikroff is a 36 g dried-fish snack, not cod or squid to cook: "BACALHAU SECO
+  // IKROFF" was the dearest dried cod at EUR 63.61/kg. 22 October 2026.
+  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b|com natas|\ba bras\b|espiritual|\bikroff\b/i },
   // Not breaded shrimp, the cheapest "whole shrimp" at Continente and Auchan.
   // 21 October 2026.
   { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"], exclude: /panad|empanad|tempura/i },
@@ -348,7 +350,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "lula", label: "Lula", unit: "kg", heads: ["lula"] },
   { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"] },
   { id: "douradinho", label: "Douradinho", unit: "kg", heads: ["douradinho"] },
-  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"] },
+  { id: "pota", label: "Pota", unit: "kg", heads: ["pota"], exclude: /\bikroff\b/i },
   { id: "choco", label: "Choco", unit: "kg", heads: ["choco"], exclude: /chocolate/i },
   { id: "ameijoa", label: "Amêijoa", unit: "kg", heads: ["ameijoa"] },
   { id: "dourada", label: "Dourada", unit: "kg", heads: ["dourada"] },

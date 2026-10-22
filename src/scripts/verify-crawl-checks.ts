@@ -7,6 +7,8 @@ import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { compareWithBaseline, MIN_SECTION_FOR_DROP, sectionWarnings } from "../scrapers/crawl/history";
 import { detached } from "../scrapers/types";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
+import { idsFromProductSitemap, missingProductVerdict } from "../scrapers/crawl/auchan-sitemap";
+import { productSitemapsFromIndex } from "../scrapers/crawl/sitemap-index";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -34,7 +36,37 @@ export async function verifyCrawlChecks(): Promise<number> {
   verifyNoPageRetention();
   await verifyRotationWarnings();
   verifyPingoDoceSitemap();
+  verifyAuchanSitemap();
   return failures;
+}
+
+/** Auchan's own product list, read by its nightly since 22 October 2026 (code review M2). */
+function verifyAuchanSitemap() {
+  console.log("\n  Auchan's own product list");
+  // The shape of Auchan's index and product files as read on 22 October 2026.
+  const index =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    "<sitemap>\n        <loc>https://www.auchan.pt/sitemap_0-product.xml</loc>\n        <lastmod>2026-10-22T07:58:32+00:00</lastmod>\n    </sitemap>" +
+    "<sitemap><loc>https://www.auchan.pt/sitemap_1-product.xml</loc></sitemap>" +
+    "<sitemap><loc>https://www.auchan.pt/sitemap_2-image.xml</loc></sitemap></sitemapindex>";
+  check("its index gives its two product files, not the image file",
+    productSitemapsFromIndex(index).map((u) => u.split("/").pop()).join() === "sitemap_0-product.xml,sitemap_1-product.xml");
+  const file =
+    "<urlset><url>\n        <loc>https://www.auchan.pt/pt/alimentacao/mercearia/arroz/arroz-carolino-auchan-1kg/10.html</loc>\n    </url>" +
+    "<url><loc>https://www.auchan.pt/pt/eletrodomesticos/frigorificos/frigorifico-x/3466535.html</loc></url>" +
+    "<url><loc>https://www.auchan.pt/pt/alimentacao/categoria-sem-produto/</loc></url></urlset>";
+  check("a product file gives the ids we store, food or not; other addresses are ignored",
+    idsFromProductSitemap(file).join() === "10,3466535", idsFromProductSitemap(file).join());
+
+  const listed = new Set(["1", "2"]);
+  const v = (page: "gone" | "unavailable" | "alive" | "unreachable", id: string, list: Set<string> | null = listed) =>
+    missingProductVerdict(page, list, id);
+  check("missing from the walk and the list, page still there: a dead night", v("alive", "9") === "unlisted");
+  check("missing from the walk but in the list: the walk has a hole, as before", v("alive", "1") === "alive");
+  check("a page saying out of stock keeps the product, listed or not", v("unavailable", "9") === "unavailable" && v("unavailable", "1") === "unavailable");
+  check("a page saying gone is gone, listed or not", v("gone", "1") === "gone");
+  check("an unreachable page of an unlisted product counts on the list's word", v("unreachable", "9") === "unlisted" && v("unreachable", "1") === "unreachable");
+  check("a list not believed tonight changes nothing", v("alive", "9", null) === "alive" && v("unreachable", "9", null) === "unreachable");
 }
 
 /**
