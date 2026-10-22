@@ -5,8 +5,9 @@
  * The three chains say different amounts (21 October 2026): Continente marks
  * about 28% of its products and gives the price before the discount, but no
  * end date; Pingo Doce marks about 27% and gives an end date, but no earlier
- * price; Auchan's crawl does not read the marker at all, so its prices are
- * never called promotions - unknown, not "not on promotion".
+ * price. Auchan's crawl reads its listing tiles' struck earlier price since
+ * 22 October 2026 (price reductions only; no end date) - before that its
+ * prices were never called promotions: unknown, not "not on promotion".
  *
  * Pure, and free of the database, so the pages and the basket can share it.
  */

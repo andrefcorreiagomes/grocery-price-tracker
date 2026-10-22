@@ -12,13 +12,15 @@ import { storeName } from "../../lib/stores";
  * October 2026; this brings them back into each crawl's report.
  *
  * Measured on 21 October 2026, products on sale: Continente 4,730 of 17,197 on
- * promotion (28%), Pingo Doce 2,675 of 9,791 (27%). Auchan's listing walk
- * records no promotion state at all (18,353 unknown) - not read, rather than
- * broken, so it is reported but never warned about.
+ * promotion (28%), Pingo Doce 2,675 of 9,791 (27%). Auchan's listing walk read
+ * no promotion at all until 22 October 2026; since then it reads the struck
+ * earlier price on each tile (auchanTilePromotion) - 3 of the 48 tiles on its
+ * first listing page, so its share may well sit below the others'. A store
+ * not in this set is reported as not read, and never warned about.
  */
 
 /** Stores whose crawl reads the promotion marker today. */
-const READS_PROMOTIONS = new Set(["CONTINENTE", "PINGO_DOCE"]);
+const READS_PROMOTIONS = new Set(["CONTINENTE", "PINGO_DOCE", "AUCHAN"]);
 
 /** Fewer products than this is a test or partial run: too few to judge a share. */
 const MIN_SEEN = 500;

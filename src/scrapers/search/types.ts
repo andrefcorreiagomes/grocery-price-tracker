@@ -32,8 +32,10 @@ export interface SearchHit {
   sizeSource?: "page" | "listing";
 
   /**
-   * Promotion state, from a product page only - undefined from a listing tile,
-   * so a listing crawl cannot erase what a page crawl recorded.
+   * Promotion state, from a product page - and, since 22 October 2026, from an
+   * Auchan listing tile, whose struck-through earlier price shows it (see
+   * auchanTilePromotion). Undefined from any other listing tile, so a listing
+   * crawl cannot erase what a page crawl recorded.
    */
   onPromotion?: boolean;
   regularPrice?: number | null;

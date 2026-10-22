@@ -93,6 +93,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     if (category === "") withoutCategory++;
 
     const price = Number(gtm.price);
+    const promotion = auchanTilePromotion($(el).find(".auc-price__stricked, .strike-through").first().text(), price);
     // Auchan's own per-kilo or per-item figure, printed on every tile measured.
     // When it settles the size, the size goes with the tile; when it does not,
     // the field stays absent and the name decides later, as it always did.
@@ -107,9 +108,9 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
       category,
       url: urls.absoluteProductUrl,
       ...(size ?? {}),
+      ...promotion,
       // Auchan's own figure as printed ("8.6 €/Kg", "1.25 €/un"); null when the
-      // tile has none. Promotion is not read: the tiles have not been checked
-      // for it, so it stays undefined and nothing is overwritten.
+      // tile has none.
       ...(() => {
         const shown = figure ? parseShownUnitPrice(figure) : null;
         return { shownUnitPrice: shown?.value ?? null, shownUnitPriceUnit: shown?.unit ?? null };
@@ -118,6 +119,28 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
   });
 
   return { hits, seen, unpriced, malformed, withoutCategory };
+}
+
+/**
+ * A tile's promotion, from its struck-through earlier price: "Price reduced
+ * from 2,98 € to" (a pack price) or "from 1,39 € /Kg to" (per kilo), in the
+ * same basis as the tile's price. Checked on a live listing page on 21 October
+ * 2026: 3 of its 48 tiles carried one, each beside a discount badge ("-16%").
+ *
+ * NOT the "Promoção" label: it sat on 43 of those 48 tiles, promoted or not -
+ * a template the page fills in the visitor's browser, with offers (multi-buy,
+ * loyalty card) a crawler reading the HTML never sees. So "on promotion" here
+ * means what the site's mark means: the price shown is a reduced price.
+ *
+ * A tile without a struck price is NOT on promotion, which also clears a
+ * promotion that has ended.
+ */
+export function auchanTilePromotion(struck: string, price: number): { onPromotion: boolean; regularPrice: number | null } {
+  const before = struck.match(/(\d+(?:[.,]\d+)?)/)?.[1];
+  const regular = before ? Number(before.replace(",", ".")) : NaN;
+  return Number.isFinite(regular) && regular > price
+    ? { onPromotion: true, regularPrice: regular }
+    : { onPromotion: false, regularPrice: null };
 }
 
 /**
