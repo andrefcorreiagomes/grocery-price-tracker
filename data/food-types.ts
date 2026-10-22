@@ -193,8 +193,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pessego", label: "Pêssego", unit: "kg", heads: ["pessego"] },
   { id: "manga", label: "Manga", unit: "kg", heads: ["manga"] },
   { id: "abobora", label: "Abóbora", unit: "kg", heads: ["abobora"] },
-  { id: "espinafre", label: "Espinafre", unit: "kg", heads: ["espinafre"] },
-  { id: "morango", label: "Morango", nameOnly: true, unit: "kg", heads: ["morango"] },
+  // Not creamed spinach, a side dish. 21 October 2026.
+  { id: "espinafre", label: "Espinafre", unit: "kg", heads: ["espinafre"], exclude: /\bnatas\b/i },
+  // Not chocolate-coated strawberries. 21 October 2026.
+  { id: "morango", label: "Morango", nameOnly: true, unit: "kg", heads: ["morango"], exclude: /chocolate/i },
   { id: "cenoura", label: "Cenoura", unit: "kg", heads: ["cenoura"] },
   { id: "alface", label: "Alface", nameOnly: true, unit: "kg", heads: ["alface"] },
   { id: "framboesa", label: "Framboesa", unit: "kg", heads: ["framboesa"] },
@@ -238,7 +240,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "figo", label: "Figo", unit: "kg", heads: ["figo"],
     exclude: /\bsecos?\b|desidrat|\bdoce\b|compota|chocolate|bolacha|torta|cheio/i },
   { id: "coco", label: "Coco", unit: "kg", heads: ["coco"],
-    exclude: /ralado|leite|bebida|\bagua\b|creme|chips|\boleo\b|farinha|\bdoce\b|chocolate|bolacha|iogurte|gelado/i },
+    // "Doces" too: Auchan's "CÔCOS DOCES DA PENHA" are a sweet. 21 October 2026.
+    exclude: /ralado|leite|bebida|\bagua\b|creme|chips|\boleo\b|farinha|\bdoces?\b|chocolate|bolacha|iogurte|gelado/i },
   { id: "papaia", label: "Papaia", unit: "kg", heads: ["papaia", "mamao"], exclude: /desidrat|\bsecas?\b|sumo/i },
   { id: "maracuja", label: "Maracujá", unit: "kg", heads: ["maracuja"], exclude: /sumo|nectar|polpa|iogurte|gelado|\bdoce\b/i },
   { id: "brocolo", label: "Brócolos", unit: "kg", heads: ["brocolo", "brocoli"], exclude: /sopa|creme|pure|gratinad/i },
@@ -288,7 +291,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // "Coelhos de Chocolate" are Easter sweets. 20 October 2026.
   { id: "coelho", label: "Coelho", unit: "kg", heads: ["coelho"], exclude: /chocolate/i },
   // Not a seasoning "para carne" ("Mix Salicórnia p/ Carne"). 20 October 2026.
-  { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"], exclude: /\bp(ara|\/) carne|tempero|salicornia|\bervas\b/i },
+  // Minced, as the name says: "Carne para Cozido" (stew meat) and kebab meat
+  // were the cheapest mince. 21 October 2026.
+  { id: "carne-picada", label: "Carne picada", nameOnly: true, unit: "kg", heads: ["carne"], require: /picad|moid/i, exclude: /\bp(ara|\/) carne|tempero|salicornia|\bervas\b/i },
   // Charcutaria: these name an animal but ARE the food type - see CUT_WORDS.
   { id: "salsicha", label: "Salsicha", nameOnly: true, unit: "kg", heads: ["salsicha", "salsichao"] },
   { id: "fiambre", label: "Fiambre", unit: "kg", heads: ["fiambre"] },
@@ -311,7 +316,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"] },
   // "Paio York" is a cooked ham, not the smoked sausage. 20 October 2026.
   { id: "paio", label: "Paio", unit: "kg", heads: ["paio"], exclude: /\byork\b/i },
-  { id: "salame", label: "Salame", unit: "kg", heads: ["salame"] },
+  // Not "Salame de Chocolate", a dessert - the cheapest salame at all three
+  // chains on 21 October 2026.
+  { id: "salame", label: "Salame", unit: "kg", heads: ["salame"], exclude: /chocolate/i },
   // Catalan cured sausage, at all three chains. 20 October 2026.
   { id: "fuet", label: "Fuet", unit: "kg", heads: ["fuet"] },
   { id: "alheira", label: "Alheira", unit: "kg", heads: ["alheira"] },
@@ -335,14 +342,21 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // ("caras"), tongues, cheeks and swim bladders ("samos"), sold for specific
   // dishes - heads at EUR 5.99/kg were the cheapest "cod". The same reasoning
   // as salmon heads. Decided by hand, 17 October 2026.
-  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b/i },
-  { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"] },
+  // Nor cod dishes: "Bacalhau com Natas" was cod. 21 October 2026.
+  { id: "bacalhau", label: "Bacalhau", unit: "kg", heads: ["bacalhau"], exclude: /\b(paloco|escamudo)\b|\b(caras?|cabecas?|linguas?|bochechas?|samos?)\b|com natas|\ba bras\b|espiritual/i },
+  // Not breaded shrimp, the cheapest "whole shrimp" at Continente and Auchan.
+  // 21 October 2026.
+  { id: "camarao", label: "Camarão", unit: "kg", heads: ["camarao", "gamba"], exclude: /panad|empanad|tempura/i },
   // "Petinga" is young sardine, sold tinned like sardines. 20 October 2026.
   { id: "sardinha", label: "Sardinha", unit: "kg", heads: ["sardinha", "petinga"] },
   // Heads are sold for stock and soup, not as salmon to eat: three Auchan
   // salmon heads at EUR 1.89-1.99/kg were the cheapest "salmon" in the country.
   // Decided by hand, 4 October 2026.
   { id: "salmao", label: "Salmão", nameOnly: true, unit: "kg", heads: ["salmao"], exclude: /\bcabeca\b/i },
+  // NOT excluding "CABEÇA" here, unlike monkfish: Auchan writes it into whole
+  // fish sold with the head ("CORVINA AQUICULTURA CABEÇA", EUR 7.99), and the
+  // page of "PESCADA REDE CABEÇA" (EUR 3.99/kg on promotion) does not say
+  // which it is. Checked 21 October 2026.
   { id: "pescada", label: "Pescada", nameOnly: true, unit: "kg", heads: ["pescada", "pescadinha"], exclude: /panad/i },
   { id: "lula", label: "Lula", unit: "kg", heads: ["lula"] },
   { id: "polvo", label: "Polvo", unit: "kg", heads: ["polvo"] },
@@ -354,8 +368,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "robalo", label: "Robalo", unit: "kg", heads: ["robalo"] },
   { id: "carapau", label: "Carapau", unit: "kg", heads: ["carapau"] },
   { id: "cavala", label: "Cavala", unit: "kg", heads: ["cavala"] },
-  { id: "corvina", label: "Corvina", unit: "kg", heads: ["corvina"] },
-  { id: "tamboril", label: "Tamboril", unit: "kg", heads: ["tamboril"] },
+  // Roe is not the fish: "CORVINA OVAS" was the cheapest meagre. Nor monkfish
+  // heads ("TAMBORIL CABEÇA", EUR 5.99/kg against 13.99, its page: "ideal para
+  // dar sabor às suas receitas de peixe" - for stock). 21 October 2026.
+  { id: "corvina", label: "Corvina", unit: "kg", heads: ["corvina"], exclude: /\bovas\b/i },
+  { id: "tamboril", label: "Tamboril", unit: "kg", heads: ["tamboril"], exclude: /(?<!\bsem )\bcabecas?\b/i },
   { id: "perca", label: "Perca", unit: "kg", heads: ["perca"] },
   { id: "truta", label: "Truta", unit: "kg", heads: ["truta"] },
   { id: "linguado", label: "Linguado", unit: "kg", heads: ["linguado"] },
@@ -394,7 +411,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "caracol", label: "Caracóis", unit: "kg", heads: ["caracol", "caracoi", "caracoleta"], exclude: /canela|frutas|chocolate|folhad|massa|creme/i },
 
   // --- Laticínios e ovos ---------------------------------------------------
-  { id: "queijo", label: "Queijo", unit: "kg", heads: ["queijo", "queijinho"] },
+  // Not petit-suisse ("Queijinho Petit"), a children's dessert and the
+  // cheapest cheese spread, nor the almond sweet "Queijinhos de Amêndoa com
+  // Ovos Moles". 21 October 2026.
+  { id: "queijo", label: "Queijo", unit: "kg", heads: ["queijo", "queijinho"], exclude: /\bpetit\b|ovos moles/i },
   { id: "iogurte", label: "Iogurte", unit: "kg", heads: ["iogurte"] },
   // Claimed at step 1 so it never reaches the category fallback, which files an
   // oat drink under `leite` (its shelf is "Leite e Bebidas Vegetais") and a rice
@@ -433,7 +453,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     // "Leite Creme" is a custard dessert. 18 October 2026.
     exclude: /achocolat|chocolate|cacau|\bcafe|galao|cap+uc|latte|morango|baunilha|banana|caramelo|condensad|\bem po\b|\bcoco\b|creme de leite|leite creme|\bcreme\b|protei|crescimento|infantil|fermentad/i },
   // Not peanut or other nut butters. 20 October 2026.
-  { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"], exclude: /amendoim|amendoa|caju|avela|pistacio|cacau/i },
+  // Nor coconut butter ("MANTEIGA SEARA DE CÔCO"). 21 October 2026.
+  { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"], exclude: /amendoim|amendoa|caju|avela|pistacio|cacau|\bcoco\b/i },
   { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
   // Plant-based yoghurts go by brand names too: Alpro's "Yofu", Sojasun's
@@ -470,7 +491,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     // Not soy steaks in tomato sauce ("Bifes Cem Porcento Soja Molho Tomate"),
     // nor miso or fermented soy beans. Auchan writes "MOLHO KIKKOMAN SOJA", so
     // the words need not be next to each other. 20 October 2026.
-    require: /\bsoja\b|shoyu/i, exclude: /\bcom molho\b|\bbifes?\b|tomate|\bmiso\b|fermentad/i },
+    // Nor a soy béchamel. 21 October 2026.
+    require: /\bsoja\b|shoyu/i, exclude: /\bcom molho\b|\bbifes?\b|tomate|\bmiso\b|fermentad|bechamel/i },
   // The sauce and the dried chilli are different products (EUR 2.26 against
   // about EUR 31 a kilo), and the unit cannot tell them apart: Pingo Doce
   // records its sauce by weight. So each must say what it is - "molho", or
@@ -482,7 +504,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
     require: /(?=.*piri)(?=.*(moid|\bgrao\b|\bsecos?\b|\bem po\b|flocos|esmagad|saqueta|vagem))/i, exclude: /\bmolho\b/i },
   { id: "pesto", label: "Pesto", unit: "either", heads: ["molho", "pesto"], require: /pesto/i, exclude: /\bcom molho\b/i },
   { id: "bechamel", label: "Béchamel", unit: "either", heads: ["molho", "bechamel"], require: /bechamel/i, exclude: /\bcom molho\b/i },
-  { id: "molho-alho", label: "Molho de alho", unit: "either", heads: ["molho"], require: /molho de alho|\balho\b/i, exclude: /\bcom molho\b|piri|pesto|soja/i },
+  // Not a tomate sauce with garlic ("PASSATA TOMATE ... CEBOLA E ALHO").
+  // 21 October 2026.
+  { id: "molho-alho", label: "Molho de alho", unit: "either", heads: ["molho"], require: /molho de alho|\balho\b/i, exclude: /\bcom molho\b|piri|pesto|soja|tomate|passata|tempero/i },
   { id: "barbecue", label: "Molho barbecue", unit: "either", heads: ["molho"], require: /barbecue|\bbbq\b/i, exclude: /\bcom molho\b/i },
   { id: "molho-tomate", label: "Molho de tomate", unit: "either", heads: ["molho"], require: /\btomate\b/i, exclude: /\bcom molho\b|ketchup/i },
   // massa the pasta, not massa the dough
@@ -491,7 +515,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "massa", label: "Massa", unit: "kg", heads: ["massa", "esparguete", "noodle", "fusilli", "ravioli", "tortellini"],
     // Tofu, seitan and potato starch share Auchan's fresh-pasta shelves.
     // "Massa de Alho" and "Massa de Pimentão" are seasoning pastes. 20 October 2026.
-    exclude: /massa folhada|massa quebrada|massa de pizza|massa areada|massa de (alho|pimentao|piment|malagueta|tomate)|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
+    // Pizza dough in any wording ("Massa Fresca para Pizza" was the cheapest
+    // fresh pasta) - but not pizza-flavoured ravioli - and "Massa de Tempero".
+    // 21 October 2026. (Not "risotto": review decisions turn shelved
+    // "massa" into ready meals, and would no longer reach them - 22 October.)
+    exclude: /massa folhada|massa quebrada|massa (fresca )?(para |de )?pizza|base de pizza|massa areada|massa de (alho|pimentao|piment|malagueta|tomate)|tempero|\btofu\b|\bseitan\b|fecula|\bpots?\b|^pasta (bolonhesa|carbonara)/i },
   // Sweets that are not chocolate, which reach here through the shelf rather
   // than the name: "Chocolates e Guloseimas" holds both, and a name like
   // "Rebuçados de Mentol" has no head of its own, so the category answered.
@@ -543,7 +571,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "vinagre", label: "Vinagre", unit: "l", heads: ["vinagre"], exclude: /\bcreme\b|glace|reducao/i },
   { id: "pate", label: "Paté", nameOnly: true, unit: "kg", heads: ["pate"] },
   // "Canja"/"Canjinha" is chicken broth: a soup, not chicken. 20 October 2026.
-  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja", "canjinha"] },
+  // Not instant soup, a packet of powder (see sopa-instantanea). 21 October 2026.
+  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja", "canjinha"], exclude: /instantane/i },
   // Soup powders and sachets: a packet of powder cannot be compared per kilo
   // with ready soup. No heads yet - their names ("Creme de Marisco Knorr")
   // read like ready soups - so only review assigns it (data/kind-reviews.ts).
@@ -682,7 +711,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
 
   // --- Congelados e refeições ----------------------------------------------
   { id: "gelado", label: "Gelado", hidden: "sweets", unit: "l", heads: ["gelado"] },
-  { id: "pizza", label: "Pizza", unit: "kg", heads: ["pizza"] },
+  // A pizza, not the dough to make one. 21 October 2026.
+  { id: "pizza", label: "Pizza", unit: "kg", heads: ["pizza"], exclude: /massa (fresca )?(para |de )?pizza|base de pizza/i },
   { id: "lasanha", label: "Lasanha", unit: "kg", heads: ["lasanha"] },
   // A dish, not an ingredient that shares its shelf. Auchan's "preparados e
   // refeições rápidas" ("mixes and quick meals") also holds cornmeal, maize,
@@ -718,7 +748,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // drinks; listed first so they claim those names. 18 October 2026.
   { id: "agua-sabor", label: "Água tónica e com sabor", hidden: "drinks", nameOnly: true, unit: "l", heads: ["agua"],
     require: /tonica|ginger|\bsabor|aromatizad|botanic|\bpink\b|\blima\b|\blimao\b|framboesa|morango|pessego|frutos/i },
-  { id: "agua", label: "Água", nameOnly: true, unit: "l", heads: ["agua"] },
+  // Coconut water is a drink, not water. 21 October 2026.
+  { id: "agua", label: "Água", nameOnly: true, unit: "l", heads: ["agua"], exclude: /\bcoco\b/i },
   // Breakfast cereals, not cereal BARS (a snack, set aside with the sweets) or
   // protein powders sold on the sports-nutrition cereal shelf. 17 October 2026.
   { id: "cereais", label: "Cereais", unit: "kg", heads: ["cereal"],

@@ -117,9 +117,12 @@ export const STORE_ERRORS: StoreError[] = [
     problem:
       "Auchan's per-kilo figure implies 750 g for one croissant; a Bollycao weighs about 75 g, so the figure is " +
       "ten times too small - a price per 100 g labelled per kilo.",
-    evidence: 'price 0.99 €, name "1UN", Auchan\'s per-kilo figure 1.32 €/Kg on its listing tile',
-    checkedOn: "2026-10-04",
-    listedSize: { packageSize: 0.75, unit: "kg" },
+    // Re-checked 22 October 2026: the price rose to 1.45 €, and the size worked
+    // out from Auchan's own figure moved from 0.75 to 0.751 kg - rounding, the
+    // same error.
+    evidence: 'price 0.99 € (1.45 € on 22 Oct), name "1UN", Auchan\'s per-kilo figure 1.32 €/Kg on its listing tile',
+    checkedOn: "2026-10-22",
+    listedSize: { packageSize: 0.751, unit: "kg" },
   },
   {
     store: "AUCHAN",

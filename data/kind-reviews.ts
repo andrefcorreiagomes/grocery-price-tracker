@@ -36,6 +36,11 @@
  * pass, as the user asked, without a page to approve first. No new kinds or
  * rules. Groups the classifier decided by head noun are recorded product by
  * product, so a decision cannot reach products nobody reviewed.
+ *
+ * Batch 5, 22 October 2026: verified products that a store's shelf move would
+ * otherwise lose. A group decision is tied to its shelf; when the store moves
+ * a product, the decision stays behind (the verified-kinds check, section 18
+ * of verify:nightly, is what notices). Recorded here by product instead.
  */
 
 export interface ReviewedGroup {
@@ -1268,4 +1273,5 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 4, store: "AUCHAN", id: "3574510", name: "GOIABADA PREDILECTA 250G", kind: null, why: "Guava paste." },
   { batch: 4, store: "AUCHAN", id: "3860732", name: "GOIABADA PREDILECTA TURMA DA MÓNICA 30G", kind: null, why: "Guava paste." },
   { batch: 4, store: "AUCHAN", id: "3927180", name: "PAPPARDELLE IGLO BOLONHESA 300G", kind: "refeicao", why: "A ready pasta dish, as at Continente." },
+  { batch: 5, store: "AUCHAN", id: "997170", name: "RISOTTO RISO GALLO 4 QUEIJOS 175G", kind: "refeicao", why: "A ready risotto (group 4.16), moved by Auchan to arroz-e-massa/massas-especialidades on 22 October 2026." },
 ];

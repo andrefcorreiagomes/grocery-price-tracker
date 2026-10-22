@@ -53,6 +53,8 @@ export function labelsOf(kind: string, name: string, categoryPath: string | null
     (l) =>
       (!l.categories || (category !== undefined && l.categories.includes(category))) &&
       (!l.kinds || l.kinds.includes(kind)) &&
+      !(l.unless && l.unless.test(n)) &&
+      !l.notKinds?.includes(kind) &&
       (l.match.test(n) || (l.shelf !== undefined && shelf !== "" && l.shelf.test(shelf)))
   ).map((l) => l.id);
   return [...new Set(ids)];

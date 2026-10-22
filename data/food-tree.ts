@@ -126,7 +126,9 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("perna", "Perna e coxa", /perna|coxa|pernil/), // x0.73
     s("asa", "Asa", /\basas?\b|asinha/), // x0.51
     s("inteiro", "Inteiro", /inteir|frango do campo|campestre/), // x0.68
-    s("miudos", "Miúdos", /miud|moela|figado|pescoc|coracoe/), // x0.62
+    // Feet too: Auchan's "PATAS DE FRANGO LIMPAS" were its cheapest "other
+    // chicken". 21 October 2026.
+    s("miudos", "Miúdos", /miud|moela|figado|pescoc|coracoe|\bpatas?\b/), // x0.62
   ],
   peru: [
     s("peito", "Peito e bifes", /peito|bife|escalope/), // x1.40
@@ -173,15 +175,22 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   ],
   leite: [
     // Prices barely differ, but a shopper does not swap whole milk for skimmed.
-    s("meio-gordo", "Meio-gordo", /meio.?gordo/),
+    // Auchan abbreviates it "M/GORDO". 21 October 2026.
+    s("meio-gordo", "Meio-gordo", /meio.?gordo|\bm ?\/ ?gordo/),
     s("magro", "Magro", /magro|desnatado|\b0%/),
     s("gordo", "Gordo", /\bgordo\b|inteiro/),
   ],
   queijo: [
+    // First: a spread is a spread whichever cheese it is made from ("Creme de
+    // Queijo para Barrar Emmental" was the cheapest Emmental, and a goat's
+    // cheese spread the cheapest goat's cheese). Not "queijinho" alone, which
+    // is any small cheese. 21 October 2026.
+    s("barrar", "Para barrar", /barrar|philadelphia|creme/), // x0.85
     s("flamengo", "Flamengo", /flamengo/), // x0.70
     s("mozzarella", "Mozzarella", /mozzarell|mozarel/), // x0.87
     s("ralado", "Ralado", /ralad/), // x1.04
-    s("parmesao", "Parmesão e grana", /parmes|grana|parmigiano/), // x1.80
+    // A whole word: the brand Granarolo made a ricotta the cheapest Parmesan.
+    s("parmesao", "Parmesão e grana", /parmes|\bgrana\b|parmigiano/), // x1.80
     s("brie", "Brie e camembert", /brie|camembert/), // x1.18
     s("cheddar", "Cheddar", /cheddar/), // x1.27
     s("emmental", "Emmental", /emmental|emental/), // x0.93
@@ -189,7 +198,6 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("cabra", "Cabra", /cabra/), // x1.43
     s("ovelha", "Ovelha", /ovelha|serra da estrela|azeitao|evora|nisa|serpa/), // x1.35
     s("fresco", "Fresco", /fresco/), // x0.70
-    s("barrar", "Para barrar", /barrar|creme|philadelphia|queijinho/), // x0.85
   ],
   iogurte: [
     s("grego", "Grego", /grego|greek/), // x0.97
@@ -200,10 +208,17 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   arroz: [
     s("risotto", "Risotto e arbóreo", /risott|arborio|carnaroli/), // x1.52
     s("basmati", "Basmati", /basmati/), // x1.20
+    // Thai jasmine and other fragrant rice were "other rice", beside plain
+    // long-grain at a third of the price. 21 October 2026.
+    s("aromatico", "Thai e aromático", /\bthai\b|jasmi|perfumad|aromatic/),
     s("vaporizado", "Vaporizado", /vaporizado/), // x0.66
     s("integral", "Integral", /integral/), // x0.72
-    s("agulha", "Agulha", /agulha/), // x0.62
-    s("carolino", "Carolino", /carolino/), // x0.60
+    // Pingo Doce writes "Arroz Calorino". Before agulha, because Auchan sells
+    // a "CAROLINO ... EXTRA LONGO". 21 October 2026.
+    s("carolino", "Carolino", /carolino|calorino/), // x0.60
+    // Plain long-grain rice ("Arroz Longo", "Branqueado Longo") is agulha in
+    // Portugal; it was "other rice" beside sushi rice. 21 October 2026.
+    s("agulha", "Agulha", /agulha|\blongo\b/), // x0.62
   ],
   massa: [
     s("fresca", "Fresca e recheada", /fresca|tortellini|ravioli|gnocchi|recheada|girasoli|tortelloni/), // x1.49
@@ -236,7 +251,9 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("azeite", "Azeite", /./), // x0.66
   ],
   acucar: [
-    s("amarelo", "Amarelo e mascavado", /amarelo|mascavad|moreno|demerara|\bcana\b/), // x0.86
+    // Not "cana" alone: "Açúcar Branco de Cana" is white; whole cane sugar
+    // ("Cana Integral") is brown. 21 October 2026.
+    s("amarelo", "Amarelo e mascavado", /amarelo|mascavad|moreno|demerara|integral/), // x0.86
     s("branco", "Branco", /branco|granulado|refinado|\bfino\b|\bpo\b/), // x0.68
   ],
   cafe: [
@@ -250,14 +267,25 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   ],
   chourico: [
     s("corrente", "Corrente", /corrente/), // x0.49
+    // Blood sausage was the cheapest meat chouriço. 21 October 2026.
+    s("sangue", "De sangue", /sangue/),
     s("carne", "De carne", /./), // x1.04
+  ],
+  // Half-fat butter was the cheapest butter at Auchan. Salted and unsalted
+  // apart too, as with milk. 21 October 2026.
+  manteiga: [
+    s("magra", "Magra ou light", /magra|light|\bmeia gordura|reduzid|-\s?\d{2}\s?%/),
+    s("sem-sal", "Sem sal", /sem sal/),
+    s("com-sal", "Com sal", /com sal|\bsal\b|salgad/),
   ],
   batata: [
     s("preparada", "Preparada (palitos, cubos, para forno)", /palito|airfryer|forno|\bcubos?\b|rodelas|salteada|gratin|vapor/), // x2.24
     s("cozer", "Para cozer", /./), // x0.74
   ],
   feijao: [
-    s("encarnado", "Encarnado", /encarnado|vermelho|catarino|manteiga/),
+    // Butter beans are their own bean, not red ones. 21 October 2026.
+    s("manteiga", "Manteiga", /manteiga/),
+    s("encarnado", "Encarnado", /encarnado|vermelho|catarino/),
     s("branco", "Branco", /branco/),
     s("frade", "Frade", /frade/),
     s("preto", "Preto", /preto/),
@@ -274,6 +302,10 @@ export interface Label {
   categories?: string[];
   /** or to these kinds */
   kinds?: string[];
+  /** never when the name matches this */
+  unless?: RegExp;
+  /** never for these kinds */
+  notKinds?: string[];
 }
 
 /**
@@ -281,12 +313,17 @@ export interface Label {
  * Comparisons will keep products with different labels apart (step 2).
  */
 export const LABELS: Label[] = [
-  { id: "congelado", label: "Congelado", match: /congelad/ },
+  // The shelf too: a frozen bag's name often does not say so ("Espinafres em
+  // Folha Continente", Auchan's "ERVILHAS EXTRAFINAS 1KG"), and those were
+  // the cheapest FRESH spinach, peas and green beans. 21 October 2026.
+  { id: "congelado", label: "Congelado", match: /congelad/, shelf: /congelad/ },
   {
     id: "lata", label: "Em lata ou frasco",
     // In fish, "em azeite" and a drained weight "120 (84) G" mean a tin; in
     // pulses and vegetables, "cozido" means the cooked jar rather than dried.
-    match: /\blatas?\b|conserva|\bfrasco\b|\bem (azeite|oleo|agua|tomate|molho|escabeche)\b|ao natural|\(\d+\)|\bcozid[oa]s?\b/,
+    // Fruit "em calda" (in syrup) is tinned: Pingo Doce's tinned peaches were
+    // its cheapest fresh peach. 21 October 2026.
+    match: /\blatas?\b|conserva|\bfrasco\b|\bem (azeite|oleo|agua|tomate|molho|escabeche|calda)\b|ao natural|\(\d+\)|\bcozid[oa]s?\b/,
     // Whatever a chain files under its tinned-goods shelf is tinned, though
     // the name may not say so ("Atum Posta Natural"). 18 October 2026.
     shelf: /conserva/,
@@ -299,13 +336,27 @@ export const LABELS: Label[] = [
     id: "lata", label: "Em lata ou frasco",
     match: /\bazeite\b|\boleo\b|\btomate\b|\bmolho\b|mostarda|piri.?piri|\blimao\b|picante|malagueta|\bcaril\b|\balho\b/,
     categories: ["peixe"],
+    // Not breaded, frozen or fresh fish: "Filetes de Pescada com Salsa e Alho"
+    // and a lemon breaded fillet were filed as tinned - the first a breaded
+    // fillet whose name does not say so, hence the kinds too. 21 October 2026.
+    unless: /panad|congelad|fresc/,
+    notKinds: ["filete-panado", "douradinho", "delicias-do-mar"],
   },
-  { id: "fumado", label: "Fumado", match: /fumad/ },
+  {
+    // Peeled or crushed tomatoes are tinned; a fresh tomato is never "pelado".
+    // Pingo Doce's and Auchan's tinned tomatoes were their cheapest fresh
+    // tomatoes. 21 October 2026.
+    id: "lata", label: "Em lata ou frasco", match: /\bpelad[oa]s?\b|triturad|em pedacos/, kinds: ["tomate"],
+  },
+  // At the start of a word: "perfumado" (Thai fragrant rice) is not smoked.
+  // 21 October 2026.
+  { id: "fumado", label: "Fumado", match: /\b(de)?fumad/ },
   // Not "frutos secos" (nuts), which names a whole aisle.
   { id: "seco", label: "Seco ou desidratado", match: /(?<!frutos )\bsec[oa]s?\b|desidratad/ },
   { id: "bio", label: "Biológico", match: /\bbio\b|biologic/ },
-  // Pingo Doce sells its lactose-free milk as "... Livre".
-  { id: "sem-lactose", label: "Sem lactose", match: /sem lactose|lactose free|\blivre\b/, categories: ["laticinios"] },
+  // Pingo Doce sells its lactose-free milk as "... Livre" - but "Ovos de Ar
+  // Livre" are free-range eggs. 21 October 2026.
+  { id: "sem-lactose", label: "Sem lactose", match: /sem lactose|lactose free|(?<!\bar )\blivre\b/, categories: ["laticinios"] },
   { id: "sem-gluten", label: "Sem glúten", match: /sem gluten|gluten free/ },
   {
     // The Iberian black pig (Alentejano in Portugal, Ibérico in Spain): the same

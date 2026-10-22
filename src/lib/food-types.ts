@@ -143,8 +143,11 @@ function resolve(head: string, name: string, fromShelf = false): FoodType | null
 // tropicais" filed as banana, and a crème liégeois on "gelatinas e
 // sobremesas" filed as jelly. "Snacks de Chocolate" is not open - it says
 // what the snacks are - so "snacks" counts only when no "de" follows.
+// "Especialidades" alone or after "e" ("Queijos e Especialidades") is open;
+// "massas-especialidades", the shelf Auchan moved its specialty pastas to on
+// 22 October 2026, names pasta - and three verified pastas lost their kind.
 const OPEN_SHELF =
-  /\b(especialidades|outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?|tropica(?:l|is)|aromatizad[oa]s?)\b|\bsnacks?\b(?![\s-]+de\b)/;
+  /(?:^|\be[\s-]+)especialidades\b|\b(outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?|tropica(?:l|is)|aromatizad[oa]s?)\b|\bsnacks?\b(?![\s-]+de\b)/;
 
 /**
  * Does this shelf name an open set? One exception, from the data: Auchan's
@@ -153,7 +156,7 @@ const OPEN_SHELF =
  */
 function isOpenShelf(segment: string): boolean {
   const s = stripAccents(segment).toLowerCase();
-  if (/\bbombo/.test(s) && !/\b(especialidades|outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?)\b/.test(s)) {
+  if (/\bbombo/.test(s) && !/(?:^|\be[\s-]+)especialidades\b|\b(outros|outras|mais|diversos|diversas|variados|aperitivos?|sobremesas?)\b/.test(s)) {
     return false;
   }
   return OPEN_SHELF.test(s);
