@@ -2,6 +2,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DailyReport, ProductNote } from "./daily-report";
 import { promotionLine } from "./promo-watch";
+import { LEAVING_NOTE, REACHED_NOTE, pingoDoceLines } from "./pingodoce-report";
 
 /**
  * Turning a report into something a person reads and something a machine reads.
@@ -441,6 +442,14 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
     );
   }
 
+  if (report.pingoDoce) {
+    const { reached, leaving } = pingoDoceLines(report.pingoDoce);
+    lines.push(
+      ...section("Sitemap and product pages: was the whole catalogue reached", REACHED_NOTE, reached, explain),
+      ...section("Products leaving the catalogue", LEAVING_NOTE, leaving, explain)
+    );
+  }
+
   if (report.discovery) {
     const d = report.discovery;
     lines.push(
@@ -615,7 +624,10 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         "here is not the absolute number but whether it moved: five products without a category is " +
         "normal, five hundred means a parser broke.",
       [
-        `  ${report.quality.total} products; missing price ${report.quality.missingPrice}, ` +
+        `  ${report.quality.total} products; missing price ${report.quality.missingPrice}` +
+          // Pingo Doce keeps out-of-stock products as rows with no price.
+          (report.pingoDoce ? " (out of stock - kept with no price)" : "") +
+          ", " +
           `brand ${report.quality.missingBrand}, category ${report.quality.missingCategory}, ` +
           `url ${report.quality.missingUrl}`,
         // A missing promotion marker reads as "not on promotion", so the count
@@ -694,8 +706,13 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
 
   // Likewise the category audit: it belongs to the crawler that walks
   // categories. The rotation's "against the store's own counts" section asks the
-  // useful half of the same question.
-  if (sawEverything)
+  // useful half of the same question. A crawler that read no category counts at
+  // all has nothing to say here: until 22 October 2026 Auchan's report printed
+  // "8 crawled of 0 published", and every report "sitemap cross-check: could
+  // not be read", for checks no current crawler attempts.
+  const auditedCategories =
+    report.categories.published > 0 || report.categories.unknown.length > 0 || report.categories.missing.length > 0;
+  if (sawEverything && auditedCategories)
     lines.push(
     ...section(
       "Categories",
@@ -728,7 +745,7 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
                   ? `, ${report.categories.sitemapUnknown.length} unrecognised: ${report.categories.sitemapUnknown.join(", ")}`
                   : ", all recognised"),
             ]
-          : ["", "  sitemap cross-check: could not be read"]),
+          : []),
         ...(report.categories.publishedCountChanges.length
           ? [
               "",

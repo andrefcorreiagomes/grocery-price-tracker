@@ -209,6 +209,12 @@ export interface DailyReport {
 
   /** How many products this run saw marked on promotion (promo-watch.ts). */
   promotions?: import("./promo-watch").PromotionTally;
+
+  /**
+   * Present on Pingo Doce's runs: its sitemap, its product pages and the
+   * products leaving - that route's counterpart of `discovery` and `gridHealth`.
+   */
+  pingoDoce?: import("./pingodoce-report").PingoDoceExtras;
 }
 
 export interface GridHealthExtras {
@@ -322,6 +328,14 @@ export interface ReportInput {
     fetchMs: number | null;
     sections: { label: string; expected: number | null }[];
   } | null;
+  /**
+   * True when the crawler keeps a row for a product listed without a price -
+   * Pingo Doce's product pages do, for out-of-stock products, about 2,400 of
+   * them. A missing price is then a stock fact, not a parse fault, and the
+   * crawler watches its share itself (pingodoce-report.ts) instead of warning
+   * on every one.
+   */
+  unpricedIsStock?: boolean;
 }
 
 export async function buildDailyReport(input: ReportInput): Promise<DailyReport> {
@@ -495,7 +509,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
     );
   }
   for (const d of input.drift) warnings.push(d);
-  if (missingPrice > 0) warnings.push(`${missingPrice} product(s) have no price`);
+  if (missingPrice > 0 && !input.unpricedIsStock) warnings.push(`${missingPrice} product(s) have no price`);
   if (missingUrl > 0) warnings.push(`${missingUrl} product(s) have no url`);
   if (slowdown !== null && slowdown > SLOWDOWN) {
     warnings.push(`requests are ${slowdown.toFixed(1)}x slower than last run - possible throttling`);

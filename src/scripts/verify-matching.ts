@@ -6,6 +6,8 @@ import { capsuleCountFromName, eggCountFromName, eggCountFromUnitPrice, itemCoun
 import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "../lib/food-tree";
 import { comparisonGroups, mainGroup, MIN_CHAINS, shownGroups, type TreeProduct } from "../lib/comparison-groups";
 import { missingFromList } from "../scrapers/crawl/product-checks";
+import { deadPagesBelievable, pingoDoceProblems, type PingoDoceExtras } from "../scrapers/crawl/pingodoce-report";
+import { renderReport } from "../scrapers/crawl/render-report";
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
@@ -40,6 +42,7 @@ import {
 import { euros } from "../lib/money";
 import { promotionOf } from "../lib/promotion";
 import { promotionLine, promotionWarning } from "../scrapers/crawl/promo-watch";
+import { auchanTilePromotion, parseAuchanTilesDetailed } from "../scrapers/search/auchan";
 import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { createServer } from "node:http";
@@ -501,8 +504,26 @@ function verifyComparison(): number {
   const failed = { ...tally("CONTINENTE", 0, 0, 0), error: "database is locked" };
   check("a failed count is a warning, not a crash",
     promotionWarning(failed)?.includes("database is locked") === true && promotionLine(failed).includes("could not be counted"));
-  check("Auchan's unread promotions are reported, not warned about",
-    promotionWarning(tally("AUCHAN", 17740, 0, 0)) === null && promotionLine(tally("AUCHAN", 17740, 0, 0)).includes("not read"));
+  check("a store whose promotions are not read is reported, not warned about",
+    promotionWarning(tally("OUTRA", 17740, 0, 0)) === null && promotionLine(tally("OUTRA", 17740, 0, 0)).includes("not read"));
+  check("Auchan's promotions are read now, so a night with none is a warning",
+    promotionWarning(tally("AUCHAN", 17740, 0, 17740)) !== null);
+
+  // Auchan's listing tiles (search/auchan.ts), from the live markup of 21 October
+  // 2026: the struck earlier price is the promotion; the "Promoção" label,
+  // present on 43 of 48 tiles, is not.
+  const auchanTile = (id: string, price: string, inside: string) =>
+    `<div class="product-tile" data-gtm='{"id":"${id}","name":"LARANJA 2 KG","price":"${price}","brand":"","category":"produtos-frescos/fruta"}' ` +
+    `data-urls='{"absoluteProductUrl":"https://www.auchan.pt/pt/x/${id}.html"}'><span class="sales">${inside}` +
+    `<div class="auc-price__promotion"><span class="auc-price__promotion__label"> Promoção </span></div></span></div>`;
+  const tiles = parseAuchanTilesDetailed(
+    auchanTile("158914", "2.49", `<span class="strike-through"><span class="auc-price__stricked">Price reduced from 2,98 € to</span></span><span class="value">2,49 €</span>`) +
+      auchanTile("234229", "1.19", `<span class="value">1,19 € /Kg</span>`)
+  ).hits;
+  check("an Auchan tile with a struck price is a promotion, with the price before",
+    tiles[0]?.onPromotion === true && tiles[0]?.regularPrice === 2.98);
+  check("an Auchan tile with only the \"Promoção\" label is not", tiles[1]?.onPromotion === false && tiles[1]?.regularPrice === null);
+  check("a struck price per kilo reads too", auchanTilePromotion("Price reduced from 1,39 € /Kg to", 1.19).regularPrice === 1.39);
 
   // Two prices or it is not a comparison. This is what empties the wine page:
   // every wine group pairs a sized Auchan bottle with an unsized Continente row.
@@ -2022,5 +2043,53 @@ function verifyStaleProducts(): number {
   check("products missing from the store's list are found", missingFromList(held, listed).missing.join() === "p97,p98,p99");
   check("a few missing is believable", missingFromList(held, listed).believable);
   check("a fifth of the range vanishing overnight is not", !missingFromList(held, new Set(held.slice(0, 80))).believable);
+
+  // Pingo Doce's report, from its night of 22 October 2026.
+  console.log("\n  Pingo Doce's report");
+  const night: PingoDoceExtras = {
+    sitemapFiles: [{ file: "sitemap_0-product.xml", entries: 11436 }, { file: "sitemap_1-product.xml", entries: 4692 }],
+    sitemapPrevious: 16150,
+    food: 10178, nonFood: 5807, skippedSections: 141, fromMixed: 943, unfiled: 2,
+    unparseable: 0, unparseableSamples: [], unknownSections: [],
+    targets: 10178, fetched: 9907, withSize: 8903, unpriced: 2656,
+    unreachable: 126, unreachableSamples: [{ storeProductId: "980669", name: "Fetch failed (503)" }],
+    missingFromSitemap: 211, sitemapBelieved: true, deadPages: 145, deadPagesBelieved: true,
+    delistedNow: 202, delistedSamples: [{ storeProductId: "1", name: "Produto Retirado" }],
+    stoppedBySection: 0, stoppedByName: 0,
+  };
+  const nightProblems = pingoDoceProblems(night);
+  check("that night's 126 unreadable pages (1.2%) are its one warning", nightProblems.fails.length === 0 &&
+    nightProblems.warnings.length === 1 && nightProblems.warnings[0].includes("126 page(s) could not be read"), nightProblems.warnings.join(" | "));
+  check("a usual night, with no unreadable pages, has no problem", (() => {
+    const p = pingoDoceProblems({ ...night, unreachable: 0 });
+    return p.fails.length === 0 && p.warnings.length === 0;
+  })());
+  check("145 pages saying gone of 10,178 is believed", deadPagesBelievable(145, 10178));
+  check("most pages saying gone at once is not: a broken reader", !deadPagesBelievable(9000, 10178));
+  const broken = pingoDoceProblems({ ...night, deadPages: 9000, deadPagesBelieved: false, withSize: 100, unpriced: 9000, unreachable: 0 });
+  check("a broken page reader FAILs, and the size and price shares warn", broken.fails.length === 1 &&
+    broken.warnings.some((w) => w.includes("pack size")) && broken.warnings.some((w) => w.includes("no price")), [...broken.fails, ...broken.warnings].join(" | "));
+  check("an unknown department and unreadable addresses warn",
+    pingoDoceProblems({ ...night, unreachable: 0, unknownSections: [{ section: "nova-seccao", count: 40 }], unparseable: 3 }).warnings.length === 2);
+  check("a disbelieved sitemap warns", pingoDoceProblems({ ...night, unreachable: 0, sitemapBelieved: false }).warnings.length === 1);
+  const pdReport = renderReport({
+    store: "PINGO_DOCE",
+    runAt: "2026-10-22T00:25:00.000Z",
+    verdict: "OK",
+    problems: [],
+    baseline: { runs: 3, since: "2026-10-18T21:27:00.000Z" },
+    scraper: { sections: [], requests: 0, megabytes: 0, transferredMegabytes: null, minutesFetching: 0, retries: 0, slowdown: null },
+    quality: { total: 10370, missingPrice: 2974, missingBrand: 0, missingCategory: 0, missingUrl: 0 },
+    catalogue: { seen: 0, newProducts: 0, disappeared: 0, stillMissing: 0, returned: 0, moved: 0, renamed: 0, samples: { newProducts: [], disappeared: [], returned: [], moved: [], renamed: [] } },
+    prices: { opened: 0, changed: 0, unchanged: 0, skipped: 0, movers: [], absurd: [] },
+    categories: { published: 0, crawled: 25, unknown: [], missing: [], publishedCountChanges: [], sitemapSlugs: 0, sitemapUnknown: [] },
+    live: { candidatePairsAffected: 0 },
+    drift: [],
+    pingoDoce: night,
+  }, { explain: false });
+  check("the report shows the sitemap and pages section", pdReport.includes("Sitemap and product pages") && pdReport.includes("16,128 address(es) in 2 file(s)"));
+  check("the report shows products leaving", pdReport.includes("delisted this run (third night): 202"));
+  check("missing prices are explained as out of stock", pdReport.includes("missing price 2974 (out of stock"));
+  check("no category audit, so no Categories section", !pdReport.includes("## Categories") && !pdReport.includes("sitemap cross-check"));
   return failures - before;
 }

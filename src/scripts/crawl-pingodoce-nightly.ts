@@ -11,14 +11,16 @@ import {
   stopTrackingLeftOut,
 } from "../scrapers/crawl/product-checks";
 import { formatHttpStats, httpStats, requireCrawlerContact, wireBytesOf } from "../scrapers/http";
-import { recordRun } from "../scrapers/crawl/history";
-import { catalogueSizes } from "../scrapers/crawl/catalogue-size";
+import { compareWithBaseline, compareWithPrevious, previousRunFor, recordRun, rollingBaseline } from "../scrapers/crawl/history";
+import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
+import { buildDailyReport, snapshotBefore, type DailyReport } from "../scrapers/crawl/daily-report";
+import { deadPagesBelievable, pingoDoceProblems, type PingoDoceExtras } from "../scrapers/crawl/pingodoce-report";
+import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
+import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import type { SearchHit } from "../scrapers/search/types";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { LeftOutTally, recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 
 /**
  * Crawl Pingo Doce ONE PRODUCT PAGE AT A TIME - the route its robots.txt allows.
@@ -40,6 +42,10 @@ import { join } from "node:path";
  * Resumable by construction. `--limit` takes the stalest slice by
  * `lastCheckedAt`, so repeated partial runs march deterministically through the
  * catalogue instead of re-reading the front of it.
+ *
+ * A full run writes the same report as the other two stores (reports/,
+ * OK/WARN/FAIL), since 22 October 2026; a --limit or --new slice writes none,
+ * because "what changed" and "what disappeared" mean nothing for a slice.
  */
 
 function arg(name: string): string | undefined {
@@ -132,7 +138,15 @@ async function main() {
     return;
   }
 
+  // Read the previous state BEFORE anything writes over it: the report diffs
+  // against it, and this is the only moment the old values exist.
+  const fullRun = limit === undefined && !onlyNew;
+  const before = fullRun ? await snapshotBefore("PINGO_DOCE") : null;
+  const previousRun = await previousRunFor("PINGO_DOCE");
+  const baseline = await rollingBaseline("PINGO_DOCE");
+
   const writer = await openCatalogueWriter("PINGO_DOCE");
+  const seenAt = writer.seenAt;
   const started = Date.now();
 
   // The sitemap is the store's whole tree, so this is a complete view of its
@@ -189,12 +203,20 @@ async function main() {
   const heldSet = new Set(held);
   const absent = missingFromList(held, sitemap.allIds);
   const pageSaysGone = crawl.dead.map((d) => d.storeProductId).filter((id) => heldSet.has(id));
-  const deadTonight = [...new Set([...(absent.believable ? absent.missing : []), ...pageSaysGone])];
+  // A page the reader cannot understand also counts as "gone", so a markup
+  // change would make nearly every page gone at once, and three such nights
+  // would delist the store. An implausible share is not counted (pingodoce-report.ts).
+  const pagesBelieved = deadPagesBelievable(crawl.dead.length, targets.length);
+  const deadTonight = [
+    ...new Set([...(absent.believable ? absent.missing : []), ...(pagesBelieved ? pageSaysGone : [])]),
+  ];
   const { delisted } = await recordDead("PINGO_DOCE", deadTonight, new Date());
   console.log(
     `\nno longer listed: ${absent.missing.length} held product(s) missing from the sitemap` +
       (absent.believable ? "" : ` - more than ${MAX_SHARE_MISSING * 100}% of the range, so the list is not believed tonight`) +
-      `; ${pageSaysGone.length} page(s) said gone; ${delisted.length} delisted after ${DEAD_NIGHTS_BEFORE_DELISTING} nights`
+      `; ${pageSaysGone.length} page(s) said gone` +
+      (pagesBelieved ? "" : " - too many at once, so the pages are not believed tonight") +
+      `; ${delisted.length} delisted after ${DEAD_NIGHTS_BEFORE_DELISTING} nights`
   );
 
   console.log("\nby department:");
@@ -217,13 +239,31 @@ async function main() {
   console.log("\nrequests:");
   for (const line of formatHttpStats()) console.log(line);
 
+  // Read before this run is recorded below, since both compare against the
+  // newest recorded run. The same figures as the record: every page read.
+  const runSections = crawl.results.map((r) => ({ cgid: r.category.cgid, label: r.category.label, collected: r.products.length }));
+  const runTotal = runSections.reduce((n, r) => n + r.collected, 0);
+  const drift = fullRun
+    ? [...(await compareWithPrevious("PINGO_DOCE", runTotal, runSections)), ...compareWithBaseline(baseline, runTotal, runSections)]
+    : [];
+  const sitemapPrevious =
+    (
+      await prisma.crawlRun.findFirst({
+        where: { store: "PINGO_DOCE" },
+        orderBy: { startedAt: "desc" },
+        select: { sitemapEntries: true },
+      })
+    )?.sitemapEntries ?? null;
+  const sizesBefore = await previousSizes(seenAt);
+  const sizesNow = await catalogueSizes();
+
   // The run's own record, as the other two chains keep: how long it took, how
   // many requests, how many products per department. Until 18 October 2026
   // Pingo Doce kept none, so nobody could say how long its crawl takes. Only a
   // full run is recorded: a --limit or --new slice would make the next
   // comparison, and the next time estimate, meaningless.
   const durationMs = Date.now() - runStarted;
-  if (limit === undefined && !onlyNew) {
+  if (fullRun) {
     const stats = httpStats().reduce(
       (a, h) => ({
         requests: a.requests + h.requests,
@@ -236,12 +276,12 @@ async function main() {
     );
     await recordRun(
       "PINGO_DOCE",
-      crawl.results.reduce((n, r) => n + r.products.length, 0),
-      crawl.results.map((r) => ({ cgid: r.category.cgid, label: r.category.label, collected: r.products.length })),
+      runTotal,
+      runSections,
       {
         http: { ...stats, wireBytes: stats.wireBytes || null },
         seenAt: summary.seenAt,
-        catalogueSizes: await catalogueSizes(),
+        catalogueSizes: sizesNow,
         sitemapEntries: sitemap.perFile.reduce((n, f) => n + f.entries, 0),
         sitemapFiles: sitemap.perFile.length,
         sitemapPerFile: sitemap.perFile,
@@ -250,7 +290,7 @@ async function main() {
       }
     );
   }
-  console.log(`\nDone in ${(durationMs / 60000).toFixed(1)} min${limit === undefined && !onlyNew ? " (run recorded)" : ""}.`);
+  console.log(`\nDone in ${(durationMs / 60000).toFixed(1)} min${fullRun ? " (run recorded)" : ""}.`);
 
   console.log(
     `\nprices: ${summary.prices.changed} changed, ${summary.prices.unchanged} held,` +
@@ -261,38 +301,96 @@ async function main() {
   console.log(`Done: ${created} product(s) created, ${updated} updated.`);
 
   // A misread promotion marker turns every promotion into a full price without
-  // a single error; the count is the only sign (promo-watch.ts). Pingo Doce has
-  // no full report, so the warning joins its sections file below.
+  // a single error; the count is the only sign (promo-watch.ts).
   const promotions = await tallyPromotions("PINGO_DOCE", summary.seenAt);
   const promotionProblem = promotionWarning(promotions);
   console.log(`\n${promotionLine(promotions)}`);
   if (promotionProblem) console.log(`WARN: ${promotionProblem}`);
 
-  // Pingo Doce's crawl writes no full report yet, so its sections get a file of
-  // their own beside the other stores' reports.
-  const lines = [...sectionLines(sectionChanges, leftOut), promotionLine(promotions)];
-  const problems = [...sectionProblems(sectionChanges), ...(promotionProblem ? [promotionProblem] : [])];
-  const stamp = new Date().toISOString().slice(0, 16);
-  const text = [
-    `# PINGO_DOCE sections - ${stamp.replace("T", " ")}`,
-    "",
-    `**${problems.length > 0 ? "WARN" : "OK"}**`,
-    "",
-    ...problems.map((p) => `- ${p}`),
-    ...(problems.length > 0 ? [""] : []),
-    ...lines,
-    "",
-  ].join("\n");
-  await mkdir("reports", { recursive: true });
-  const file = join("reports", `pingodoce-sections-${stamp.replace(/[:T]/g, "-")}.md`);
-  await writeFile(file, text, "utf8");
-  console.log(`\nsections:\n${lines.map((l) => `  ${l}`).join("\n")}\n  written to ${file}`);
+  if (!fullRun || !before) {
+    console.log("\nA slice (--limit or --new): no report written - what changed and what disappeared mean nothing for a slice.");
+    return;
+  }
+
+  const names = new Map([...before.byStoreProductId].map(([id, row]) => [id, row.name]));
+  const extras: PingoDoceExtras = {
+    sitemapFiles: sitemap.perFile.map((f) => ({ file: f.url.split("/").pop() ?? f.url, entries: f.entries })),
+    sitemapPrevious,
+    food: sitemap.food.length,
+    nonFood: sitemap.nonFood,
+    skippedSections: sitemap.skipped,
+    fromMixed: sitemap.fromMixed,
+    unfiled: sitemap.unfiled.length,
+    unparseable: sitemap.unparseable,
+    unparseableSamples: sitemap.unparseableSamples,
+    unknownSections: [...sitemap.unknownSections].map(([section, count]) => ({ section, count })),
+    targets: targets.length,
+    fetched: crawl.fetched,
+    withSize: crawl.withSize,
+    unpriced: crawl.unpriced.length,
+    unreachable: crawl.unreachable.length,
+    unreachableSamples: crawl.unreachable.slice(0, 5).map((u) => ({ storeProductId: u.storeProductId, name: u.reason })),
+    missingFromSitemap: absent.missing.length,
+    sitemapBelieved: absent.believable,
+    deadPages: crawl.dead.length,
+    deadPagesBelieved: pagesBelieved,
+    delistedNow: delisted.length,
+    delistedSamples: delisted.slice(0, 12).map((id) => ({ storeProductId: id, name: names.get(id) ?? id })),
+    stoppedBySection,
+    stoppedByName,
+  };
+
+  // Only the products the catalogue kept: a mixed-aisle page whose name is not
+  // food was read but never saved, and would otherwise count as "new" every night.
+  const leftOutSet = new Set(leftOutIds);
+  const keptResults = crawl.results.map((r) => ({ ...r, products: r.products.filter((p) => !leftOutSet.has(p.id)) }));
+
+  let report: DailyReport = await buildDailyReport({
+    store: "PINGO_DOCE",
+    seenAt,
+    before,
+    results: keptResults,
+    audit: { unknown: [], missing: [] },
+    publishedCounts: new Map(),
+    prices: summary.prices,
+    http: httpStats(),
+    drift,
+    shortSections: [],
+    sitemapSlugs: [],
+    sitemapUnknown: [],
+    baseline: { runs: baseline.runs, since: baseline.since },
+    previousRun,
+    unpricedIsStock: true,
+  });
+  report = {
+    ...report,
+    pingoDoce: extras,
+    catalogueByStore: compareSizes(sizesNow, sizesBefore),
+    sections: sectionLines(sectionChanges, leftOut),
+    promotions,
+  };
+
+  // Each escalate puts its message first, so the least serious go in first and
+  // the FAILs last, leaving the worst at the top.
+  const { fails, warnings } = pingoDoceProblems(extras);
+  for (const problem of sectionProblems(sectionChanges)) report = escalate(report, "WARN", problem);
+  if (promotionProblem) report = escalate(report, "WARN", promotionProblem);
+  for (const w of [...warnings].reverse()) report = escalate(report, "WARN", w);
+  for (const f of [...fails].reverse()) report = escalate(report, "FAIL", f);
+
+  const explain = !flag("brief");
+  const written = await writeReport(report, { explain });
+  console.log(`\n${renderReport(report, { explain })}`);
+  console.log(`\nreport written to ${written.text} and ${written.json}`);
+  if (report.verdict === "FAIL") process.exitCode = 1;
 }
 
 main()
   .then(() => prisma.$disconnect())
   .catch(async (e) => {
-    console.error(e);
+    // A run that dies still leaves a report saying so; otherwise
+    // reports/latest.md would go on showing an earlier night as this one.
+    await writeCrashReport("PINGO_DOCE", e);
     await prisma.$disconnect();
     process.exit(1);
   });
