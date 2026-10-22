@@ -458,8 +458,22 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
   alone, because Pingo Doce has no barcodes, and the site says no group spans
   the three. Before matching runs nightly: check a sample of the new groups,
   and change that text.
-- **H7.** Needs a few Continente product pages of products that are out of
-  stock, to see whether such a page drops its price.
+- **H6, sample.** 60 of the rebuilt groups (40 at all three chains, 20 new at
+  two) read one by one on 22 October 2026: 53 look right, 4 doubtful, 3 wrong.
+  All three wrong ones carry the "one store has two products" flag (297 of the
+  2,861 groups): a strawberry yoghurt joined with strawberry-and-kiwi, a red
+  wine with a rosé, a wine with its "SO2 Free" version.
+- **H7.** 10 of the 12 Continente pages last night's report gave as "gone"
+  were read on 22 October 2026, with permission. 9 send the visitor to the
+  home page; among them are seasonal fruit (watermelon, peaches, apples), so
+  Continente seems to answer "not for sale now" the same way as "gone". The
+  10th, Queijo Grana Padano Continente (6015576), is on sale today at €3.19,
+  in stock, at a new address, but was delisted last night after three "gone"
+  nights and will not be looked at again for 90 days (RECHECK_AFTER_DAYS).
+  A page that loses its price was not seen. *Suggest:* look again at a
+  delisted product much sooner (for example after 7 days, then 30), so a
+  product back in stock returns within days. The cost is small: Continente
+  delists about 100 products a night.
 
 ## Suggested order
 
