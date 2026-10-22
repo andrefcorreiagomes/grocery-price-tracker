@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
-import { detached, finiteOrNull, type ScrapeResult } from "./types";
+import { detached, finiteOrNull, PageReadError, type ScrapeResult } from "./types";
 import { sectionKey } from "../lib/store-sections";
 
 interface SchemaProduct {
@@ -26,7 +26,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   );
 
   if (!product || product.offers?.price === undefined) {
-    throw new Error(`Continente: could not find product/price data at ${url}`);
+    throw new PageReadError(`Continente: could not find product/price data at ${url}`);
   }
 
   const $ = cheerio.load(html);

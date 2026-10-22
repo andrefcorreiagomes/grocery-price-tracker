@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { rawGet, type RawResponse } from "./fetch-raw";
+import { PageReadError } from "./types";
 
 // The crawl scripts run outside Next.js, which is what normally reads .env.
 config({ quiet: true });
@@ -239,6 +240,36 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * No answer at all: a timeout, a refused or dropped connection, a name that did
+ * not resolve - after every retry. Its own type so that a crawler can never
+ * read it as "the product is gone": until 22 October 2026 Continente's and
+ * Pingo Doce's crawlers counted any error that was not an HttpError as a dead
+ * page, so a bad network night advanced products toward delisting.
+ */
+export class NetworkError extends Error {
+  constructor(url: string, cause: string) {
+    super(`No answer from ${url}: ${cause}`);
+    this.name = "NetworkError";
+  }
+}
+
+/**
+ * What a failed product-page read says about the product - the one rule every
+ * page crawler uses.
+ *
+ *   gone         the store answered 404 or 410, or the page loaded and the
+ *                reader found no product on it (PageReadError)
+ *   unreachable  anything else: a 5xx after retries, no answer at all, or an
+ *                unexpected error in our own code - we could not tell
+ *
+ * Only "gone" advances a product toward delisting.
+ */
+export function failedPageVerdict(error: unknown): "gone" | "unreachable" {
+  if (error instanceof HttpError) return error.status === 404 || error.status === 410 ? "gone" : "unreachable";
+  return error instanceof PageReadError ? "gone" : "unreachable";
+}
+
 /** Transient by nature: rate limiting, or the origin briefly unavailable. */
 function isRetryable(status: number): boolean {
   return status === 429 || status === 408 || status >= 500;
@@ -282,10 +313,10 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
         "Accept-Language": "pt-PT,pt;q=0.9",
       });
     } catch (error) {
-      // Network-level failure (DNS, socket) - worth one more try.
+      // Network-level failure (DNS, socket, timeout) - worth one more try.
       statsFor(host).fetchMs += Date.now() - startedAt;
       statsFor(host).retries++;
-      lastError = error instanceof Error ? error : new Error(String(error));
+      lastError = new NetworkError(url, error instanceof Error ? error.message : String(error));
       if (attempt < MAX_ATTEMPTS - 1) await sleep(MIN_DELAY_MS * 2 ** attempt);
       continue;
     }
@@ -315,7 +346,7 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
     if (attempt < MAX_ATTEMPTS - 1) await sleep(retryAfterMs(res, attempt));
   }
 
-  throw lastError ?? new Error(`Fetch failed for ${url}`);
+  throw lastError ?? new NetworkError(url, "no attempt was made");
 }
 
 /** Extracts every <script type="application/ld+json"> block's parsed JSON from raw HTML. */

@@ -15,6 +15,22 @@ import type { Store } from "@/lib/stores";
  * has exactly one home and the two tables cannot disagree about it.
  */
 
+/**
+ * Ids per query. The database refuses a list longer than about 996 ids
+ * (measured 22 October 2026), so every write that takes a list of products
+ * goes through `forEachBatch`. Before that date three of them did not, and the
+ * safety brakes - which touch every product of a bad night at once, well over
+ * a thousand - would have stopped the run at the moment they were protecting it.
+ */
+export const BATCH = 500;
+
+/** Run `work` on `ids` in slices of BATCH, adding up what each slice returns. */
+export async function forEachBatch(ids: string[], work: (slice: string[]) => Promise<number | void>): Promise<number> {
+  let total = 0;
+  for (let i = 0; i < ids.length; i += BATCH) total += (await work(ids.slice(i, i + BATCH))) ?? 0;
+  return total;
+}
+
 /** How long a verdict is trusted before it goes back in the queue. */
 export const RECHECK_AFTER_DAYS = 90;
 
@@ -150,15 +166,9 @@ export function compareCheckTotals(
  * re-fetched every single night.
  */
 export async function clearChecks(store: Store, storeProductIds: string[]): Promise<number> {
-  let removed = 0;
-  // In batches: the database driver accepts at most 999 values per query.
-  for (let i = 0; i < storeProductIds.length; i += 500) {
-    const { count } = await prisma.productCheck.deleteMany({
-      where: { store, storeProductId: { in: storeProductIds.slice(i, i + 500) } },
-    });
-    removed += count;
-  }
-  return removed;
+  return forEachBatch(storeProductIds, async (slice) =>
+    (await prisma.productCheck.deleteMany({ where: { store, storeProductId: { in: slice } } })).count
+  );
 }
 
 /**
@@ -273,10 +283,11 @@ export async function recordRecategorised(
   storeProductIds: string[],
   checkedAt: Date
 ): Promise<void> {
-  if (storeProductIds.length === 0) return;
-  await prisma.catalogueProduct.updateMany({
-    where: { store, storeProductId: { in: storeProductIds } },
-    data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+  await forEachBatch(storeProductIds, async (slice) => {
+    await prisma.catalogueProduct.updateMany({
+      where: { store, storeProductId: { in: slice } },
+      data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+    });
   });
 }
 
@@ -292,16 +303,14 @@ export async function stopTrackingLeftOut(
   storeProductIds: string[],
   checkedAt: Date
 ): Promise<number> {
-  let marked = 0;
-  // In batches: the database driver accepts at most 999 values per query.
-  for (let i = 0; i < storeProductIds.length; i += 500) {
-    const { count } = await prisma.catalogueProduct.updateMany({
-      where: { store, delistedAt: null, storeProductId: { in: storeProductIds.slice(i, i + 500) } },
-      data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
-    });
-    marked += count;
-  }
-  return marked;
+  return forEachBatch(storeProductIds, async (slice) =>
+    (
+      await prisma.catalogueProduct.updateMany({
+        where: { store, delistedAt: null, storeProductId: { in: slice } },
+        data: { delistedAt: checkedAt, lastCheckedAt: checkedAt },
+      })
+    ).count
+  );
 }
 
 /**
@@ -316,10 +325,11 @@ export async function recordUnavailable(
   storeProductIds: string[],
   checkedAt: Date
 ): Promise<void> {
-  if (storeProductIds.length === 0) return;
-  await prisma.catalogueProduct.updateMany({
-    where: { store, storeProductId: { in: storeProductIds } },
-    data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt },
+  await forEachBatch(storeProductIds, async (slice) => {
+    await prisma.catalogueProduct.updateMany({
+      where: { store, storeProductId: { in: slice } },
+      data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt },
+    });
   });
 }
 
@@ -336,9 +346,10 @@ export async function touchChecked(
   storeProductIds: string[],
   checkedAt: Date
 ): Promise<void> {
-  if (storeProductIds.length === 0) return;
-  await prisma.catalogueProduct.updateMany({
-    where: { store, storeProductId: { in: storeProductIds } },
-    data: { lastCheckedAt: checkedAt },
+  await forEachBatch(storeProductIds, async (slice) => {
+    await prisma.catalogueProduct.updateMany({
+      where: { store, storeProductId: { in: slice } },
+      data: { lastCheckedAt: checkedAt },
+    });
   });
 }

@@ -131,6 +131,9 @@ them.
 *Suggest:* treat a product seen in a non-food section like the other two
 stores do. Separately, decide the baby-food question (already on the to-do
 list). *Small* for the first part.
+*Confirmed on 22 October* from Auchan's own sitemap (see M2): 29 of the 39 are
+in its first product file, and 27 of those are now filed under
+`o-mundo-do-bebe`, Auchan's baby section.
 
 **H5. The classification step empties the whole catalogue for a moment, with nothing to undo a crash.**
 *Read in code.* `classify:food` erases every product's kind, sub-kind and
@@ -187,8 +190,16 @@ The Auchan code says a grid walk has "no independent list to check
 completeness against". If the sitemap lists products, it is that list, and it
 might replace many of the page checks for missing products. That is not known
 until it is looked at.
-*Suggest:* with your permission, 1 or 2 requests to see what it contains. Then
-decide.
+*Looked at on 22 October, with permission (3 requests; one was repeated
+because of my own mistake saving it):* the index lists 13 files, two of them
+products (`sitemap_0-product.xml`, `sitemap_1-product.xml`). The first holds
+34,376 product addresses, each with a date and, like Pingo Doce's, the section
+it is filed under (`/pt/alimentacao/mercearia/...`). Its ids are the ids we
+store (address `.../10.html` is product 10). 12,635 of our 18,390 Auchan
+products on sale are in that first file; the second was not fetched.
+*Suggest:* use it the way Pingo Doce's is used: to learn which products left,
+and which moved into a non-food section, without a page request each.
+*Medium.*
 
 **M3. Pingo Doce's sitemap guard never accepts a real change.**
 *Read in code.* If more than 5% of the products we hold vanish from the sitemap,
@@ -302,8 +313,22 @@ Pingo Doce counts any promotion box on the page; whether that includes
 reads Auchan's product pages with a definition based on an end date
 ([auchan.ts:128](../src/scrapers/auchan.ts#L128)), and saves it, overwriting
 what the tile reader records.
-*Suggest:* check one Pingo Doce multi-buy page (within the 300-page
-allowance); make the enrich script leave promotions alone. *Small.*
+*Looked at on 22 October, with permission (5 Pingo Doce product pages):* Pingo
+Doce has no multi-buy section, but the check found something else. Of its
+2,688 products marked on promotion, 361 have no end date. Three of those pages
+were read: two carry a "Preço Garantido" (guaranteed price) badge and one a
+recommended retail price ("PVPR"), and none shows a promotion. Pingo Doce puts
+the promotion box on these pages **empty**, and our reader counts the box
+whether or not it holds anything
+([pingodoce.ts:158](../src/scrapers/pingodoce.ts#L158)). The two real
+promotions read show the earlier price crossed out ("Price reduced from 4,59
+€/Kg to"), the same markup as Auchan's tiles, although the reader's comment
+says Pingo Doce never prints the earlier price.
+*Suggest:* at Pingo Doce, as at Auchan and Continente, "on promotion" means a
+crossed-out earlier price above today's price, and that earlier price is
+stored. That would make the rule the same at all three stores. Decide whether
+a price below the recommended retail price ("PVPR") counts. Make the enrich
+script leave promotions alone. *Small.*
 
 **M13. The checks are hard to find their way around, and some important readers are not tested.**
 `verify-matching.ts` has grown to 2,127 lines and 412 checks, mixing matching,
@@ -411,6 +436,11 @@ decisions**, while the stored kind uses them (`backfill-sizes.ts`).
 - Most comments explain *why*, with the case that taught it. That is also why
   so many go out of date (L1); the answer is to date the numbers in them, not
   to remove them.
+
+## Fixed
+
+- **H1, H2, H3** on 22 October 2026, with checks in
+  `src/scripts/verify-crawl-safety.ts` (section 19 of `verify:nightly`).
 
 ## Suggested order
 

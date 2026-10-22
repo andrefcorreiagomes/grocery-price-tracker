@@ -1,6 +1,6 @@
 import { parseSize } from "../lib/matching";
 import { extractLdJsonBlocks, fetchHtml, HttpError } from "./http";
-import { validDateOrNull, type ScrapeResult } from "./types";
+import { PageReadError, validDateOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -90,7 +90,7 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
   );
 
   if (!product || product.offers?.price === undefined) {
-    throw new Error(`Auchan: could not find product/price data at ${url}`);
+    throw new PageReadError(`Auchan: could not find product/price data at ${url}`);
   }
 
   const name = product.name ?? "";

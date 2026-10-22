@@ -55,6 +55,19 @@ export interface ScrapeResult {
 }
 
 /**
+ * The page loaded, and the reader found no product on it: no product data, or
+ * no price it can read. The page readers throw this - and only this - for a
+ * page that answered, which is what lets a crawler count it as "gone" while a
+ * failure to get an answer at all is not (failedPageVerdict in http.ts).
+ */
+export class PageReadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PageReadError";
+  }
+}
+
+/**
  * These two guards exist because the types above are compile-time only.
  * `Number("abc")` is NaN and NaN *is* a `number`; `new Date("x")` is an Invalid
  * Date and still a `Date`. Both would satisfy the interface and land in the

@@ -9,6 +9,7 @@ import {
   type ComparableProduct,
 } from "../lib/comparison";
 import { FOOD_TYPE_BY_ID } from "../lib/food-types";
+import { forEachBatch } from "../scrapers/crawl/product-checks";
 import { unitPrice } from "../lib/pricing";
 import { FOOD_TYPES } from "../../data/food-types";
 import { renderComparisonReport } from "./comparison-report-html";
@@ -199,9 +200,8 @@ async function clearPlaceholderPrices(apply: boolean): Promise<number> {
   console.log(`\n${rows.length} placeholder price(s) - a store not quoting a price:`);
   for (const r of rows) console.log(`  EUR ${r.price}  ${r.store.padEnd(11)} ${r.name.slice(0, 46)}`);
   if (apply) {
-    await prisma.catalogueProduct.updateMany({
-      where: { id: { in: rows.map((r) => r.id) } },
-      data: { price: null },
+    await forEachBatch(rows.map((r) => r.id), async (slice) => {
+      await prisma.catalogueProduct.updateMany({ where: { id: { in: slice } }, data: { price: null } });
     });
     console.log("  cleared to no-price.");
   } else {

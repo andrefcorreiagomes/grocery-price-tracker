@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "./brand-normalize";
 import { extractLdJsonBlocks, fetchHtml } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit } from "./page-size";
-import { detached, type ScrapeResult } from "./types";
+import { detached, PageReadError, type ScrapeResult } from "./types";
 
 /**
  * At or below this, Pingo Doce is not quoting a price. It publishes "0,00 EUR"
@@ -32,7 +32,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   );
 
   if (!product) {
-    throw new Error(`Pingo Doce: could not find product data at ${url}`);
+    throw new PageReadError(`Pingo Doce: could not find product data at ${url}`);
   }
 
   const $ = cheerio.load(html);
@@ -40,7 +40,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   const parsed = parsePortuguesePrice(priceText);
 
   if (parsed === null) {
-    throw new Error(
+    throw new PageReadError(
       `Pingo Doce: could not find/parse price ("${priceText}") at ${url}`
     );
   }

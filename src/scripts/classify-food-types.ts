@@ -21,18 +21,59 @@ import { labelsOf, subKindOf } from "../lib/food-tree";
  *
  * Rewrites `foodType` from scratch every run, so editing data/food-types.ts and
  * re-running is the normal way to iterate.
+ *
+ * Every product gets its kind, whether the store still sells it or not. The
+ * report counts only the products on sale, but the price history reads the
+ * products no longer sold too: until 22 October 2026 only those on sale were
+ * given a kind back after the reset, so a product dropped out of every price
+ * history the night it was delisted, and past points on the charts moved.
  */
 
 const STORES = STORE_ORDER;
+
+/** A catalogue row, as classification reads it. */
+export interface ClassifyRow {
+  id: string;
+  store: string;
+  storeProductId: string;
+  name: string;
+  categoryPath: string | null;
+  delistedAt: Date | null;
+}
+
+/** Every product to classify - those no longer sold included. */
+export async function rowsToClassify() {
+  return prisma.catalogueProduct.findMany({
+    select: {
+      id: true, store: true, storeProductId: true, name: true, categoryPath: true,
+      packageSize: true, unit: true, price: true, delistedAt: true,
+    },
+  });
+}
+
+/** The kind, sub-kind and labels to write for each row in a food section that has a kind. Pure. */
+export function kindAssignments(
+  rows: ClassifyRow[]
+): { id: string; foodType: string; subKind: string | null; labels: string | null }[] {
+  const out: { id: string; foodType: string; subKind: string | null; labels: string | null }[] = [];
+  for (const r of rows) {
+    if (!isFoodSection(r.store, r.categoryPath)) continue;
+    const type = decideKind(r).id;
+    if (!type) continue;
+    const labels = labelsOf(type, r.name, r.categoryPath);
+    out.push({ id: r.id, foodType: type, subKind: subKindOf(type, r.name), labels: labels.length ? labels.join(",") : null });
+  }
+  return out;
+}
 
 async function main() {
   const dry = process.argv.includes("--dry");
   const only = process.argv.find((a) => a.startsWith("--type="))?.split("=")[1];
 
-  const rows = await prisma.catalogueProduct.findMany({
-    where: { delistedAt: null },
-    select: { id: true, store: true, storeProductId: true, name: true, categoryPath: true, packageSize: true, unit: true, price: true },
-  });
+  const all = await rowsToClassify();
+  // What is written covers every product; what is reported, only those on sale.
+  const toWrite = kindAssignments(all);
+  const rows = all.filter((r) => r.delistedAt === null);
   const food = rows.filter((r) => isFoodSection(r.store, r.categoryPath));
   console.log(
     `${rows.length.toLocaleString()} live products, ${food.length.toLocaleString()} in food sections ` +
@@ -49,19 +90,20 @@ async function main() {
   let unmatched = 0;
   const unmatchedHeads = new Map<string, number>();
 
+  // The same decisions that are written, so the report cannot describe others.
+  const decided = new Map(toWrite.map((a) => [a.id, a]));
   for (const r of food) {
-    // The classifier's answer as review corrected or confirmed it
-    // (data/kind-reviews.ts).
-    const type = decideKind(r).id;
-    if (!type) {
+    const a = decided.get(r.id);
+    if (!a) {
       unmatched++;
       const head = r.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
       unmatchedHeads.set(head, (unmatchedHeads.get(head) ?? 0) + 1);
       continue;
     }
-    const subKind = subKindOf(type, r.name);
-    const labels = labelsOf(type, r.name, r.categoryPath);
-    assignments.push({ id: r.id, foodType: type, subKind, labels: labels.length ? labels.join(",") : null });
+    const type = a.foodType;
+    const subKind = a.subKind;
+    const labels = a.labels ? a.labels.split(",") : [];
+    assignments.push(a);
     for (const l of labels) labelCount.set(l, (labelCount.get(l) ?? 0) + 1);
     if (SUB_KINDS[type]) {
       const byKind = subStores.get(type) ?? new Map<string, Map<string, number>>();
@@ -174,7 +216,7 @@ async function main() {
     // Grouped by (kind, sub-kind, labels), so this is a few hundred updateMany
     // calls rather than 37,000 single ones.
     const groups = new Map<string, { foodType: string; subKind: string | null; labels: string | null; ids: string[] }>();
-    for (const a of assignments) {
+    for (const a of toWrite) {
       const key = `${a.foodType}|${a.subKind ?? ""}|${a.labels ?? ""}`;
       const bucket = groups.get(key) ?? { foodType: a.foodType, subKind: a.subKind, labels: a.labels, ids: [] };
       bucket.ids.push(a.id);
@@ -191,15 +233,22 @@ async function main() {
         written += batch.length;
       }
     }
-    const types = new Set(assignments.map((a) => a.foodType)).size;
-    console.log(`\nwrote foodType, sub-kind and labels on ${written.toLocaleString()} products across ${types} types.`);
+    const types = new Set(toWrite.map((a) => a.foodType)).size;
+    console.log(
+      `\nwrote foodType, sub-kind and labels on ${written.toLocaleString()} products across ${types} types` +
+        ` (${assignments.length.toLocaleString()} on sale, ${(written - assignments.length).toLocaleString()} no longer sold,` +
+        ` kept for the price history).`
+    );
   }
 
   await prisma.$disconnect();
 }
 
-main().catch(async (e) => {
-  console.error(e);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+// Run directly, not when imported by the checks.
+if (process.argv[1]?.replace(/\\/g, "/").endsWith("classify-food-types.ts")) {
+  main().catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+}

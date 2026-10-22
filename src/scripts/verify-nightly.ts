@@ -21,6 +21,7 @@ import { verifyMatching } from "./verify-matching";
 import { verifyContinentePages } from "./verify-continente-pages";
 import { verifyKindReviews } from "./verify-kind-reviews";
 import { checkGold } from "./kind-gold";
+import { verifyCrawlSafety } from "./verify-crawl-safety";
 import type { SearchHit } from "../scrapers/search/types";
 
 /**
@@ -341,6 +342,10 @@ async function main() {
   console.log("\n18. verified kinds are kept");
   const gold = await checkGold();
   check(`${gold.checked} verified products keep their kind`, gold.broken.length === 0, gold.broken.slice(0, 5).join(" | "));
+
+  // The fixes of the code review's first group (docs/code-review-2026-10.md).
+  console.log("\n19. failed pages, long lists, and kinds of products no longer sold");
+  failures += await verifyCrawlSafety();
 
   console.log(`\n${failures === 0 ? "all checks passed" : `${failures} CHECK(S) FAILED`}`);
   if (failures > 0) process.exitCode = 1;

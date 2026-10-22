@@ -1,5 +1,5 @@
 import { scrapePingoDoce } from "../pingodoce";
-import { HttpError } from "../http";
+import { failedPageVerdict } from "../http";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult, CrawlProgress } from "./types";
 import type { PingoDoceProductUrl } from "./pingodoce-sitemap";
@@ -119,9 +119,10 @@ export async function fetchPingoDoceProducts(
     } catch (error) {
       const err = error as Error;
       // A 404, or a page that loaded with no product data on it, both mean the
-      // store no longer sells this. Anything else means we could not tell, and
-      // must not be mistaken for a delisting.
-      const gone = err instanceof HttpError ? err.status === 404 || err.status === 410 : true;
+      // store no longer sells this. Anything else - no answer at all included -
+      // means we could not tell, and must not be mistaken for a delisting
+      // (failedPageVerdict in http.ts).
+      const gone = failedPageVerdict(error) === "gone";
       (gone ? dead : unreachable).push({
         storeProductId: target.storeProductId,
         url: target.url,

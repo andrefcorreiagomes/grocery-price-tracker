@@ -7,6 +7,7 @@ import { recordSections, sectionLines, sectionProblems } from "../scrapers/crawl
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import {
+  forEachBatch,
   recordDead,
   recordUnavailable,
   stopTrackingLeftOut,
@@ -218,12 +219,12 @@ async function main() {
       // Alive but absent: reset the dead counter and any stale unavailable marker
       // (it is neither dying nor out of stock), but do NOT advance lastSeenAt, so
       // it stays visible as a hole in the walk until the grid picks it up again.
-      if (alive.length > 0) {
+      await forEachBatch(alive, async (slice) => {
         await prisma.catalogueProduct.updateMany({
-          where: { store: STORE, storeProductId: { in: alive } },
+          where: { store: STORE, storeProductId: { in: slice } },
           data: { deadCount: 0, unavailableAt: null, lastCheckedAt: seenAt },
         });
-      }
+      });
     }
     console.log(
       `  ${confirmedDead.length.toLocaleString()} gone, ${alive.length.toLocaleString()} alive but missing` +

@@ -1,5 +1,5 @@
 import { scrapeContinente } from "../continente";
-import { fetchHtml, HttpError } from "../http";
+import { failedPageVerdict, fetchHtml } from "../http";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult, CrawlProgress } from "./types";
 
@@ -309,9 +309,10 @@ export async function fetchProducts(
       const err = error as Error;
       // A 404, or a page that loaded with no product data on it, both mean the
       // store no longer sells this - roughly half of the sitemap's unseen
-      // entries are in that state. Anything else means we could not tell, and
-      // must not be mistaken for a delisting.
-      const gone = err instanceof HttpError ? err.status === 404 || err.status === 410 : true;
+      // entries are in that state. Anything else - no answer at all included -
+      // means we could not tell, and must not be mistaken for a delisting
+      // (failedPageVerdict in http.ts).
+      const gone = failedPageVerdict(error) === "gone";
       (gone ? dead : unreachable).push({
         storeProductId: target.storeProductId,
         url: target.url,
