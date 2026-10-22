@@ -24,7 +24,7 @@ import {
 import { PINGO_DOCE_FOOD_CATEGORIES } from "../scrapers/crawl/pingodoce-categories";
 import { coverageRows } from "../scrapers/crawl/pingodoce";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
-import { sectionWarnings } from "../scrapers/crawl/history";
+import { compareWithBaseline, MIN_SECTION_FOR_DROP, sectionWarnings } from "../scrapers/crawl/history";
 import { adminEnabled } from "../lib/admin";
 import { currentSince, MAX_NAMED_GROUPS, STALE_AFTER_DAYS } from "../lib/grupos";
 import { detached } from "../scrapers/types";
@@ -684,6 +684,38 @@ function verifySectionComparison(): number {
     broken.some((w) => w.startsWith("Frescos:") && w.includes("fewer")),
     broken.find((w) => w.startsWith("Frescos:")) ?? "(nothing reported)"
   );
+
+  // Small aisles, from Continente's nights of 21 and 22 October 2026: each of
+  // these warned, and none meant anything.
+  const small = {
+    startedAt: new Date("2026-10-21T00:05:00Z"),
+    total: 17000,
+    sections: [
+      { cgid: "Garrafeira", label: "Garrafeira", collected: 2 },
+      { cgid: "Marcas", label: "Marcas", collected: 25 },
+      { cgid: "Campanhas", label: "Campanhas", collected: 1 },
+      { cgid: "Frescos", label: "Frescos", collected: 3409 },
+    ],
+  };
+  const smallNow = [
+    { cgid: "Garrafeira", label: "Garrafeira", collected: 1 },
+    { cgid: "Marcas", label: "Marcas", collected: 4 },
+    { cgid: "Frescos", label: "Frescos", collected: 3409 },
+  ];
+  const quiet = sectionWarnings(small, 17000, smallNow);
+  check(`sections under ${MIN_SECTION_FOR_DROP} products do not warn, shrinking or gone`, quiet.length === 0, quiet.join(" | ") || "no warnings");
+  const collapsed = sectionWarnings(small, 17000, [...smallNow.slice(0, 2), { cgid: "Frescos", label: "Frescos", collected: 42 }]);
+  check("a large section collapsing still does (Frescos, 3,409 to 42, 19 October 2026)",
+    collapsed.length === 1 && collapsed[0].startsWith("Frescos:"), collapsed.join(" | "));
+  const median = compareWithBaseline(
+    { runs: 5, since: new Date("2026-08-21T15:03:00Z"), total: 17000, perRequestMs: null,
+      sections: new Map([["Marcas", 14.5], ["Oportunidades", 2.5], ["Frescos", 3409]]) },
+    17000,
+    [{ cgid: "Marcas", label: "Marcas", collected: 6 }, { cgid: "Oportunidades", label: "Oportunidades", collected: 1 },
+      { cgid: "Frescos", label: "Frescos", collected: 42 }]
+  );
+  check("against the median too: small aisles quiet, the large collapse reported",
+    median.length === 1 && median[0].startsWith("Frescos:"), median.join(" | "));
 
   return failures - before;
 }
@@ -2089,7 +2121,7 @@ function verifyStaleProducts(): number {
   }, { explain: false });
   check("the report shows the sitemap and pages section", pdReport.includes("Sitemap and product pages") && pdReport.includes("16,128 address(es) in 2 file(s)"));
   check("the report shows products leaving", pdReport.includes("delisted this run (third night): 202"));
-  check("missing prices are explained as out of stock", pdReport.includes("missing price 2974 (out of stock"));
+  check("missing prices are explained as unavailable", pdReport.includes("missing price 2974 (marked unavailable"));
   check("no category audit, so no Categories section", !pdReport.includes("## Categories") && !pdReport.includes("sitemap cross-check"));
   return failures - before;
 }

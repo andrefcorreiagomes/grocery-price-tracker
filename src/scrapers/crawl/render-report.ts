@@ -626,7 +626,7 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
       [
         `  ${report.quality.total} products; missing price ${report.quality.missingPrice}` +
           // Pingo Doce keeps out-of-stock products as rows with no price.
-          (report.pingoDoce ? " (out of stock - kept with no price)" : "") +
+          (report.pingoDoce ? " (marked unavailable - kept with no price)" : "") +
           ", " +
           `brand ${report.quality.missingBrand}, category ${report.quality.missingCategory}, ` +
           `url ${report.quality.missingUrl}`,

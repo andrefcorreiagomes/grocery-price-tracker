@@ -69,12 +69,18 @@ first version of the site compared. It was retired with them on 21 October
 
 | | |
 |---|---|
-| Food products collected | **44,777**: Continente 17,047 · Pingo Doce 9,706 · Auchan 18,024 |
-| Products assigned a kind of food | **36,922** (82%), and 6,615 of them a cut or variety (sub-kind) as well |
-| Kinds of food defined so far | **233**, in 15 categories, from *alheira* and *farinheira* to *tremoço* and *requeijão*; sweets, desserts and drinks are set aside for now |
-| Kinds of food compared on the site | **195**, in 554 comparisons (same cut or variety, sold the same way), each priced at two chains or more, using only products seen by their chain's crawls within the last 14 days |
-| Identical products matched across two chains | **916** |
-| Figures from | the crawls of 3 and 4 October 2026, after the section rules of 17 October left out 1,092 non-food products |
+| Food products collected | **45,120**: Continente 17,136 · Pingo Doce 9,594 · Auchan 18,390 |
+| Products assigned a kind of food | **36,066** (80%), and 6,475 of them a cut or variety (sub-kind) as well |
+| Kinds of food defined so far | **252**, in 15 categories, from *alheira* and *farinheira* to *tremoço* and *requeijão*; sweets, desserts and drinks are set aside for now |
+| Kinds of food compared on the site | **214**, in 605 comparisons (same cut or variety, sold the same way), each priced at two chains or more, using only products seen by their chain's crawls within the last 14 days |
+| Identical products matched across two chains | **908** |
+| Figures from | the nightly crawls of 22 October 2026 |
+
+Since the previous figures (17 October 2026), the share of products with a
+kind fell from 82% to 80%. That fall is corrections, not losses: 363 jams had
+been counted as honey and 173 savoury snacks as popcorn, and they now have no
+kind until kinds of their own are added. The identical products fell from 916
+to 908 because one side of 14 matched pairs is no longer sold.
 
 The list of kinds of food is still being extended, and both counts grow with
 it. The database itself is not published.
@@ -205,21 +211,18 @@ advice.
    a person's call.
 
 10. **A crawl that finishes is not a crawl that worked.** The first Pingo Doce
-    crawl finished normally with less than half the catalogue. So the Auchan
-    and Continente crawls now write a report on themselves, ending in OK, WARN
+    crawl finished normally with less than half the catalogue. So each store's
+    crawl now writes a report on itself, ending in OK, WARN
     or FAIL: whether it collected as many products as the store says it has,
     whether a section shrank since the last run, and whether the run stopped
     halfway. A bad crawl never marks products as removed.
 
 ## Current limitations
 
-- **Continente sizes.** A size is known for 60% of Continente's food products,
-  against 89 to 94% at the other two chains, so Continente is in fewer
-  comparisons. The same wine at two chains cannot be compared yet: 168
-  identical wines are matched, but none has a known size at both.
-- **Prices are from one weekend's crawls**, on 3 and 4 October 2026. The crawls
-  do not yet run on a daily schedule.
-- **Pingo Doce shows no online price** for 2,933 of its 10,273 products.
+- **The crawls are started by hand.** One command, `npm run nightly`, runs all
+  three overnight, but it does not yet start by itself every night.
+- **Pingo Doce shows no online price** for 2,380 of its 9,594 products: its
+  site marks them unavailable ("Indisponível").
 - **Some kinds of food are too broad to rank fairly.** *Queijo* (cheese) covers
   everything from a children's fromage frais to a cured Serra da Estrela.
 - **Not online yet.** The site runs on my computer; it is not public.

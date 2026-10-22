@@ -17,6 +17,18 @@ import { stripAccents } from "../../lib/matching";
 const SECTION_DROP = 0.2;
 /** The store total is steadier than any one section, so it gets a tighter bound. */
 const TOTAL_DROP = 0.1;
+/**
+ * A section must have held at least this many products for its drop - or its
+ * absence - to warn. Small promotional and brand aisles swing by half from one
+ * night to the next: every section drop reported from 20 to 22 October 2026
+ * was in one that had held 25 products or fewer (Continente's Garrafeira, 2 to
+ * 1; Auchan's promoções-clube-auchan, 10 to 5), which kept Continente on WARN
+ * every night. The real alarms on record were sections of 276 and 3,409
+ * (19 October 2026, when Continente moved its shelves). A small section that
+ * vanishes outright is still listed under the store's sections (section-watch.ts),
+ * and the store total still has its own check.
+ */
+export const MIN_SECTION_FOR_DROP = 50;
 
 export interface RunSection {
   /**
@@ -265,7 +277,7 @@ export function sectionWarnings(
   const before = new Map(previous.sections.map((s) => [key(s), s]));
   for (const section of sections) {
     const was = before.get(key(section));
-    if (!was || was.collected === 0) continue;
+    if (!was || was.collected < MIN_SECTION_FOR_DROP) continue;
     if (section.collected < was.collected * (1 - SECTION_DROP)) {
       warnings.push(
         `${section.label}: ${was.collected} to ${section.collected} ` +
@@ -278,7 +290,7 @@ export function sectionWarnings(
   // dropped from the config, or its id changed and it is being skipped.
   const now = new Set(sections.map(key));
   for (const was of previous.sections) {
-    if (!now.has(key(was))) {
+    if (!now.has(key(was)) && was.collected >= MIN_SECTION_FOR_DROP) {
       warnings.push(`${was.label} was crawled last run and is missing from this one`);
     }
   }
@@ -376,7 +388,7 @@ export function compareWithBaseline(
 
   for (const section of sections) {
     const usual = baseline.sections.get(section.cgid);
-    if (usual === undefined || usual === 0) continue;
+    if (usual === undefined || usual < MIN_SECTION_FOR_DROP) continue;
     if (section.collected < usual * (1 - SECTION_DROP)) {
       warnings.push(
         `${section.label}: ${section.collected}, against a median of ${usual} ${over} ` +

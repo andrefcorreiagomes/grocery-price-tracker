@@ -18,7 +18,7 @@ import { DEAD_NIGHTS_BEFORE_DELISTING, MAX_SHARE_MISSING } from "./product-check
 
 /** Usually 89-90% of the pages read carry a pack size; far fewer means the size reader broke. */
 export const MIN_SIZE_SHARE = 0.8;
-/** Usually 27% of the pages read are out of stock (no price); far more means the price reader broke. */
+/** Usually 27% of the pages read are marked unavailable (no price); far more means the price reader broke. */
 export const MAX_UNPRICED_SHARE = 0.4;
 /** Usually 0, once 1.2% (126 pages answering 503); more than this is worth a look. */
 export const MAX_UNREACHABLE_SHARE = 0.01;
@@ -53,7 +53,7 @@ export interface PingoDoceExtras {
   targets: number;
   fetched: number;
   withSize: number;
-  /** pages that loaded with no price: out of stock */
+  /** pages that loaded with no price: marked unavailable ("Indisponível") */
   unpriced: number;
   unreachable: number;
   unreachableSamples: ProductNote[];
@@ -151,7 +151,7 @@ export function pingoDoceLines(x: PingoDoceExtras): { reached: string[]; leaving
     "",
     `  pages read:               ${x.fetched.toLocaleString()} of ${x.targets.toLocaleString()} attempted`,
     `  with a pack size:         ${x.withSize.toLocaleString()} (${pct(x.withSize, x.fetched)})`,
-    `  listed without a price:   ${x.unpriced.toLocaleString()} (${pct(x.unpriced, x.fetched)}) - out of stock, kept with no price`,
+    `  listed without a price:   ${x.unpriced.toLocaleString()} (${pct(x.unpriced, x.fetched)}) - marked unavailable, kept with no price`,
     `  could not be read:        ${x.unreachable.toLocaleString()}` + (x.unreachable > 0 ? "   (no claim made about these)" : ""),
     ...x.unreachableSamples.slice(0, 5).map((u) => `    ${u.storeProductId}: ${u.name}`),
   ];
@@ -186,4 +186,4 @@ export const REACHED_NOTE =
   "food or not without a request. Two silent failures matter here. A department the sitemap shows " +
   "that we do not know is a department never crawled. And a page reader that breaks returns no " +
   "error, only fewer sizes or prices, so their shares are watched: about 89% of pages carry a pack " +
-  "size and about 27% have no price because the product is out of stock.";
+  "size and about 27% have no price because the store marks them unavailable.";

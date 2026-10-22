@@ -330,8 +330,9 @@ export interface ReportInput {
   } | null;
   /**
    * True when the crawler keeps a row for a product listed without a price -
-   * Pingo Doce's product pages do, for out-of-stock products, about 2,400 of
-   * them. A missing price is then a stock fact, not a parse fault, and the
+   * Pingo Doce's product pages do, for the products the store marks
+   * unavailable ("Indisponível"), about 2,400 of them. A missing price is then
+   * the store's own statement, not a parse fault, and the
    * crawler watches its share itself (pingodoce-report.ts) instead of warning
    * on every one.
    */
