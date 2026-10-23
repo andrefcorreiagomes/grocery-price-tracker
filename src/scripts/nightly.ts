@@ -153,7 +153,11 @@ async function main() {
   const allowed = process.env.NIGHTLY_HOST?.trim();
 
   if (plan) {
-    console.log(`would run on ${host} (NIGHTLY_HOST=${allowed ?? "not set"})`);
+    console.log(
+      allowed && allowed.toLowerCase() === host.toLowerCase()
+        ? `would run on ${host} (NIGHTLY_HOST=${allowed})`
+        : `would REFUSE to run on ${host}: NIGHTLY_HOST is ${allowed ?? "not set"}, the only machine that writes the database`
+    );
     if (!noCrawl) console.log(`robots.txt check: ${STORES.map((s) => s.robots).join(", ")}`);
     if (!noCrawl) console.log(`crawls ${together ? "at the same time" : "one after another"}: ${STORES.map((s) => s.script).join(", ")}`);
     console.log(`then: ${AFTER.map((a) => a.script).join(", ")}, a backup, and ${dir}/summary.md`);
