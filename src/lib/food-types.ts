@@ -177,6 +177,21 @@ export function explainFoodType(
   categoryPath: string | null
 ): FoodTypeExplanation {
   if (!isFoodSection(store, categoryPath)) return { id: null, step: null, why: "not a food section" };
+  return explainFromName(name, store, categoryPath);
+}
+
+/**
+ * The kind a name alone suggests, with no shelf to check it against: only for
+ * GUESSING before a page is read, never for storing. Continente's addresses
+ * carry the product's name but not its section, and the catch-up opens the
+ * addresses whose name suggests food first (continente-backlog.ts, 23 October
+ * 2026). Every address is still opened; the guess only sets the order.
+ */
+export function kindFromName(name: string, store: string): string | null {
+  return explainFromName(name, store, null).id;
+}
+
+function explainFromName(name: string, store: string, categoryPath: string | null): FoodTypeExplanation {
 
   const tokens = nameTokensForType(name, store);
   const plain = stripAccents(name).toLowerCase();

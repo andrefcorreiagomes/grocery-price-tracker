@@ -100,6 +100,17 @@ export function setHttpTimingForChecks(t: { minDelayMs: number; pausesMs: number
   timing.pausesMs = t.pausesMs;
 }
 
+/**
+ * Ask a store faster than MIN_DELAY_MS, for one command that the user has
+ * decided may go faster: Continente's one-off catch-up of never-opened
+ * addresses at 2 a second (the user, 23 October 2026). The nightly keeps one
+ * a second. The refusal brake (REFUSALS) applies at any pace.
+ */
+export function setRequestsPerSecond(perSecond: number): void {
+  if (!(perSecond > 0 && perSecond <= 2)) throw new Error(`requests per second must be above 0 and at most 2, got ${perSecond}`);
+  timing.minDelayMs = Math.round(1_000 / perSecond);
+}
+
 /** What to do after a page is refused, given how many in a row now. Pure, for the checks. */
 export function afterRefusal(inARow: number, pauses = REFUSALS.pausesMs.length): "carry on" | "pause" | "stop" {
   if (inARow === 0 || inARow % REFUSALS.pagesBeforePause !== 0) return "carry on";

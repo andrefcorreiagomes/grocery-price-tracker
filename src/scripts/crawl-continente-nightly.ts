@@ -1,11 +1,14 @@
 import { prisma } from "../lib/db";
-import {
-  discoverProductUrls,
-  fetchProducts,
-  type ProductTarget,
-} from "../scrapers/crawl/continente-products";
+import { discoverProductUrls, fetchProducts, type ProductTarget } from "../scrapers/crawl/continente-products";
 import { discoverCategoryPaths, fetchPublishedCounts } from "../scrapers/crawl/continente-categories";
-import { LeftOutTally, SectionTally, recordSections, sectionLines, sectionProblems, type SectionChanges } from "../scrapers/crawl/section-watch";
+import {
+  LeftOutTally,
+  SectionTally,
+  recordSections,
+  sectionLines,
+  sectionProblems,
+  type SectionChanges,
+} from "../scrapers/crawl/section-watch";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import {
   checkTotals,
@@ -23,18 +26,13 @@ import {
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
+import { backlogOrder, isContinenteFood, saveGrouped } from "../scrapers/crawl/continente-backlog";
 import { buildDailyReport, mergeResultsByLabel, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
 import { SAMPLE, nightsToComplete, type DiscoveryExtras } from "../scrapers/crawl/discovery-report";
 import { RUNS_BEFORE_ACCEPTING, comparePerFile, judgeSitemap } from "../scrapers/crawl/sitemap-trust";
-import {
-  compareWithBaseline,
-  compareWithPrevious,
-  previousRunFor,
-  recordRun,
-  rollingBaseline,
-} from "../scrapers/crawl/history";
+import { compareWithBaseline, compareWithPrevious, previousRunFor, recordRun, rollingBaseline } from "../scrapers/crawl/history";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
 import {
   archiveIdentitySwaps,
@@ -48,8 +46,6 @@ import {
 import { writeCrashReport } from "../scrapers/crawl/crash-report";
 import { escalate, renderReport, writeReport } from "../scrapers/crawl/render-report";
 import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "../scrapers/http";
-import type { SearchHit } from "../scrapers/search/types";
-import { topSection } from "../lib/store-sections";
 
 /**
  * The nightly Continente run: the one command a scheduler calls.
@@ -79,23 +75,8 @@ const STORE = "CONTINENTE" as const;
 /** Verdicts re-checked per night, on top of the backlog budget. */
 const RECHECK_PER_NIGHT = 300;
 
-/** data/store-sections.ts, applied to what the product page says. */
-const isFood = (path: string | null, name: string) => keepInCatalogue(STORE, path, name).keep;
-
-/** Save a batch of food products, grouped into the sections the report reads. */
-async function saveGrouped(
-  writer: Awaited<ReturnType<typeof openCatalogueWriter>>,
-  batch: SearchHit[]
-) {
-  const bySection = new Map<string, SearchHit[]>();
-  for (const hit of batch) {
-    const section = topSection(hit.category);
-    const list = bySection.get(section) ?? [];
-    list.push(hit);
-    bySection.set(section, list);
-  }
-  for (const [section, products] of bySection) await writer.save(products, section);
-}
+// Shared with the catch-up command (continente-backlog.ts).
+const isFood = isContinenteFood;
 
 async function main() {
   requireCrawlerContact();
@@ -242,7 +223,9 @@ async function main() {
     unexamined.push({ storeProductId: id, url });
   }
 
-  // NEWEST FIRST, by the <lastmod> the sitemap publishes for each product.
+  // LIKELY FOOD FIRST, by the name in the address (backlogOrder, since
+  // 23 October 2026, the user's wish), and within that NEWEST FIRST, by the
+  // <lastmod> the sitemap publishes for each product.
   //
   // About 88,000 published ids have never been opened, and at a few thousand a
   // night the ORDER decides what is found this month rather than next. Sitemap
@@ -257,11 +240,7 @@ async function main() {
   //
   // Ids with no published date sort last: unknown is not the same as recent,
   // and treating it as recent would let a missing field jump the queue.
-  unexamined.sort(
-    (a, b) =>
-      (sitemapLastmod.get(b.storeProductId) ?? -Infinity) -
-      (sitemapLastmod.get(a.storeProductId) ?? -Infinity)
-  );
+  unexamined.splice(0, unexamined.length, ...backlogOrder(unexamined, sitemapLastmod));
 
   // Products we hold that the sitemap has stopped listing. Report-only: a 404
   // from the product page is what actually counts towards delisting.

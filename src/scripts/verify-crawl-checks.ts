@@ -9,6 +9,7 @@ import { detached } from "../scrapers/types";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
 import { idsFromProductSitemap, missingProductVerdict } from "../scrapers/crawl/auchan-sitemap";
 import { productSitemapsFromIndex } from "../scrapers/crawl/sitemap-index";
+import { backlogOrder, looksLikeFood, nameFromProductUrl } from "../scrapers/crawl/continente-backlog";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -37,7 +38,28 @@ export async function verifyCrawlChecks(): Promise<number> {
   await verifyRotationWarnings();
   verifyPingoDoceSitemap();
   verifyAuchanSitemap();
+  verifyContinenteBacklog();
   return failures;
+}
+
+/** The order Continente's never-opened addresses are opened in (23 October 2026). */
+function verifyContinenteBacklog() {
+  console.log("\n  Continente's never-opened addresses: likely food first");
+  const url = (slug: string, id: string) => `https://www.continente.pt/produto/${slug}-${id}.html`;
+  check("the name is read from the address", nameFromProductUrl(url("queijo-flamengo-fatias-continente", "2597619")) === "queijo flamengo fatias continente");
+  check("a food name suggests food, a fridge does not",
+    looksLikeFood(url("banana-continente", "1")) && !looksLikeFood(url("frigorifico-combinado-samsung", "2")));
+  const targets = [
+    { storeProductId: "old-fridge", url: url("frigorifico-combinado-samsung", "10") },
+    { storeProductId: "new-fridge", url: url("televisao-led-55", "11") },
+    { storeProductId: "old-cheese", url: url("queijo-flamengo-continente", "12") },
+    { storeProductId: "new-rice", url: url("arroz-carolino-continente", "13") },
+    { storeProductId: "undated-milk", url: url("leite-meio-gordo-mimosa", "14") },
+  ];
+  const lastmod = new Map([["old-fridge", 1], ["new-fridge", 9], ["old-cheese", 2], ["new-rice", 8]]);
+  const order = backlogOrder(targets, lastmod).map((t) => t.storeProductId).join();
+  check("likely food first, newest first within each, no date last; nothing left out",
+    order === "new-rice,old-cheese,undated-milk,new-fridge,old-fridge", order);
 }
 
 /** Auchan's own product list, read by its nightly since 22 October 2026 (code review M2). */
