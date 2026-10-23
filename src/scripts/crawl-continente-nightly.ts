@@ -22,6 +22,7 @@ import {
   type CheckResult,
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
 import { buildDailyReport, mergeResultsByLabel, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { promotionLine, promotionWarning, tallyPromotions } from "../scrapers/crawl/promo-watch";
@@ -117,6 +118,8 @@ async function main() {
   // Read the previous state BEFORE anything writes over it. snapshotBefore is
   // the only moment the pre-crawl values of every row exist.
   const before = await snapshotBefore(STORE);
+  // The same moment, for the sitemap-date test (sitemap-dates.ts).
+  const fieldsBefore = await pageFieldsBefore(STORE);
   const previousRun = await previousRunFor(STORE);
   const baseline = await rollingBaseline(STORE);
 
@@ -154,6 +157,9 @@ async function main() {
     console.log(`  could not read the sitemap: ${sitemapError}`);
     console.log("  skipping discovery for tonight; the price refresh continues");
   }
+  // The sitemap-date test: each product's date, whenever it changes.
+  const dates = await recordSitemapDates(STORE, sitemapLastmod, seenAt);
+  console.log(`  sitemap dates: ${dates.changed.toLocaleString()} changed since the last run, ${dates.first.toLocaleString()} recorded for the first time`);
 
   // The last sitemap we BELIEVED is the baseline; everything since then is
   // evidence about whether a change is a glitch or the new normal. Both are
@@ -498,6 +504,10 @@ async function main() {
 
   const saved = writer.finish();
   const total = saved.summaries.reduce((sum, s) => sum + s.total, 0);
+
+  // The sitemap-date test: what changed on the pages read tonight.
+  const pageChanges = await recordPageChanges(STORE, fieldsBefore, seenAt);
+  console.log(`\npage changes recorded: ${Object.entries(pageChanges).map(([f, n]) => `${f} ${n}`).join(", ") || "none"}`);
 
   // Guard 2: a product discovered this run that shares an exact barcode with one
   // that just disappeared is the same product under a new id. Carry its price

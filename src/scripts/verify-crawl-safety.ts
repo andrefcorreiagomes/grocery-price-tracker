@@ -33,6 +33,7 @@ import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "
 import { buildGroups, shownOnSite } from "../lib/grouping";
 import { auchanBarcodeFromHtml } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { changedFields, pageFieldsBefore, recordPageChanges, recordSitemapDates, type PageFields } from "../scrapers/crawl/sitemap-dates";
 import { cheapestPerStore } from "../lib/comparison";
 
 /**
@@ -58,6 +59,8 @@ function check(label: string, ok: boolean, detail = "") {
 }
 
 async function cleanup() {
+  await prisma.sitemapDate.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
+  await prisma.pageChange.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
   await prisma.productCheck.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
   await prisma.catalogueProduct.deleteMany({ where: { storeProductId: { startsWith: PREFIX } } });
 }
@@ -493,6 +496,39 @@ async function verifyRefusals() {
   }
 }
 
+/** The sitemap-date test: dates kept when they change, page changes kept field by field. */
+async function verifySitemapDates() {
+  console.log("\n  the sitemap-date test: what is kept each night");
+  const base: PageFields = { price: 1.99, name: "Atum", brand: "Bom Petisco", size: "0.12 kg", shelf: "Mercearia", promotion: false, regularPrice: null, barcode: "5601234567897" };
+  check("nothing changed, nothing kept", changedFields(base, { ...base, price: 1.9900000001 }).length === 0);
+  const diff = changedFields(base, { ...base, price: 2.19, name: "Atum em Azeite" });
+  check("a new price and a new name are each kept, with before and after",
+    diff.map((d) => `${d.field}:${d.before}>${d.after}`).join() === "price:1.99>2.19,name:Atum>Atum em Azeite", diff.map((d) => d.field).join());
+
+  await cleanup();
+  const a = `${PREFIX}date-a`;
+  const b = `${PREFIX}date-b`;
+  const night = (d: number) => new Date(Date.UTC(2026, 9, 23 + d));
+  const first = await recordSitemapDates(STORE, new Map([[a, night(-5).getTime()], [b, night(-5).getTime()]]), night(0));
+  const same = await recordSitemapDates(STORE, new Map([[a, night(-5).getTime()], [b, night(-5).getTime()]]), night(1));
+  const moved = await recordSitemapDates(STORE, new Map([[a, night(1).getTime()], [b, night(-5).getTime()]]), night(2));
+  const rows = await prisma.sitemapDate.count({ where: { storeProductId: { startsWith: PREFIX } } });
+  check("a date is kept the first time, not again while it stays, and again when it moves",
+    first.first === 2 && same.changed + same.first === 0 && moved.changed === 1 && rows === 3, `${JSON.stringify([first, same, moved])} rows ${rows}`);
+
+  await prisma.catalogueProduct.create({
+    data: { store: STORE, storeProductId: a, name: "Atum", brand: "Bom Petisco", url: "https://example.invalid/d", price: 1.99, categoryPath: "Mercearia/Conservas" },
+  });
+  const before = await pageFieldsBefore(STORE);
+  const writer = await openCatalogueWriter(STORE);
+  await writer.save([{ id: a, name: "Atum", price: 2.19, brand: "Bom Petisco", category: "Mercearia/Conservas", url: "https://example.invalid/d" }], "Mercearia");
+  const counts = await recordPageChanges(STORE, before, writer.seenAt);
+  const kept = await prisma.pageChange.findMany({ where: { storeProductId: a } });
+  check("a page read tonight with a new price leaves one change, the price", Object.keys(counts).join() === "price" && counts.price === 1 && kept.some((k) => k.field === "price" && k.before === "1.99" && k.after === "2.19"),
+    JSON.stringify(counts));
+  await cleanup();
+}
+
 /** M5: why a product left is recorded beside when, and cleared when it returns. */
 async function verifyDelistReason() {
   console.log("\n  M5: why a product left is recorded");
@@ -534,6 +570,7 @@ export async function verifyCrawlSafety(): Promise<number> {
     await verifyBarcodesKept();
     await verifyNotForSale();
     await verifyDelistReason();
+    await verifySitemapDates();
   } finally {
     await cleanup();
   }

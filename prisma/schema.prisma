@@ -660,3 +660,43 @@ model FoodTypeCategory {
   @@index([category])
   @@index([confirmed])
 }
+
+/// The "last modified" date a store's sitemap gives a product, each time it
+/// changes (the sitemap-date test, agreed with the user on 22 October 2026).
+///
+/// One row per product per distinct date, so a product whose date never moves
+/// has one row. Read together with PageChange: if the date moves on the nights
+/// the price (or anything else) changes, and not otherwise, the nightly could
+/// skip the pages whose date has not moved. Continente's sitemap carries a
+/// date per product; Pingo Doce's is recorded too if it has one.
+model SitemapDate {
+  id             String   @id @default(cuid())
+  store          String
+  storeProductId String
+  /// the date the sitemap gives
+  lastmod        DateTime
+  /// the run that first saw this date for this product
+  firstSeenAt    DateTime
+
+  @@unique([store, storeProductId, lastmod])
+  @@index([store, firstSeenAt])
+}
+
+/// What changed on a product's page between two runs that read it: one row
+/// per field that changed, with its value before and after, as text. For the
+/// sitemap-date test (see SitemapDate); also a record of renames, new sizes
+/// and the like, which the catalogue otherwise overwrites.
+model PageChange {
+  id             String   @id @default(cuid())
+  store          String
+  storeProductId String
+  /// price, name, brand, size, shelf, promotion, regular price, barcode
+  field          String
+  before         String?
+  after          String?
+  /// the run that saw the new value
+  seenAt         DateTime
+
+  @@index([store, seenAt])
+  @@index([store, storeProductId])
+}

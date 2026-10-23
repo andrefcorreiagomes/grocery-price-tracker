@@ -249,6 +249,8 @@ export interface PingoDoceSitemap {
   perFile: { url: string; entries: number }[];
   /** why the index was not used tonight, or null when it was */
   indexProblem: string | null;
+  /** each product's sitemap date, when the sitemap gives one (sitemap-dates.ts) */
+  lastmod: Map<string, number>;
 }
 
 const UNPARSEABLE_SAMPLES = 5;
@@ -275,14 +277,18 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   let skipped = 0;
   const excludedIds: string[] = [];
   let unparseable = 0;
+  const lastmod = new Map<string, number>();
 
   const { files, indexProblem } = await productSitemaps();
   for (const sitemap of files) {
     const xml = await fetchHtml(sitemap);
     let entries = 0;
 
-    for (const match of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    // Each <loc>, and the <lastmod> beside it when there is one (the
+    // sitemap-date test, sitemap-dates.ts).
+    for (const match of xml.matchAll(/<loc>([^<]+)<\/loc>(?:\s*<lastmod>([^<]*)<\/lastmod>)?/g)) {
       const url = match[1];
+      const when = match[2] ? Date.parse(match[2]) : NaN;
       if (!url.includes("/home/produtos/")) continue;
       entries++;
 
@@ -297,6 +303,7 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
       // listed it.
       if (seen.has(storeProductId)) continue;
       seen.add(storeProductId);
+      if (Number.isFinite(when)) lastmod.set(storeProductId, when);
 
       const section = pathSegments(url)[0] ?? "";
       if (section === "") {
@@ -332,5 +339,6 @@ export async function discoverPingoDoceProducts(): Promise<PingoDoceSitemap> {
   return {
     food, nonFood, fromMixed, skipped, sections, excludedIds, allIds: seen, unknownSections, unfiled, unparseable, unparseableSamples, perFile,
     indexProblem,
+    lastmod,
   };
 }

@@ -601,6 +601,76 @@ After tonight's run (00:05, 23 October):
 11. Whole-page checks of the two page readers on pieces of real pages, the
     next time pages are read anyway.
 12. Bring the five places that read sizes into one (rest of M8).
+13. The five suggestions of "Scraping routes and completeness" below, waiting
+    for the user's choice.
+14. THE SITEMAP-DATE TEST (agreed 22 October, 23:40; build on 23 October
+    after the nightly ends, about 10:00). Each night, for Continente and for
+    Pingo Doce if its sitemap has dates: save each product's sitemap date
+    whenever it changes, and what changed on the product page that night
+    (price, name, brand, size, shelf, promotion, barcode). The changes can
+    also be rebuilt from two consecutive nightly backups (kept 7 days). Then
+    KEEP CHECKING it: after about a week, report to the user which page
+    changes move the date - the user's guess is that a price change does.
+    If the date reliably follows the price, propose skipping unchanged pages.
+    BUILT 23 October (tables SitemapDate and PageChange,
+    `src/scrapers/crawl/sitemap-dates.ts`); the first night recorded is the
+    night of 23-24 October. The nightly logs say "sitemap dates: ..." and
+    "page changes recorded: ...". Still to do: the comparison after a week.
+15. CRAWL PACE (talk of 22 October). No store's robots.txt sets a limit on
+    pages or a wait between requests. One request per second is our own
+    choice, the usual polite default. Up to about 2 per second at night is
+    still modest for stores this size; beyond that, risk of being blocked.
+    The refusal brake (L6) protects at any pace. The user wants ALL of
+    Continente's 71,558 never-opened addresses opened (about 20 hours at 1 per
+    second, 10 at 2): my advice was to spread them over a few nights at the
+    current pace rather than go faster. Decide the plan with him.
+
+## Scraping routes and completeness (22 October 2026, the report word for word)
+
+Kept here at the user's request, as written to him, so it can be recalled
+exactly. Nothing in it is started; items 2, 4 and 5 of the suggestions make
+requests to the stores and wait for his decision.
+
+> I committed and pushed tonight's four changes (`2418422`). Then I read all three stores' robots.txt with one request each: none has changed since the copies we keep. I also measured our catalogue against each store's own product list (its sitemap), using the copies already saved, so that needed no extra requests.
+>
+> > *For each store, what are the ways allowed by its robots.txt to get the product information, and is there a more efficient one?*
+>
+> Two terms first: a **listing page** is the page a shopper scrolls, showing many products at once; a **product page** is one product's own page.
+>
+> **Continente** forbids searches and every address with the parameters that page through listings: page size, starting position, category, and product number.
+> 1. **Its sitemap, then one product page per product.** This is what we do: about 17,000 pages a night, about 5 h 45 min. It is the only allowed way to get every price.
+> 2. **Section pages without parameters.** Allowed, but they show only the first few products, because moving to the next page needs a forbidden parameter. We already read them for Continente's own section counts.
+> 3. **Possible saving (needs measuring):** each entry in Continente's sitemap carries a "last modified" date. If that date changes whenever the price changes, we could skip pages whose date hasn't moved. That could save most of the requests. The nightly reads the sitemap anyway, so it could record the dates for about a week at no extra request cost, and we compare them with the price changes we see. If the date does not follow the price, this saving is off.
+>
+> **Pingo Doce** forbids the listings' paging parameters and the addresses the "load more" button uses.
+> 1. **Its sitemap, then one product page per product.** This is what we do: about 10,200 pages a night, about 3 hours. Each address names its section, so non-food is skipped without a request.
+> 2. **Department pages without parameters.** These give 14 products each plus the store's count. We read them every night from tonight.
+> 3. **A gap in the wording that we should not use.** The rules forbid the paging parameters only when they come first in an address. Putting another parameter first would get past the letter of the rules, but the rules' own heading says they block exactly this, and the "load more" address is forbidden outright. I don't recommend it.
+> 4. **The same date-based saving as Continente,** if Pingo Doce's sitemap carries dates. Tonight's run can check that, again with no extra request.
+>
+> **Auchan** forbids only filters, sorting, searches and account pages. Paging through listings is allowed.
+> 1. **Listing pages, 200 products each.** This is what we do: about 1,000 requests and 85 minutes for its whole catalogue, already the cheapest of the three.
+> 2. **Bigger pages, if Auchan's server accepts them.** Asking for more than 200 products per page would mean fewer requests. One or two test requests would tell.
+> 3. **Sitemap and one page per product.** Far worse (about 20,000 pages), and its dates are useless here: all 34,234 dated entries in its first file carried the same day.
+>
+> **In short:** Auchan has no meaningfully better route. For Continente and Pingo Doce, the only possibly large saving is skipping products whose sitemap date hasn't changed, and a week of recording will show whether that is safe.
+>
+> > *How are we sure that, for each store, we see every product it sells?*
+>
+> We aren't sure for any store yet, and the measurements show where the gaps are:
+>
+> - **Continente: incomplete, for a known reason.** Its list has 103,753 addresses, and **71,558 have never been looked at**. Its addresses don't show the section, so each one needs one page read to learn whether it is food, and the nightly reads 3,000 a night. That is 24 more nights at this pace. The gap shows in the store's own section counts against ours: frozen food 1,085 against our 746, ready meals 558 against 176, fruit and vegetables 844 against 689. Some of each gap is products counted in two sections, but not all of it. A higher nightly allowance, or a one-off catch-up, would close it sooner. That means more load on the store, so it's your decision.
+> - **Pingo Doce: complete against its list.** Every food product its sitemap lists is read every night. What we can't see is a product Pingo Doce sells but leaves out of its sitemap. **A free cross-check:** the 19 department pages read from tonight show 14 products each, 266 in all. If any of them is missing from our catalogue, the list is not complete, and the report could say so.
+> - **Auchan: the biggest measured gap.** Its own list has 20,032 products in food sections, and **2,209 of them (11%) have never been in our catalogue**. Part of the reason is known: the walk skips a product shown without a price, out of stock, so a product out of stock when it first appears never gets a row. On the 21 October walk, 1,419 tiles had no price. The rest are products the walk misses, which we already knew about. **To close it:** use Auchan's list, now read every night, to find food products we have never held, and read each one's page once. That is about 2,209 pages the first time, then only new ones each night.
+>
+> **What I suggest:**
+> 1. Record the sitemap dates at Continente and Pingo Doce for a week, then decide on skipping unchanged pages. No extra requests.
+> 2. Two test requests to Auchan with bigger pages.
+> 3. Add the free department-page cross-check to Pingo Doce's report.
+> 4. Close Auchan's 2,209-product gap through its list (about 2,209 page reads once).
+> 5. Decide how fast to finish Continente's 71,558 unexamined addresses.
+>
+> Nothing on this list is started. Tell me which to do; items 2, 4 and 5 make requests to the stores.
 
 ## Measured on 22 October, before the decisions above
 

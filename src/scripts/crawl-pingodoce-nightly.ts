@@ -3,6 +3,7 @@ import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import type { PingoDoceProductUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
+import { pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
 import {
   DEAD_NIGHTS_BEFORE_DELISTING,
   MAX_SHARE_MISSING,
@@ -166,8 +167,17 @@ async function main() {
     console.log(`\nthe store's own counts: ${publishedCounts.size} of ${departmentCounts.length} departments read`);
   }
 
+  // The sitemap-date test (sitemap-dates.ts): every product's fields before
+  // the run writes over them, and each product's sitemap date if it has one.
+  const fieldsBefore = await pageFieldsBefore("PINGO_DOCE");
   const writer = await openCatalogueWriter("PINGO_DOCE");
   const seenAt = writer.seenAt;
+  const dates = await recordSitemapDates("PINGO_DOCE", sitemap.lastmod, seenAt);
+  console.log(
+    sitemap.lastmod.size === 0
+      ? "\nsitemap dates: the sitemap gives none"
+      : `\nsitemap dates: ${dates.changed.toLocaleString()} changed since the last run, ${dates.first.toLocaleString()} recorded for the first time`
+  );
   const started = Date.now();
 
   // The sitemap is the store's whole tree, so this is a complete view of its
@@ -213,6 +223,8 @@ async function main() {
   });
 
   const summary = writer.finish();
+  const pageChanges = await recordPageChanges("PINGO_DOCE", fieldsBefore, seenAt);
+  console.log(`\npage changes recorded: ${Object.entries(pageChanges).map(([f, n]) => `${f} ${n}`).join(", ") || "none"}`);
   const byName = await stopTrackingMovedOut("PINGO_DOCE", leftOutIds, liveHeld, new Date());
   if (byName.refused) {
     nonFoodRefused.push(`mixed-aisle names not recognised as food: ${byName.refused}`);
