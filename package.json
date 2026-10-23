@@ -22,6 +22,7 @@
     "discover": "tsx src/scripts/discover.ts",
     "backfill:sizes": "tsx src/scripts/backfill-sizes.ts",
     "validate:comparisons": "tsx src/scripts/validate-comparisons.ts",
+    "check:saves": "tsx src/scripts/check-saves.ts",
     "verify:nightly": "tsx src/scripts/verify-on-copy.ts",
     "verify:nightly:here": "tsx --expose-gc src/scripts/verify-nightly.ts",
     "measure:classifier": "tsx src/scripts/measure-classifier.ts",

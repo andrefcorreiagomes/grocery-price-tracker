@@ -55,3 +55,6 @@ next-env.d.ts
 # scrape failure log
 /logs
 reports/
+
+# the private to-do list: never uploaded (the user's decision, 23 October 2026)
+/TODO.md
