@@ -243,6 +243,9 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       // (2 products, a pork dish and a trifle).
       "black-friday": "mixed",
       "sabores-auchan": "mixed",
+      // First seen 22 October 2026 (2 products, both toys); decided by the
+      // user on 23 October: track it, since Christmas food may follow.
+      natal: "mixed",
     },
     skip: [
       // 93 products, none with a food type (creatine, pre-workout)
