@@ -363,7 +363,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "corvina", label: "Corvina", unit: "kg", heads: ["corvina"], exclude: /\bovas\b/i },
   { id: "tamboril", label: "Tamboril", unit: "kg", heads: ["tamboril"], exclude: /(?<!\bsem )\bcabecas?\b/i },
   { id: "perca", label: "Perca", unit: "kg", heads: ["perca"] },
-  { id: "truta", label: "Truta", unit: "kg", heads: ["truta"] },
+  // Roe is not the fish: "Ovas de Truta Spherika Gourmet" (verified as no
+  // kind) became trout when Continente moved it to a new shelf, 24 October 2026.
+  { id: "truta", label: "Truta", unit: "kg", heads: ["truta"], exclude: /\bovas?\b/i },
   { id: "linguado", label: "Linguado", unit: "kg", heads: ["linguado"] },
   { id: "mexilhao", label: "Mexilhão", unit: "kg", heads: ["mexilhao"] },
   // Salmon heads, kept out of salmão, would otherwise fall to this type through

@@ -6,6 +6,7 @@ import path from "node:path";
 import { prisma } from "../lib/db";
 import { fetchPage, requireCrawlerContact } from "../scrapers/http";
 import { LOG_KEEP_DAYS, pruneLogs } from "./log-retention";
+import { takeLock } from "./run-lock";
 
 /**
  * The whole night in one command: the three crawls, then everything that
@@ -170,6 +171,8 @@ async function main() {
     throw new Error(`this is ${host}, but NIGHTLY_HOST is ${allowed}: the nightly run only writes the database on that machine`);
   }
   requireCrawlerContact();
+  // One collection at a time (run-lock.ts): refuses if another run is going.
+  takeLock(`npm run nightly (${day})`);
   mkdirSync(dir, { recursive: true });
   const started = Date.now();
 

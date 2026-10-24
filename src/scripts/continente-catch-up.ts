@@ -5,6 +5,7 @@ import { backlogOrder, isContinenteFood, looksLikeFood, saveGrouped } from "../s
 import { checkedIds, recordChecks, type CheckResult } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { formatHttpStats, requireCrawlerContact, setRequestsPerSecond } from "../scrapers/http";
+import { takeLock } from "./run-lock";
 
 /**
  * Open every Continente address never opened before, once (the user's wish,
@@ -37,6 +38,8 @@ async function main() {
     console.error(`This computer is ${host}; the crawls run only on ${allowed} (NIGHTLY_HOST in .env).`);
     process.exit(1);
   }
+  // One collection at a time (run-lock.ts): refuses while the nightly runs.
+  takeLock("npm run catchup:continente");
   const args = process.argv.slice(2);
   const stopRaw = args.find((a) => a.startsWith("--stop-at="))?.split("=")[1];
   const [h, m] = (stopRaw ?? "").split(":").map(Number);
