@@ -8,8 +8,9 @@ import { STORE_LIST, type Store } from "../lib/stores";
  * request, 23 October 2026.)
  *
  * Read-only, from the database and the reports alone - no request to any
- * store, no write. For each store's newest run (CrawlRun; its startedAt is the
- * instant the run stamped on everything it saved):
+ * store, no write. Since 24 October 2026 the nightly's last step. For each
+ * store's newest run (CrawlRun; its startedAt is the instant the run stamped
+ * on everything it saved), and any other run of that store the same night:
  *
  *   1. products saved   rows stamped with the run's instant = the report's
  *                       "products seen"
@@ -56,32 +57,73 @@ const say = (ok: boolean, line: string) => {
   console.log(`  ${ok ? "ok     " : "PROBLEM"}  ${line}`);
 };
 
+/** How far back from a store's newest run another run counts as the same night. */
+const NIGHT_MS = 12 * 3_600_000;
+
 async function checkStore(store: Store) {
-  const run = await prisma.crawlRun.findFirst({ where: { store }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
+  const run = await prisma.crawlRun.findFirst({ where: { store }, orderBy: { startedAt: "desc" }, select: { startedAt: true, durationMs: true } });
   if (!run) return console.log(`\n${store}: no run recorded`);
-  const seenAt = run.startedAt;
-  const report = reportFor(store, seenAt);
-  console.log(`\n${store}: the run of ${seenAt.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" })}${report ? ` (report ${report.file})` : " - no report found for it"}`);
+  const runEnd = new Date(run.startedAt.getTime() + (run.durationMs ?? NIGHT_MS));
+  // Every instant a run of this night stamped on what it saved. Normally one:
+  // the lock (run-lock.ts) allows one collection at a time. On the night of
+  // 23-24 October two runs went at once, before the lock existed, and a run
+  // that is stopped half-way stamps products without leaving a CrawlRun row,
+  // so the stamps are read from the products themselves.
+  // The night starts with the earliest run still going when the newest began;
+  // the Continente catch-up of the evening before is not part of it.
+  const earlier = await prisma.crawlRun.findMany({
+    where: { store, startedAt: { gte: new Date(run.startedAt.getTime() - NIGHT_MS) } },
+    select: { startedAt: true, durationMs: true },
+  });
+  const nightStart = new Date(
+    Math.min(...earlier.filter((r) => r.startedAt.getTime() + (r.durationMs ?? 0) >= run.startedAt.getTime()).map((r) => r.startedAt.getTime()))
+  );
+  const stampRows = await prisma.catalogueProduct.groupBy({
+    by: ["lastSeenAt"],
+    // Up to the newest run's end: a later command (the Continente catch-up) is not part of the night.
+    where: { store, lastSeenAt: { gte: nightStart, lte: runEnd } },
+  });
+  const stamps = [...new Set([run.startedAt, ...stampRows.map((s) => s.lastSeenAt)].map((d) => d.getTime()))]
+    .sort((a, b) => a - b)
+    .map((t) => new Date(t));
+  const stampSet = new Set(stamps.map((d) => d.getTime()));
+  const first = stamps[0];
+  const reports = [...new Map(stamps.map((s) => reportFor(store, s)).filter((r): r is ReportFigures => r !== null).map((r) => [r.file, r])).values()];
+  const when = (d: Date) => d.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  console.log(`\n${store}: the run of ${when(run.startedAt)}${reports.length ? ` (report ${reports.map((r) => r.file).join(", ")})` : " - no report found for it"}`);
+  const single = stamps.length === 1;
+  if (!single) {
+    say(false, `${stamps.length} runs of this store saved products this night (started ${stamps.map(when).join("; ")}): only one should; ` +
+      `the counts below take them together`);
+  }
 
   // 1. products saved
-  const seen = await prisma.catalogueProduct.count({ where: { store, lastSeenAt: seenAt } });
-  if (report) say(seen === report.seen, `products saved with tonight's stamp: ${seen.toLocaleString()}; the report says it saw ${report.seen.toLocaleString()}`);
-  else console.log(`  -        products saved with tonight's stamp: ${seen.toLocaleString()} (no report to compare with)`);
+  const seen = await prisma.catalogueProduct.count({ where: { store, lastSeenAt: { in: stamps } } });
+  const mostSeen = Math.max(0, ...reports.map((r) => r.seen));
+  if (reports.length) {
+    // With two runs a product seen by both carries the later stamp, so the
+    // products saved can only be checked to cover what each run saw.
+    say(single ? seen === mostSeen : seen >= mostSeen,
+      `products saved with tonight's stamp: ${seen.toLocaleString()}; the report says it saw ${mostSeen.toLocaleString()}`);
+  } else console.log(`  -        products saved with tonight's stamp: ${seen.toLocaleString()} (no report to compare with)`);
 
   // 2. prices saved
-  const stamped = await prisma.cataloguePrice.count({ where: { lastSeenAt: seenAt, product: { store } } });
-  if (report) {
-    const expected = report.prices.opened + report.prices.changed + report.prices.unchanged;
-    say(stamped === expected, `prices stamped tonight: ${stamped.toLocaleString()}; the report says ${expected.toLocaleString()} (opened ${report.prices.opened}, changed ${report.prices.changed}, unchanged ${report.prices.unchanged.toLocaleString()})`);
+  const stamped = await prisma.cataloguePrice.count({ where: { lastSeenAt: { in: stamps }, product: { store } } });
+  if (reports.length) {
+    const expected = Math.max(...reports.map((r) => r.prices.opened + r.prices.changed + r.prices.unchanged));
+    const r = reports[0].prices;
+    say(single ? stamped === expected : stamped >= expected,
+      `prices stamped tonight: ${stamped.toLocaleString()}; the report says ${expected.toLocaleString()}` +
+        (single ? ` (opened ${r.opened}, changed ${r.changed}, unchanged ${r.unchanged.toLocaleString()})` : ""));
   }
   const pricedTonight = await prisma.catalogueProduct.findMany({
-    where: { store, lastSeenAt: seenAt, price: { not: null } },
+    where: { store, lastSeenAt: { in: stamps }, price: { not: null } },
     select: { storeProductId: true, price: true, prices: { where: { isOpen: true }, select: { price: true, lastSeenAt: true } } },
   });
   const wrong = pricedTonight.filter(
     (p) =>
       p.prices.length !== 1 ||
-      p.prices[0].lastSeenAt.getTime() !== seenAt.getTime() ||
+      !stampSet.has(p.prices[0].lastSeenAt.getTime()) ||
       Math.round(p.prices[0].price * 100) !== Math.round((p.price as number) * 100)
   );
   say(wrong.length === 0, `products seen with a price whose price history agrees: ${(pricedTonight.length - wrong.length).toLocaleString()} of ${pricedTonight.length.toLocaleString()}` +
@@ -89,7 +131,7 @@ async function checkStore(store: Store) {
 
   // 3. accounted for
   const forgotten = await prisma.catalogueProduct.findMany({
-    where: { store, delistedAt: null, lastSeenAt: { lt: seenAt }, OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: seenAt } }] },
+    where: { store, delistedAt: null, lastSeenAt: { lt: first }, OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: first } }] },
     select: { storeProductId: true, name: true },
   });
   say(forgotten.length === 0, `products on sale neither seen nor looked at tonight: ${forgotten.length.toLocaleString()}` +

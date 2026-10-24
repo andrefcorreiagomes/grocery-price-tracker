@@ -3,10 +3,13 @@ import type { AddressInfo } from "node:net";
 import { prisma } from "../lib/db";
 import {
   afterRefusal,
+  BLOCKS,
   failedPageVerdict,
   fetchHtml,
+  fetchPage,
   HttpError,
   httpStats,
+  isBlockAnswer,
   NetworkError,
   REFUSALS,
   setHttpTimingForChecks,
@@ -496,6 +499,58 @@ async function verifyRefusals() {
   }
 }
 
+/**
+ * A store that says it is blocking us (474, as Continente did to the rented
+ * server on 23 October 2026) is left alone after BLOCKS.blocksBeforeStop such
+ * pages in a row - and nothing an ordinary removed product does can look like
+ * that: a redirect to the home page, a "not found", a page without a product.
+ */
+async function verifyBlocks() {
+  const n = BLOCKS.blocksBeforeStop;
+  console.log(`\n  a store that blocks us is left alone after ${n} blocked pages in a row`);
+  check("474 \"Request Blocked\" is a block", isBlockAnswer(474, "Request Blocked"));
+  check("403 with a page saying blocked is a block", isBlockAnswer(403, "<h1>Request Blocked</h1>") && isBlockAnswer(403, "Acesso bloqueado"));
+  check("403 without it, 404, 410, 503 and 200 are not",
+    !isBlockAnswer(403, "<h1>Forbidden</h1>") && !isBlockAnswer(404, "") && !isBlockAnswer(410, "") && !isBlockAnswer(503, "busy") && !isBlockAnswer(200, "blocked"));
+
+  let hits = 0;
+  const server = createServer((req, res) => {
+    hits++;
+    if (req.url?.startsWith("/moved")) res.writeHead(302, { Location: "/" }).end();
+    else if (req.url === "/") res.writeHead(200, { "Content-Type": "text/html" }).end("<html>home page, no product</html>");
+    else if (req.url?.startsWith("/gone")) res.writeHead(404).end("not found");
+    else res.writeHead(474).end("Request Blocked");
+  });
+  const base = await new Promise<string>((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`))
+  );
+  setHttpTimingForChecks({ minDelayMs: 1, pausesMs: [5, 5, 5] });
+  try {
+    // 9 blocked, then a product that moved to the home page; 9 blocked, then a "not found".
+    const errors: string[] = [];
+    for (let i = 0; i < n - 1; i++) await fetchHtml(`${base}/a${i}`).catch((e: Error) => errors.push(e.name));
+    const home = await fetchPage(`${base}/moved-1`);
+    check("a removed product sent on to the home page is an answer, not a block", home.url === `${base}/`);
+    for (let i = 0; i < n - 1; i++) await fetchHtml(`${base}/b${i}`).catch((e: Error) => errors.push(e.name));
+    await fetchHtml(`${base}/gone-1`).catch((e) => errors.push(failedPageVerdict(e)));
+    check(`each of those starts the count again, so ${2 * (n - 1)} blocked pages did not stop the store`,
+      !errors.includes("StoreRefusingError") && errors.at(-1) === "gone", errors.slice(-2).join());
+    check("a blocked page is asked once, not three times", hits === 2 * (n - 1) + 2 + 1, `${hits} requests`);
+
+    let last: unknown = null;
+    for (let i = 0; i < n; i++) await fetchHtml(`${base}/c${i}`).catch((e) => (last = e));
+    check("a blocked page is never \"gone\"", failedPageVerdict(last) === "unreachable");
+    const before = hits;
+    let after: unknown = null;
+    await fetchHtml(`${base}/d`).catch((e) => (after = e));
+    check(`after ${n} blocked pages in a row the store is asked nothing more this run`,
+      after instanceof StoreRefusingError && hits === before && stoppedStores().some((h) => base.endsWith(h)), String(after));
+  } finally {
+    setHttpTimingForChecks({ minDelayMs: 1_000, pausesMs: REFUSALS.pausesMs });
+    server.close();
+  }
+}
+
 /** The sitemap-date test: dates kept when they change, page changes kept field by field. */
 async function verifySitemapDates() {
   console.log("\n  the sitemap-date test: what is kept each night");
@@ -561,6 +616,7 @@ export async function verifyCrawlSafety(): Promise<number> {
   try {
     await verifyFailedPages();
     await verifyRefusals();
+    await verifyBlocks();
     await verifyBatching();
     await verifyKindsKept();
     await verifyMovedOut();

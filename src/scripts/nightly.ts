@@ -4,7 +4,7 @@ import { createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, writeF
 import os from "node:os";
 import path from "node:path";
 import { prisma } from "../lib/db";
-import { fetchPage, requireCrawlerContact } from "../scrapers/http";
+import { fetchPage, paceFromEnv, requireCrawlerContact, secondsPerPage } from "../scrapers/http";
 import { LOG_KEEP_DAYS, pruneLogs } from "./log-retention";
 import { takeLock } from "./run-lock";
 
@@ -17,6 +17,9 @@ import { takeLock } from "./run-lock";
  *   npm run nightly -- --no-crawl   everything except the robots check and the
  *                                   crawls: no request to any store
  *   npm run nightly -- --together   the three crawls at the same time
+ *   npm run nightly -- --seconds-per-page=1.5
+ *                                   wait 1.5 seconds between two requests to
+ *                                   the same store, instead of 1 (http.ts)
  *
  * Written 20 October 2026, to move the nightly work from MSI to a machine that
  * runs it unattended (first the old laptop, then a rented server).
@@ -34,6 +37,8 @@ import { takeLock } from "./run-lock";
  *   4. pack sizes, classification, the review count, the automatic checks
  *      (verify:nightly, which includes the verified-kinds list) and the
  *      comparison check
+ *      and, last, check:saves: every product a crawl saw was saved, and every
+ *      product on sale was seen or looked at
  *   5. a consistent backup of the database into backups/, keeping the last 7
  *   6. logs/nightly-<date>/summary.md, plus each step's full output beside it
  *
@@ -44,6 +49,13 @@ const args = new Set(process.argv.slice(2));
 const plan = args.has("--plan");
 const noCrawl = args.has("--no-crawl");
 const together = args.has("--together");
+// Handed to every crawl through the environment, which each child inherits;
+// http.ts reads it and refuses a value outside 0.5 to 10.
+const pace = [...args].find((a) => a.startsWith("--seconds-per-page="))?.split("=")[1];
+if (pace !== undefined) {
+  process.env.SECONDS_PER_PAGE = pace;
+  paceFromEnv(); // this process too: its robots.txt requests, and the summary
+}
 
 const STORES = [
   { id: "AUCHAN", name: "Auchan", file: "auchan", robots: "https://www.auchan.pt/robots.txt", script: "crawl:auchan:nightly" },
@@ -71,6 +83,8 @@ const AFTER: { script: string; what: string; log?: string; needs?: string }[] = 
   { script: "review:kinds", what: "uncertain kinds counted" },
   { script: "verify:nightly", what: "automatic checks, including the verified kinds" },
   { script: "validate:comparisons", what: "comparison check" },
+  // The user, 24 October 2026: run every night, after the crawls.
+  { script: "check:saves", what: "every product seen was saved" },
 ];
 
 const KEEP_BACKUPS = 7;
@@ -161,6 +175,7 @@ async function main() {
     );
     if (!noCrawl) console.log(`robots.txt check: ${STORES.map((s) => s.robots).join(", ")}`);
     if (!noCrawl) console.log(`crawls ${together ? "at the same time" : "one after another"}: ${STORES.map((s) => s.script).join(", ")}`);
+    if (!noCrawl) console.log(`pace: one request every ${secondsPerPage()} s per store`);
     console.log(`then: ${AFTER.map((a) => a.script).join(", ")}, a backup, and ${dir}/summary.md`);
     return;
   }
@@ -238,6 +253,10 @@ async function main() {
       const stale = (text.match(/STORE DATA CHANGED|NO LONGER IN THE CATALOGUE|RE-CHECK DUE/g) ?? []).length;
       if (kinds) note = `${odd} of ${kinds} kinds have a price that looks odd; ${stale} known store errors to look at again`;
     }
+    if (a.script === "check:saves") {
+      const problems = readFileSync(r.log, "utf8").match(/(\d+) PROBLEM\(S\)/)?.[1];
+      note = problems ? `${problems} problem(s): see ${r.log}` : "every product seen was saved; every product on sale accounted for";
+    }
     steps.push({ name: a.script, ok: r.code === 0, minutes: r.minutes, note, log: r.log });
   }
 
@@ -270,7 +289,7 @@ async function main() {
     "",
     failed.length === 0 ? "**Everything worked.**" : `**${failed.length} step(s) need a look:** ${failed.map((f) => f.name).join(", ")}.`,
     "",
-    `On ${host}, ${total.toFixed(1)} minutes in all${noCrawl ? ", without crawls (--no-crawl)" : ""}.`,
+    `On ${host}, ${total.toFixed(1)} minutes in all${noCrawl ? ", without crawls (--no-crawl)" : `, one request every ${secondsPerPage()} s per store`}.`,
     "",
     "| Step | Result | Minutes | Notes |",
     "|---|---|---|---|",

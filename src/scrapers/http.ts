@@ -73,6 +73,20 @@ function isLocal(host: string): boolean {
 const MIN_DELAY_MS = 1_000;
 
 /**
+ * A slower pace for a whole night: `npm run nightly -- --seconds-per-page=1.5`
+ * (the user, 24 October 2026, for the first nights on the rented server) sets
+ * SECONDS_PER_PAGE for every crawl it starts, and each waits that long between
+ * two requests to the same store. From half a second to ten.
+ */
+function delayFromEnv(): number {
+  const raw = process.env.SECONDS_PER_PAGE?.trim();
+  if (!raw) return MIN_DELAY_MS;
+  const seconds = Number(raw);
+  if (!(seconds >= 0.5 && seconds <= 10)) throw new Error(`SECONDS_PER_PAGE must be from 0.5 to 10, got "${raw}"`);
+  return Math.round(seconds * 1_000);
+}
+
+/**
  * Backing off when a store refuses (code review L6, 22 October 2026).
  *
  * A page is REFUSED when every attempt at it got "busy" (503), "too many
@@ -93,8 +107,43 @@ export const REFUSALS = {
   pausesMs: [5 * 60_000, 10 * 60_000, 15 * 60_000],
 };
 
+/**
+ * A store that says outright it is blocking us (the user, 24 October 2026).
+ *
+ * On 23 October Continente's protection service (Link11) blocked the rented
+ * server: every page answered status 474, "Request Blocked". That answer was
+ * not a refusal to the brake above, which counts only "busy", "too many
+ * requests" and no answer: a 474 counted as an answer, reset the count, and
+ * the crawler would have gone on asking all night. Now `blocksBeforeStop`
+ * BLOCKED pages in a row stop that store for the rest of the run, with no
+ * pause and no second attempt at a blocked page - asking again only adds to
+ * the reasons to block.
+ *
+ * BLOCKED is only an answer that says so: status 474, or 403 ("forbidden")
+ * with a page that mentions being blocked. Nothing else counts, so an ordinary
+ * removed product cannot stop a crawl: an address that sends us on to the home
+ * page or a search page, a "not found", a page without a price - each is a
+ * page the store answered, and each starts the count again.
+ */
+export const BLOCKS = { blocksBeforeStop: 10 };
+
+/** Whether an answer says the store is blocking us. Pure, for the checks. */
+export function isBlockAnswer(status: number, body: string): boolean {
+  return status === 474 || (status === 403 && /\bblock(ed)?\b|bloquead/i.test(body));
+}
+
 /** Waits shortened by the checks, which run against a server on this computer. */
-const timing = { minDelayMs: MIN_DELAY_MS, pausesMs: REFUSALS.pausesMs };
+const timing = { minDelayMs: delayFromEnv(), pausesMs: REFUSALS.pausesMs };
+
+/** Read SECONDS_PER_PAGE again, for a script that set it after this file loaded (the nightly). */
+export function paceFromEnv(): void {
+  timing.minDelayMs = delayFromEnv();
+}
+
+/** The wait between two requests to one store, in seconds, for the reports. */
+export function secondsPerPage(): number {
+  return timing.minDelayMs / 1_000;
+}
 export function setHttpTimingForChecks(t: { minDelayMs: number; pausesMs: number[] }): void {
   timing.minDelayMs = t.minDelayMs;
   timing.pausesMs = t.pausesMs;
@@ -104,7 +153,8 @@ export function setHttpTimingForChecks(t: { minDelayMs: number; pausesMs: number
  * Ask a store faster than MIN_DELAY_MS, for one command that the user has
  * decided may go faster: Continente's one-off catch-up of never-opened
  * addresses at 2 a second (the user, 23 October 2026). The nightly keeps one
- * a second. The refusal brake (REFUSALS) applies at any pace.
+ * a second, or its --seconds-per-page. The brakes (REFUSALS, BLOCKS) apply at
+ * any pace.
  */
 export function setRequestsPerSecond(perSecond: number): void {
   if (!(perSecond > 0 && perSecond <= 2)) throw new Error(`requests per second must be above 0 and at most 2, got ${perSecond}`);
@@ -118,24 +168,36 @@ export function afterRefusal(inARow: number, pauses = REFUSALS.pausesMs.length):
 }
 
 const refusedInARow = new Map<string, number>();
+const blockedInARow = new Map<string, number>();
 const pausedUntil = new Map<string, number>();
-const stoppedHosts = new Set<string>();
+/** Hosts this run asks nothing more, and why. */
+const stoppedHosts = new Map<string, string>();
 
-/** The store refused so many pages in a row that this run asks it nothing more. */
+/** The store refused or blocked so many pages in a row that this run asks it nothing more. */
 export class StoreRefusingError extends Error {
-  constructor(host: string) {
-    super(`${host} refused ${REFUSALS.pagesBeforePause * (REFUSALS.pausesMs.length + 1)} pages in a row; no more requests to it this run`);
+  constructor(host: string, why: string) {
+    super(`${host} ${why}; no more requests to it this run`);
     this.name = "StoreRefusingError";
   }
 }
 
 /** Hosts this run has stopped asking, for the reports. */
 export function stoppedStores(): string[] {
-  return [...stoppedHosts];
+  return [...stoppedHosts.keys()];
 }
 
 function pageAnswered(host: string): void {
   refusedInARow.set(host, 0);
+  blockedInARow.set(host, 0);
+}
+
+function pageBlocked(host: string, status: number): void {
+  const inARow = (blockedInARow.get(host) ?? 0) + 1;
+  blockedInARow.set(host, inARow);
+  if (inARow >= BLOCKS.blocksBeforeStop) {
+    stoppedHosts.set(host, `blocked ${inARow} pages in a row (status ${status})`);
+    console.log(`  !! ${host} blocked ${inARow} pages in a row (status ${status}) - no more requests to it this run`);
+  }
 }
 
 function pageRefused(host: string): void {
@@ -143,7 +205,7 @@ function pageRefused(host: string): void {
   refusedInARow.set(host, inARow);
   const next = afterRefusal(inARow, timing.pausesMs.length);
   if (next === "stop") {
-    stoppedHosts.add(host);
+    stoppedHosts.set(host, `refused ${inARow} pages in a row, through every pause`);
     console.log(`  !! ${host} refused ${inARow} pages in a row, through every pause - no more requests to it this run`);
   } else if (next === "pause") {
     const ms = timing.pausesMs[inARow / REFUSALS.pagesBeforePause - 1];
@@ -388,7 +450,8 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
   const host = hostOf(url);
   // Also checked here, for any script that reaches a store without calling it first.
   const agent = isLocal(host) ? CRAWLER_NAME : requireCrawlerContact();
-  if (stoppedHosts.has(host)) throw new StoreRefusingError(host);
+  const stopped = stoppedHosts.get(host);
+  if (stopped) throw new StoreRefusingError(host, stopped);
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -423,6 +486,12 @@ export async function fetchPage(url: string): Promise<{ html: string; url: strin
     // A failed response still moved bytes, and a night of 404s is not free.
     statsFor(host).wireBytes += res.wireBytes;
     statsFor(host).fetchMs += Date.now() - startedAt;
+
+    // Blocked (BLOCKS): never asked again, and never "gone" (failedPageVerdict).
+    if (isBlockAnswer(res.status, res.body)) {
+      pageBlocked(host, res.status);
+      throw new HttpError(res.status, url);
+    }
 
     // A 404 means the listing is gone; retrying cannot help and the caller
     // needs to hear about it straight away. It is not counted as a retry.
