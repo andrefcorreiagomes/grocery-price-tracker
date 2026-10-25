@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -152,6 +152,15 @@ function verdictOf(log: string): string {
   return [v ? `report ${v}` : null, done, promotions, warn].filter(Boolean).join("; ");
 }
 
+/** The commit the night ran on, so a summary says which code made it (the server updates itself before each night). */
+function codeVersion(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 async function backup(): Promise<string> {
   mkdirSync("backups", { recursive: true });
   const target = path.join("backups", `nightly-${day}.db`);
@@ -291,7 +300,7 @@ async function main() {
     "",
     failed.length === 0 ? "**Everything worked.**" : `**${failed.length} step(s) need a look:** ${failed.map((f) => f.name).join(", ")}.`,
     "",
-    `On ${host}, ${total.toFixed(1)} minutes in all${noCrawl ? ", without crawls (--no-crawl)" : `, one request every ${secondsPerPage()} s per store`}.`,
+    `On ${host}, ${total.toFixed(1)} minutes in all${noCrawl ? ", without crawls (--no-crawl)" : `, one request every ${secondsPerPage()} s per store`}, code version ${codeVersion()}.`,
     "",
     "| Step | Result | Minutes | Notes |",
     "|---|---|---|---|",

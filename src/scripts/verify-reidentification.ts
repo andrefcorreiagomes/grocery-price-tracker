@@ -285,6 +285,8 @@ export async function verifyReidentification(): Promise<number> {
   await makeProduct("m-x-to-null", ean(101), yesterday); // loss
   await makeProduct("m-x-to-y", ean(102), yesterday); // SWAP
   await makeProduct("m-null-to-null", null, yesterday); // nothing knowable
+  // A new barcode under the very same name: the same product (assumption 2.17).
+  await makeProduct("m-same-name", ean(103), yesterday);
 
   const w = await openCatalogueWriter(STORE);
   await w.save(
@@ -295,10 +297,20 @@ export async function verifyReidentification(): Promise<number> {
       hit("m-x-to-y", ean(999)),
       hit("m-null-to-null", null),
       hit("m-brand-new", ean(300)), // no prior row at all
+      { ...hit("m-same-name", ean(998)), name: "PRODUCT  m-same-name" },
     ],
     "Mercearia"
   );
   const heldResult = w.finish();
+  const sameNameRow = await prisma.catalogueProduct.findUnique({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}m-same-name` } },
+    select: { eanNormalized: true, delistedAt: true },
+  });
+  check(
+    "a new barcode under the same name is no swap: the barcode is simply updated",
+    sameNameRow?.eanNormalized === matchableEan(ean(998)) && sameNameRow?.delistedAt === null,
+    `${sameNameRow?.eanNormalized}`
+  );
 
   check("exactly one swap detected", heldResult.swaps.length === 1, `${heldResult.swaps.length}`);
   check(
@@ -317,7 +329,7 @@ export async function verifyReidentification(): Promise<number> {
   check("one barcode loss counted", heldResult.barcodesLost === 1, `${heldResult.barcodesLost}`);
   check(
     "only rows with a stored barcode are compared",
-    heldResult.barcodesCompared === 3,
+    heldResult.barcodesCompared === 4, // x-to-x, x-to-null, x-to-y and same-name
     `${heldResult.barcodesCompared}`
   );
 

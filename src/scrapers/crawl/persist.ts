@@ -6,6 +6,23 @@ import { recordPrices, type PriceHistorySummary } from "./price-history";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult } from "./types";
 
+/**
+ * The same product name, give or take capitals, accents, punctuation and
+ * spacing (sizes are kept: a new pack size under a new barcode is a new
+ * product). A barcode change under an unchanged name is the same product:
+ * on 25 October 2026, 126 of the 131 Continente products ever set aside as
+ * "replaced" had exactly the name of the product that took their number -
+ * Continente, or the maker, switches between two barcodes ("Lotus Dots"
+ * 8424465654011 to ...4080 and back), and setting them aside split their price
+ * histories (assumption 2.17).
+ */
+export function sameName(a: string | undefined, b: string): boolean {
+  if (a === undefined) return false;
+  const plain = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return plain(a) === plain(b);
+}
+
 export interface PersistSummary {
   label: string;
   total: number;
@@ -157,14 +174,18 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
   // the only moment it exists: the upsert overwrites it, so a swap is
   // undetectable a millisecond later.
   const previousEan = new Map<string, string | null>();
+  const previousName = new Map<string, string>();
+  const previousUnit = new Map<string, string | null>();
   const known = new Set(
     (
       await prisma.catalogueProduct.findMany({
         where: { store },
-        select: { storeProductId: true, eanNormalized: true },
+        select: { storeProductId: true, eanNormalized: true, name: true, unit: true },
       })
     ).map((row) => {
       previousEan.set(row.storeProductId, row.eanNormalized);
+      previousName.set(row.storeProductId, row.name);
+      previousUnit.set(row.storeProductId, row.unit);
       return row.storeProductId;
     })
   );
@@ -201,7 +222,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
           // parser than a real product change, so it never archives anything -
           // it is only counted, and a mass occurrence fails the run.
           barcodesLost++;
-        } else if (arriving !== stored) {
+        } else if (arriving !== stored && !sameName(previousName.get(p.id), p.name)) {
           swaps.push({
             storeProductId: p.id,
             previousEan: stored,
@@ -218,7 +239,16 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
   }
 
   /** The upsert itself, shared by both entry points. */
-  async function write(products: SearchHit[], label: string): Promise<void> {
+  async function write(incoming: SearchHit[], label: string): Promise<void> {
+      // A count of eggs or capsules ("un") comes from the size-filling step
+      // (backfill-sizes.ts), never from the page, whose label carries no
+      // weight for them. Erasing it every night and filling it again after the
+      // crawl left about 245 Continente and 170 Pingo Doce products without a
+      // size for hours, and recorded each as a false "size change" - noise in
+      // the sitemap-date test (25 October 2026, assumptions 2.22 and 3.8).
+      const products = incoming.map((p) =>
+        p.packageSize === null && previousUnit.get(p.id) === "un" ? { ...p, packageSize: undefined, unit: undefined } : p
+      );
       const summary = byLabel.get(label) ?? { label, total: 0, created: 0, updated: 0 };
       for (const p of products) {
         summary.total++;

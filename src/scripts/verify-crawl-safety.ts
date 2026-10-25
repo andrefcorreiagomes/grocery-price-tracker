@@ -590,6 +590,20 @@ async function verifySitemapDates() {
   const kept = await prisma.pageChange.findMany({ where: { storeProductId: a } });
   check("a page read tonight with a new price leaves one change, the price", Object.keys(counts).join() === "price" && counts.price === 1 && kept.some((k) => k.field === "price" && k.before === "1.99" && k.after === "2.19"),
     JSON.stringify(counts));
+
+  // A count of eggs or capsules, filled in after the crawl, survives a page
+  // that shows no size - and so leaves no false "size change" (2.22, 3.8).
+  const eggs = `${PREFIX}date-eggs`;
+  await prisma.catalogueProduct.create({
+    data: { store: STORE, storeProductId: eggs, name: "Ovos M", url: "https://example.invalid/o", price: 2.49, categoryPath: "Laticínios e Ovos/Ovos", packageSize: 12, unit: "un" },
+  });
+  const beforeEggs = await pageFieldsBefore(STORE);
+  const eggWriter = await openCatalogueWriter(STORE);
+  await eggWriter.save([{ id: eggs, name: "Ovos M", price: 2.49, brand: "Continente", category: "Laticínios e Ovos/Ovos", url: "https://example.invalid/o", packageSize: null, unit: null }], "Laticínios");
+  const eggCounts = await recordPageChanges(STORE, beforeEggs, eggWriter.seenAt);
+  const eggRow = await prisma.catalogueProduct.findUnique({ where: { store_storeProductId: { store: STORE, storeProductId: eggs } }, select: { packageSize: true, unit: true } });
+  check("a count of eggs survives a page with no size, and no size change is recorded",
+    eggRow?.packageSize === 12 && eggRow?.unit === "un" && !("size" in eggCounts), `${JSON.stringify(eggRow)} ${JSON.stringify(eggCounts)}`);
   await cleanup();
 }
 
