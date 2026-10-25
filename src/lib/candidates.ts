@@ -1,13 +1,14 @@
 import { foldPlural, jaccard, nameTokens, normalizeBrand, normalizeName } from "./text";
+import { matchableEan } from "./barcodes";
 /**
  * Candidate generation: given the whole catalogue, produce the pairs of
  * products, at different stores, that are worth comparing.
  *
- * This is a cheap-guess stage, not a decision stage. It works from name, brand
- * and listing price alone, because barcode and package size do not exist until
- * a product page has been fetched, and fetching 42,000 of those is exactly what
- * this stage exists to avoid. Nothing here is a verdict: `classifyCandidate` in
- * `matching.ts` makes those, later, with the evidence.
+ * This is a cheap-guess stage, not a decision stage. It works mostly from name,
+ * brand and listing price; where a barcode is already known, two products
+ * sharing it are always paired too (since 25 October 2026). Nothing here is a
+ * verdict: `classifyCandidate` in `matching.ts` makes those, later, with the
+ * evidence.
  *
  * The problem it solves is quadratic. Scoring every cross-store pair would be
  * ~554 million comparisons; blocking - indexing straight to the small set worth
@@ -37,6 +38,8 @@ export interface CatalogueEntry {
   name: string;
   brand: string | null;
   price: number | null;
+  /** the product's barcode, when known: a shared one always makes a pair */
+  ean?: string | null;
 }
 
 export interface CandidatePair {
@@ -45,7 +48,8 @@ export interface CandidatePair {
   storeA: string;
   storeB: string;
   nameSimilarity: number;
-  block: "brand" | "token";
+  /** which pass found it: brand, rare name words, or a shared barcode */
+  block: "brand" | "token" | "barcode";
   /** larger listing price over smaller; NOT euro per kilo, which needs a size */
   priceRatio: number | null;
 }
@@ -290,6 +294,45 @@ export function generateCandidates(
       }
 
       if (!found) withoutCandidate++;
+    }
+  }
+
+  // Products sharing a usable barcode are always paired, whatever their names:
+  // name blocking alone never proposed 844 of 5,841 Continente-Auchan pairs
+  // with the same barcode on 25 October 2026 ("Queijo Flamengo sem Lactose
+  // Fatiado Limiano" against "QUEIJO LIMIANO FATIAS 2X200G"), so identical
+  // products were never compared (assumption 6.7).
+  const byEan = new Map<string, Prepared[]>();
+  for (const items of byStore.values()) {
+    for (const item of items) {
+      const ean = matchableEan(item.entry.ean);
+      if (!ean) continue;
+      const bucket = byEan.get(ean);
+      if (bucket) bucket.push(item);
+      else byEan.set(ean, [item]);
+    }
+  }
+  for (const group of byEan.values()) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        if (group[i].entry.store === group[j].entry.store) continue;
+        const [a, b] = canonical(group[i], group[j]);
+        const key = `${a.entry.id}|${b.entry.id}`;
+        if (pairs.has(key)) continue;
+        const prices = [a.entry.price, b.entry.price];
+        pairs.set(key, {
+          aId: a.entry.id,
+          bId: b.entry.id,
+          storeA: a.entry.store,
+          storeB: b.entry.store,
+          nameSimilarity: jaccard(a.tokens, b.tokens),
+          block: "barcode",
+          priceRatio:
+            prices[0] !== null && prices[1] !== null && Math.min(prices[0], prices[1]) > 0
+              ? Math.max(prices[0], prices[1]) / Math.min(prices[0], prices[1])
+              : null,
+        });
+      }
     }
   }
 

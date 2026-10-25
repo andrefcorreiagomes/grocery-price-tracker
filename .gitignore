@@ -58,3 +58,7 @@ reports/
 
 # the private to-do list: never uploaded (the user's decision, 23 October 2026)
 /TODO.md
+# the assumptions file: kept private from 25 October 2026 (the user's decision)
+/docs/assumptions.md
+# renamed database copies (e.g. dev.db.before-2026-10-25)
+*.db.*

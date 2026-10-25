@@ -136,6 +136,12 @@ export interface DailyReport {
     /** the store's OWN published counts, versus what it published last run */
     publishedCountChanges: { label: string; was: number; now: number }[];
     /**
+     * How many of the store's published counts could be compared with last run.
+     * Zero while changes are empty means nothing was compared, not "unchanged"
+     * (Pingo Doce's comparison silently never ran until 25 October 2026).
+     */
+    publishedCountsCompared?: number;
+    /**
      * Cross-check against the category sitemap, a second and independent source.
      * If the homepage markup ever changes, the primary audit goes quiet - this
      * is what notices.
@@ -510,11 +516,12 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
 
   // --- the store's own published counts, run over run -----------------------
   const publishedCountChanges: { label: string; was: number; now: number }[] = [];
+  let publishedCountsCompared = 0;
   for (const previous of input.previousRun?.sections ?? []) {
     const now = input.publishedCounts.get(previous.label);
-    if (previous.expected !== null && now !== undefined && now !== previous.expected) {
-      publishedCountChanges.push({ label: previous.label, was: previous.expected, now });
-    }
+    if (previous.expected === null || now === undefined) continue;
+    publishedCountsCompared++;
+    if (now !== previous.expected) publishedCountChanges.push({ label: previous.label, was: previous.expected, now });
   }
 
   // --- requests -------------------------------------------------------------
@@ -616,6 +623,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
       unknown: audit.unknown.map((c) => ({ cgid: c.cgid, label: c.label, hitCount: c.hitCount })),
       missing: audit.missing,
       publishedCountChanges,
+      publishedCountsCompared,
       sitemapSlugs: input.sitemapSlugs.length,
       sitemapUnknown: input.sitemapUnknown,
     },

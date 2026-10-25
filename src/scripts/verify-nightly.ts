@@ -273,6 +273,20 @@ async function main() {
     "a delisted product is in the 90-day re-check queue",
     stale.some((s) => s.storeProductId === `${PREFIX}10`)
   );
+  // ...but never one set aside as "replaced": its address now shows the product
+  // that replaced it (68 duplicates on 25 October 2026).
+  await prisma.catalogueProduct.update({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}10` } },
+    data: { delistReason: "replaced" },
+  });
+  check(
+    "a product set aside as replaced is never looked at again",
+    !(await staleDelisted(STORE, 50, now)).some((s) => s.storeProductId === `${PREFIX}10`)
+  );
+  await prisma.catalogueProduct.update({
+    where: { store_storeProductId: { store: STORE, storeProductId: `${PREFIX}10` } },
+    data: { delistReason: null },
+  });
 
   // A product that answers again is no longer delisted.
   const revive = await openCatalogueWriter(STORE);

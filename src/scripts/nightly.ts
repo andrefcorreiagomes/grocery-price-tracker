@@ -226,7 +226,9 @@ async function main() {
       steps.push({ name: a.script, ok: true, minutes: 0, note: `skipped: ${a.needs} was not crawled tonight` });
       continue;
     }
-    const r = await run(a.script, a.log ?? a.script.replace(":", "-"));
+    // check:saves judges tonight's runs only: those started after this nightly did.
+    const extra = a.script === "check:saves" ? [`--since=${new Date(started).toISOString()}`] : [];
+    const r = await run(a.script, a.log ?? a.script.replace(":", "-"), extra);
     let note = a.what;
     if (a.script === "match") {
       const built = readFileSync(r.log, "utf8").match(/3\. group: ([\d,]+) group/)?.[1];

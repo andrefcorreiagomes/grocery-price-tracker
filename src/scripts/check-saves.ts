@@ -60,9 +60,35 @@ const say = (ok: boolean, line: string) => {
 /** How far back from a store's newest run another run counts as the same night. */
 const NIGHT_MS = 12 * 3_600_000;
 
+/**
+ * Tonight's start: `--since=<instant>`, which the nightly passes (its own start),
+ * or else 20 hours ago for a run by hand. A store whose newest run is older was
+ * not collected tonight, and must not pass on yesterday's figures (assumption
+ * 8.2, the audit of 25 October 2026).
+ */
+const since = (() => {
+  const raw = process.argv.slice(2).find((a) => a.startsWith("--since="))?.slice("--since=".length);
+  const at = raw ? new Date(raw) : new Date(Date.now() - 20 * 3_600_000);
+  if (!Number.isFinite(at.getTime())) throw new Error(`--since is not a date: "${raw}"`);
+  return at;
+})();
+
+/**
+ * Products on sale that tonight's run only looked at - a page that said gone or
+ * out of stock, or one that could not be reached - as a share of those on sale.
+ * Normally a few dozen; a store that refuses or blocks us leaves thousands
+ * looked at and not seen, which used to pass as "accounted for".
+ */
+const ONLY_LOOKED_AT_LIMIT = 0.02;
+
 async function checkStore(store: Store) {
   const run = await prisma.crawlRun.findFirst({ where: { store }, orderBy: { startedAt: "desc" }, select: { startedAt: true, durationMs: true } });
   if (!run) return console.log(`\n${store}: no run recorded`);
+  if (run.startedAt < since) {
+    console.log(`\n${store}`);
+    say(false, `not collected tonight: its newest run started ${run.startedAt.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" })}`);
+    return;
+  }
   const runEnd = new Date(run.startedAt.getTime() + (run.durationMs ?? NIGHT_MS));
   // Every instant a run of this night stamped on what it saved. Normally one:
   // the lock (run-lock.ts) allows one collection at a time. On the night of
@@ -136,6 +162,15 @@ async function checkStore(store: Store) {
   });
   say(forgotten.length === 0, `products on sale neither seen nor looked at tonight: ${forgotten.length.toLocaleString()}` +
     (forgotten.length ? `, e.g. ${forgotten.slice(0, 3).map((f) => `${f.storeProductId} ${f.name.slice(0, 30)}`).join("; ")}` : ""));
+
+  const onSale = await prisma.catalogueProduct.count({ where: { store, delistedAt: null } });
+  const onlyLookedAt = await prisma.catalogueProduct.count({
+    where: { store, delistedAt: null, lastSeenAt: { lt: first }, lastCheckedAt: { gte: first } },
+  });
+  const share = onSale ? onlyLookedAt / onSale : 0;
+  say(share <= ONLY_LOOKED_AT_LIMIT,
+    `products on sale only looked at tonight, not read (gone, out of stock or not reached): ${onlyLookedAt.toLocaleString()} ` +
+      `(${(share * 100).toFixed(1)}% of ${onSale.toLocaleString()}; above ${ONLY_LOOKED_AT_LIMIT * 100}% means pages were refused or blocked)`);
 }
 
 async function main() {
@@ -149,6 +184,11 @@ async function main() {
     `SELECT COUNT(*) AS n FROM (SELECT productId FROM CataloguePrice WHERE isOpen = 1 GROUP BY productId HAVING COUNT(*) > 1)`
   );
   say(Number(twoOpen[0].n) === 0, `products with two open price periods at once: ${Number(twoOpen[0].n)}`);
+  // A record set aside as "replaced" carries "~retired" in its number; live
+  // again, it is a second copy of the product now under that number (68 on
+  // 25 October 2026, assumption 2.13).
+  const retiredLive = await prisma.catalogueProduct.count({ where: { delistedAt: null, storeProductId: { contains: "~retired" } } });
+  say(retiredLive === 0, `records set aside as replaced that are on sale again (duplicates): ${retiredLive}`);
 
   for (const s of STORE_LIST) await checkStore(s.id);
 

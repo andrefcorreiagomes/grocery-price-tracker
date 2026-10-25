@@ -205,8 +205,14 @@ export async function staleDelisted(
 ): Promise<{ storeProductId: string; url: string }[]> {
   // Read in full and decided here: the rule compares two dates of one row,
   // which a database filter cannot. A few thousand rows at most.
+  // Never a product set aside as "replaced": its address belongs to its product
+  // number, and the number now belongs to the product that replaced it. Looking
+  // again read the new product's page into the old row and brought it back to
+  // life - 68 Continente products were in the catalogue twice on 25 October
+  // 2026 (assumption 2.13).
   const rows = await prisma.catalogueProduct.findMany({
-    where: { store, delistedAt: { not: null } },
+    // (an explicit null: "not replaced" alone would also drop rows with no reason)
+    where: { store, delistedAt: { not: null }, OR: [{ delistReason: null }, { delistReason: { not: "replaced" } }] },
     select: { storeProductId: true, url: true, delistedAt: true, lastCheckedAt: true },
   });
   return rows

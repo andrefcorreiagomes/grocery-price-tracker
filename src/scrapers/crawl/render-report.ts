@@ -807,9 +807,11 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
                 (x) => `    ${x.label.padEnd(24)} ${x.was} to ${x.now}`
               ),
             ]
-          : explain
-            ? ["", "  the store's published counts are unchanged since the last run"]
-            : []),
+          : !explain
+            ? []
+            : report.categories.publishedCountsCompared
+              ? ["", `  the store's published counts are unchanged since the last run (${report.categories.publishedCountsCompared} compared)`]
+              : ["", "  the store's published counts could not be compared with the last run (none matched)"]),
       ],
       explain
     )

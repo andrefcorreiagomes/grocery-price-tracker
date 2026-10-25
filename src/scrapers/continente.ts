@@ -3,6 +3,7 @@ import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
 import { detached, finiteOrNull, PageReadError, sellablePrice, type ScrapeResult } from "./types";
 import { sectionKey } from "../lib/store-sections";
+import { productIdFromUrl } from "./crawl/product-id";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -11,9 +12,27 @@ interface SchemaProduct {
   offers?: { price?: string | number };
 }
 
+/**
+ * Marked on a "gone" page that loaded at the product's own address instead of
+ * sending us elsewhere. Continente sends a product it no longer sells to its
+ * home page (assumption 2.6); a page that stays put but cannot be read may be a
+ * protection page or a changed layout instead (1.13). Counted apart in the
+ * nightly, to learn which kind "gone" really is before deciding (25 October
+ * 2026); still read as gone for now.
+ */
+export const STAYED_ON_PRODUCT_PAGE = "[stayed on the product's address]";
+
 export async function scrapeContinente(url: string): Promise<ScrapeResult> {
   const page = await fetchPage(url);
-  return { ...parseContinentePage(page.html, url), finalUrl: page.url };
+  try {
+    return { ...parseContinentePage(page.html, url), finalUrl: page.url };
+  } catch (error) {
+    if (error instanceof PageReadError && productIdFromUrl(page.url) !== null && productIdFromUrl(page.url) === productIdFromUrl(url)) {
+      // First, so it survives the 100-character cut the crawler keeps of a reason.
+      throw new PageReadError(`${STAYED_ON_PRODUCT_PAGE} ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 /** Reading a page, apart from fetching it, so it can be checked on a saved one. */

@@ -86,7 +86,7 @@ async function main() {
   const sample = arg("sample") ? Number(arg("sample")) : 0;
 
   const rows = await prisma.catalogueProduct.findMany({
-    select: { id: true, store: true, name: true, brand: true, price: true, url: true },
+    select: { id: true, store: true, name: true, brand: true, price: true, url: true, ean: true },
   });
   console.log(`Loaded ${rows.length.toLocaleString()} catalogue products.`);
 
@@ -96,6 +96,7 @@ async function main() {
     name: r.name,
     brand: r.brand,
     price: r.price,
+    ean: r.ean,
   }));
 
   const startedAt = Date.now();
@@ -103,6 +104,7 @@ async function main() {
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
 
   console.log(`\ngenerated ${pairs.length.toLocaleString()} pairs in ${elapsed}s`);
+  console.log(`  found only by a shared barcode: ${pairs.filter((p) => p.block === "barcode").length.toLocaleString()}`);
   console.log(`  comparisons scored:      ${stats.comparisons.toLocaleString()}`);
   console.log(`  lookups via brand block: ${stats.lookupsByBrand.toLocaleString()}`);
   console.log(`  lookups via token block: ${stats.lookupsByToken.toLocaleString()}`);

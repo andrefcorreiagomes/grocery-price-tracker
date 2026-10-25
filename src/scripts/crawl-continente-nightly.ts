@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db";
+import { STAYED_ON_PRODUCT_PAGE } from "../scrapers/continente";
 import { discoverProductUrls, fetchProducts, type ProductTarget } from "../scrapers/crawl/continente-products";
 import { discoverCategoryPaths, fetchPublishedCounts } from "../scrapers/crawl/continente-categories";
 import {
@@ -71,6 +72,11 @@ import { formatHttpStats, httpStats, wireBytesOf, requireCrawlerContact } from "
  */
 
 const STORE = "CONTINENTE" as const;
+
+/** How many "gone" pages loaded at the product's own address instead of sending us elsewhere (continente.ts). */
+function stayedPut(dead: { reason: string }[]): string {
+  return dead.filter((d) => d.reason.startsWith(STAYED_ON_PRODUCT_PAGE)).length.toLocaleString();
+}
 
 /** Verdicts re-checked per night, on top of the backlog budget. */
 const RECHECK_PER_NIGHT = 300;
@@ -351,6 +357,7 @@ async function main() {
   console.log(
     `  ${refresh.fetched.toLocaleString()} answered` +
       `, ${refresh.dead.length.toLocaleString()} gone` +
+      ` (${stayedPut(refresh.dead)} of them stayed on the product's address)` +
       `, ${refresh.nonFood.length.toLocaleString()} no longer food` +
       `, ${refresh.unreachable.length.toLocaleString()} unreachable`
   );
@@ -436,7 +443,8 @@ async function main() {
     console.log(
       `  ${newFood.length.toLocaleString()} are food and were added` +
         `, ${examine.nonFood.length.toLocaleString()} are not food` +
-        `, ${examine.dead.length.toLocaleString()} are gone`
+        `, ${examine.dead.length.toLocaleString()} are gone` +
+        ` (${stayedPut(examine.dead)} of them stayed on the product's address)`
     );
   }
 

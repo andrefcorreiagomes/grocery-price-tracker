@@ -66,6 +66,20 @@ export class PageReadError extends Error {
 }
 
 /**
+ * A page that loaded at the product's own address but could not be read. Unlike
+ * PageReadError it says nothing about the product - a protection page, a
+ * maintenance page or a changed layout looks like this - so it is "could not
+ * tell" (failedPageVerdict), never a night towards delisting (25 October 2026,
+ * assumption 1.13).
+ */
+export class UnreadablePageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnreadablePageError";
+  }
+}
+
+/**
  * At or below this a store is not quoting a price. Pingo Doce publishes "0,00 €"
  * for a product listed but not for sale, and one cent for a handful it cannot
  * price; nothing in a supermarket costs a cent, and the cheapest real price in

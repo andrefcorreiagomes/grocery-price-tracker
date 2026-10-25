@@ -157,8 +157,12 @@ async function main() {
   // hand (npm run crawl:pingodoce; code review M10). A department that cannot be
   // read is recorded and the run continues.
   const departmentCounts = fullRun ? await readPingoDoceDepartments() : [];
+  // Keyed by the department's display name ("Mercearia"), the name every reader
+  // looks it up by. Until 25 October 2026 it was keyed by the address word
+  // ("mercearia"), so no lookup ever found a count and the night-over-night
+  // comparison never ran, while the report said "unchanged" (assumption 3.10).
   const publishedCounts = new Map(
-    departmentCounts.flatMap((c) => (c.published === null ? [] : [[c.department.slug, c.published] as const]))
+    departmentCounts.flatMap((c) => (c.published === null ? [] : [[c.department.label, c.published] as const]))
   );
   const departmentsUnread = departmentCounts
     .filter((c) => c.published === null)

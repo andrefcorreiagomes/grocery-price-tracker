@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { crawlAuchan, type AuchanCrawlMode } from "../scrapers/crawl/auchan";
 import { isFoodSegment } from "../scrapers/crawl/auchan-categories";
+import { topSectionKind } from "../lib/store-sections";
 import { classifyAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { recordSections, sectionLines, sectionProblems } from "../scrapers/crawl/section-watch";
@@ -67,6 +68,10 @@ import { RUNS_BEFORE_ACCEPTING, judgeSitemap } from "../scrapers/crawl/sitemap-t
  */
 
 const STORE = "AUCHAN" as const;
+/** Below this many pages opened, a share of "gone" says little. */
+const AUCHAN_GONE_MIN_TRIED = 20;
+/** Share of opened pages reading "gone" above which the night is not believed (about 31% on 25 October 2026). */
+const AUCHAN_GONE_SHARE = 0.8;
 /** The nightly always walks the union of root and the departments. */
 const MODE: AuchanCrawlMode = "full";
 
@@ -299,6 +304,16 @@ async function main() {
     // once is a site fault, not turnover. Freeze delisting so an unattended
     // schedule cannot wipe the catalogue over three such nights.
     catastrophe = churnCatastropheReason({ dead: confirmedDead.length, attempted: live, complete, store: STORE });
+    // That share is of every product held (about 17,900), while only the few
+    // dozen missing from the walk are opened, so it could never fire (assumption
+    // 4.19, the audit of 25 October 2026). Judged on the pages actually opened:
+    // normally about a third answer gone; nearly all of them at once means a
+    // protection page or a broken page reader, not a store emptying its shelves.
+    if (!catastrophe && toConfirm.length >= AUCHAN_GONE_MIN_TRIED && confirmedDead.length / toConfirm.length > AUCHAN_GONE_SHARE) {
+      catastrophe =
+        `${confirmedDead.length} of the ${toConfirm.length} product pages opened read as gone ` +
+        `(more than ${AUCHAN_GONE_SHARE * 100}%) - a page reader or protection page, not turnover; nothing delisted tonight`;
+    }
     if (catastrophe) {
       console.log(`  !! ${catastrophe}`);
       await touchChecked(STORE, [...confirmedDead, ...unavailable, ...unreachable, ...alive], seenAt);
@@ -515,10 +530,17 @@ async function main() {
     );
   }
   for (const s of segmentDiff.vanished) {
+    // A seasonal or promotion aisle (halloween, natal, black-friday, a
+    // one-product leaflet) empties when its season ends; only a real food
+    // department vanishing means the walk missed it (assumption 4.11, found by
+    // the audit of 25 October 2026 before Halloween ended).
+    const seasonal = topSectionKind("AUCHAN", s.segment) === "mixed";
     report = escalate(
       report,
-      "FAIL",
-      `a food segment we kept last run is gone this run: "${s.segment}" (was ${s.count.toLocaleString()} products)`
+      seasonal ? "WARN" : "FAIL",
+      seasonal
+        ? `a seasonal or promotion aisle we kept last run is gone this run: "${s.segment}" (was ${s.count.toLocaleString()} products) - normal when a season or campaign ends`
+        : `a food segment we kept last run is gone this run: "${s.segment}" (was ${s.count.toLocaleString()} products)`
     );
   }
   if (catastrophe) report = escalate(report, "FAIL", catastrophe);

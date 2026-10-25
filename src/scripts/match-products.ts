@@ -38,6 +38,8 @@ interface ProductRow {
   name: string;
   brand: string | null;
   price: number | null;
+  onPromotion: boolean | null;
+  regularPrice: number | null;
   ean: string | null;
   packageSize: number | null;
   unit: string | null;
@@ -63,7 +65,14 @@ function toCandidate(p: ProductRow): Candidate {
     brand: p.brand ?? "",
     ean: p.ean,
     size,
-    unitPrice: size && p.price !== null && size.total > 0 ? p.price / size.total : null,
+    // The price before a promotion, when there is one: the euro/unit guard
+    // (matching.ts) is there to catch a misread size, and a half-price offer at
+    // one store held back 97 of 127 barcode matches on 25 October 2026 - the
+    // comparison vanished exactly when one store was much cheaper (6.8).
+    unitPrice: (() => {
+      const price = p.onPromotion && p.regularPrice !== null && p.price !== null && p.regularPrice > p.price ? p.regularPrice : p.price;
+      return size && price !== null && size.total > 0 ? price / size.total : null;
+    })(),
     ownBrand: isOwnBrand(p.brand, p.store),
   };
 }
@@ -82,6 +91,7 @@ async function main() {
     select: {
       id: true, store: true, name: true, brand: true, price: true,
       ean: true, packageSize: true, unit: true, delistedAt: true, supersededById: true,
+      onPromotion: true, regularPrice: true,
     },
   });
   const byId = new Map<string, ProductRow>(products.map((p) => [p.id, p]));

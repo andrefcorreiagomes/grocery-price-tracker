@@ -1,9 +1,10 @@
 import * as cheerio from "cheerio";
 import { normalizePingoDoceBrand } from "./brand-normalize";
-import { extractLdJsonBlocks, fetchHtml } from "./http";
+import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit } from "./page-size";
 import { struckPricePromotion } from "./struck-price";
-import { detached, PageReadError, sellablePrice, type ScrapeResult } from "./types";
+import { detached, PageReadError, sellablePrice, UnreadablePageError, type ScrapeResult } from "./types";
+import { productIdFromUrl } from "./crawl/product-id";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -12,7 +13,21 @@ interface SchemaProduct {
 }
 
 export async function scrapePingoDoce(url: string): Promise<ScrapeResult> {
-  return parsePingoDocePage(await fetchHtml(url), url);
+  const page = await fetchPage(url);
+  try {
+    return parsePingoDocePage(page.html, url);
+  } catch (error) {
+    // Pingo Doce answers a product it no longer sells with "not found" (404):
+    // all 161 "gone" pages on 25 October 2026 were. A page that loads at the
+    // product's own address but cannot be read is something else - a
+    // protection or maintenance page, a changed layout - and says nothing about
+    // the product, so it must not count towards delisting (assumption 1.13).
+    const asked = productIdFromUrl(url);
+    if (error instanceof PageReadError && asked !== null && productIdFromUrl(page.url) === asked) {
+      throw new UnreadablePageError(`${error.message} (the page loaded at the product's own address)`);
+    }
+    throw error;
+  }
 }
 
 /** Reading a page, apart from fetching it, so it can be checked on a saved one. */

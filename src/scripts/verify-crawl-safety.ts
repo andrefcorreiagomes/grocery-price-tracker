@@ -17,6 +17,7 @@ import {
   stoppedStores,
 } from "../scrapers/http";
 import { PageReadError } from "../scrapers/types";
+import { STAYED_ON_PRODUCT_PAGE } from "../scrapers/continente";
 import { fetchProducts } from "../scrapers/crawl/continente-products";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import {
@@ -89,8 +90,11 @@ function startServer(): Promise<{ base: string; close: () => void }> {
       req.socket.destroy();
     } else if (path.startsWith("/busy")) {
       res.writeHead(503, { "Retry-After": "0" }).end("busy");
-    } else if (path.startsWith("/empty")) {
+    } else if (path.startsWith("/empty") || path === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<html><body>Página sem produto</body></html>");
+    } else if (path.startsWith("/moved")) {
+      // A product no longer sold, sent on to the home page.
+      res.writeHead(302, { Location: "/" }).end();
     } else if (path.startsWith("/continente")) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(CONTINENTE_PAGE);
     } else {
@@ -120,25 +124,30 @@ async function verifyFailedPages() {
 
   const server = await startServer();
   try {
-    const paths = ["gone", "drop", "busy", "empty"];
+    // Addresses end in "-<number>.html", as the stores' do, so the product
+    // number can be read back from where the page landed.
+    const paths = ["gone", "drop", "busy", "empty", "moved"];
     const continente = await fetchProducts(
-      [...paths, "continente"].map((p, i) => ({ storeProductId: `${p}-${i}`, url: `${server.base}/${p}/${i}.html` })),
+      [...paths, "continente"].map((p, i) => ({ storeProductId: `${i}`, url: `${server.base}/${p}/produto-${i}.html` })),
       { isFood: () => true }
     );
-    check("Continente: the 404 and the page without a product are gone", ids(continente.dead) === "empty-3,gone-0", ids(continente.dead));
-    check("Continente: the cut connection and the 503 are could-not-tell", ids(continente.unreachable) === "busy-2,drop-1", ids(continente.unreachable));
+    check("Continente: the 404, the page without a product and the one sent home are gone", ids(continente.dead) === "0,3,4", ids(continente.dead));
+    check("Continente: the page without a product that stayed on its own address is marked apart",
+      continente.dead.filter((d) => d.reason.startsWith(STAYED_ON_PRODUCT_PAGE)).map((d) => d.storeProductId).join() === "3");
+    check("Continente: the cut connection and the 503 are could-not-tell", ids(continente.unreachable) === "1,2", ids(continente.unreachable));
     check("Continente: the real page is read", continente.fetched === 1 && continente.results[0]?.products[0]?.price === 2.49);
 
     const pingo = await fetchPingoDoceProducts(
       [...paths, "pingodoce"].map((p, i) => ({
-        storeProductId: `${p}-${i}`,
-        url: `${server.base}/${p}/${i}.html`,
+        storeProductId: `${i}`,
+        url: `${server.base}/${p}/produto-${i}.html`,
         section: "mercearia",
         categoryPath: "Mercearia/Conservas",
       }))
     );
-    check("Pingo Doce: the 404 and the page without a product are gone", ids(pingo.dead) === "empty-3,gone-0", ids(pingo.dead));
-    check("Pingo Doce: the cut connection and the 503 are could-not-tell", ids(pingo.unreachable) === "busy-2,drop-1", ids(pingo.unreachable));
+    check("Pingo Doce: the 404 and the page sent home are gone", ids(pingo.dead) === "0,4", ids(pingo.dead));
+    check("Pingo Doce: an unreadable page at the product's own address is could-not-tell, like the cut connection and the 503 (1.13)",
+      ids(pingo.unreachable) === "1,2,3", ids(pingo.unreachable));
     check("Pingo Doce: the real page is read", pingo.fetched === 1 && pingo.withSize === 1);
   } finally {
     server.close();
