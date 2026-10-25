@@ -12,7 +12,14 @@
 # Whatever happens, the night then runs - on the new code or on the old - and
 # the log says which. It never stops the nightly.
 
-cd "$(dirname "$0")/.." || exit 0
+# This file can be replaced by the very update it performs, and bash reads a
+# script as it runs: so it runs from a fixed copy.
+if [ -z "$UPDATE_COPY" ]; then
+  COPY=$(mktemp /tmp/update-before-nightly.XXXXXX)
+  cp "$0" "$COPY"
+  UPDATE_COPY=1 PROJECT="$(cd "$(dirname "$0")/.." && pwd)" exec bash "$COPY"
+fi
+cd "$PROJECT" || exit 0
 mkdir -p logs
 LOG="logs/update-before-nightly-$(date +%F).log"
 exec >>"$LOG" 2>&1
