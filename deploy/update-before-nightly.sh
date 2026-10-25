@@ -7,7 +7,7 @@
 #     NOT applied unattended: the old code stays and the log says a person is
 #     needed
 #   - if the packages changed, they are installed; if the new code does not
-#     type-check, the old code is put back
+#     type-check, or fails the automatic checks, the old code is put back
 #
 # Whatever happens, the night then runs - on the new code or on the old - and
 # the log says which. It never stops the nightly.
@@ -48,6 +48,9 @@ if git diff --name-only "$PREV" "$NEXT" | grep -q '^prisma/schema.prisma$'; then
   npx prisma generate >/dev/null 2>&1 || rollback "generating the database client failed"
 fi
 npx tsc --noEmit >/dev/null 2>&1 || rollback "the new code does not type-check"
+# The full automatic checks (about 1,000, on a copy of the database, no store
+# requests; about 2 minutes) - the owner's choice, 25 October 2026.
+npm run -s verify:nightly >"logs/update-before-nightly-checks-$(date +%F).log" 2>&1 || rollback "the new code fails the automatic checks (see logs/update-before-nightly-checks-$(date +%F).log)"
 
 echo "updated $(git rev-parse --short "$PREV") -> $(git rev-parse --short HEAD): $(git log -1 --format=%s)"
 exit 0

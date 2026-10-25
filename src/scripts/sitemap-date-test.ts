@@ -1,0 +1,105 @@
+import { prisma } from "../lib/db";
+
+/**
+ * `npm run sitemap:test`: does a store move a product's sitemap date whenever
+ * the product changes? (Assumptions 2.11 and 3.20; the user's question of
+ * 23 October 2026.) Read-only.
+ *
+ * If it does, the nightly could skip every page whose date did not move. So
+ * what matters most is the change that came WITHOUT a new date - the one a
+ * skip would miss - for every field we read, not only the price (the user,
+ * 25 October 2026: a store may correct something without touching the date).
+ *
+ * For each store and each night: the pages read, the changes found on them (by
+ * field), how many of those came with a new date, and the dates that moved with
+ * no change we could see. Size changes from a count being erased and refilled
+ * ("16 un" to nothing, before 25 October) are left out as noise. Last, over all
+ * nights, how often a real price change came with a new date, with a 95% upper
+ * bound on the share that does not (exact binomial, Clopper-Pearson).
+ */
+
+const STORES = ["CONTINENTE", "PINGO_DOCE"] as const;
+
+/** One-sided 95% upper bound on a proportion when `misses` of `n` failed (Clopper-Pearson, by bisection). */
+function upperBound(misses: number, n: number): number {
+  if (n === 0) return 1;
+  const cdf = (p: number) => {
+    // P(X <= misses) for X ~ Binomial(n, p)
+    let sum = 0;
+    let term = Math.pow(1 - p, n);
+    for (let k = 0; k <= misses; k++) {
+      sum += term;
+      term *= ((n - k) / (k + 1)) * (p / (1 - p));
+    }
+    return sum;
+  };
+  let lo = misses / n, hi = 1;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (cdf(mid) > 0.05) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+
+const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
+
+async function main() {
+  console.log("Does a new sitemap date come with every change? (read-only)");
+  for (const store of STORES) {
+    const nights = (await prisma.sitemapDate.groupBy({ by: ["firstSeenAt"], where: { store }, _count: true }))
+      .map((g) => g.firstSeenAt)
+      .sort((a, b) => +a - +b);
+    console.log(`\n${store}: ${nights.length} night(s) on which dates moved (the first only records them)`);
+    if (nights.length === 0) continue;
+    // A night on which no date moved leaves no row, so the latest run closes
+    // the last stretch: changes read since then came with no new date at all
+    // (Continente, 23-25 October: 25 price changes, not one date).
+    const latest = (await prisma.crawlRun.findFirst({ where: { store }, orderBy: { startedAt: "desc" }, select: { startedAt: true } }))?.startedAt;
+    if (latest && latest > nights[nights.length - 1]) nights.push(latest);
+    let pricesTotal = 0, pricesWithDate = 0;
+    for (let i = 1; i < nights.length; i++) {
+      const from = nights[i - 1];
+      const to = nights[i];
+      // Every page change read after the previous dates were taken, up to tonight.
+      const changes = (await prisma.pageChange.findMany({
+        where: { store, seenAt: { gt: from, lte: to } },
+        select: { storeProductId: true, field: true, before: true, after: true },
+      })).filter((c) => !(c.field === "size" && c.after === null && / un$/.test(c.before ?? "")));
+      const moved = new Set((await prisma.sitemapDate.findMany({ where: { store, firstSeenAt: to }, select: { storeProductId: true } })).map((d) => d.storeProductId));
+      const read = await prisma.catalogueProduct.count({ where: { store, lastSeenAt: to } });
+
+      console.log(`  night of ${to.toISOString().slice(0, 10)}: ${read.toLocaleString()} pages read, ${moved.size.toLocaleString()} dates moved`);
+      const byField = new Map<string, { all: number; withDate: number }>();
+      for (const c of changes) {
+        const kind = c.field === "price" && (c.before === null || c.after === null) ? "price (became / stopped being unavailable)" : c.field;
+        const f = byField.get(kind) ?? { all: 0, withDate: 0 };
+        f.all++;
+        if (moved.has(c.storeProductId)) f.withDate++;
+        byField.set(kind, f);
+      }
+      for (const [field, f] of [...byField].sort()) {
+        console.log(`    ${field.padEnd(44)} ${String(f.all).padStart(5)} changed, ${String(f.withDate).padStart(5)} with a new date, ${String(f.all - f.withDate).padStart(5)} WITHOUT`);
+      }
+      const changedIds = new Set(changes.map((c) => c.storeProductId));
+      const silent = [...moved].filter((id) => !changedIds.has(id)).length;
+      console.log(`    dates that moved with no change we could see: ${silent.toLocaleString()}`);
+      const p = byField.get("price");
+      if (p) {
+        pricesTotal += p.all;
+        pricesWithDate += p.withDate;
+      }
+    }
+    const misses = pricesTotal - pricesWithDate;
+    console.log(
+      `  all nights: ${pricesWithDate} of ${pricesTotal} price changes came with a new date` +
+        (!pricesTotal
+          ? ""
+          : pricesWithDate === 0
+            ? " - the dates do not follow prices here"
+            : `; at 95% confidence, at most ${pct(upperBound(misses, pricesTotal))} of price changes come without one`)
+    );
+  }
+}
+
+main().finally(() => prisma.$disconnect());
