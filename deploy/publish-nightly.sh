@@ -8,7 +8,7 @@
 # ~/poupa-facil-private and pushes it with that repository's own key. Never
 # stops anything: a failure is logged and the next night tries again.
 
-PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT="${PROJECT:-$(cd "$(dirname "$0")/.." && pwd)}"
 NOTES="$HOME/poupa-facil-private"
 cd "$PROJECT" || exit 0
 mkdir -p logs
@@ -25,9 +25,11 @@ mkdir -p "$OUT"
 
 [ -f "$NIGHT_DIR/summary.md" ] && cp "$NIGHT_DIR/summary.md" "$OUT/summary.md" || echo "the night has no summary (still running, or stopped early)" > "$OUT/summary.md"
 
-# Each store's newest report written since the night began (file names are UTC).
+# Each store's newest report written since the night began (by the time each
+# file was written; its NAME is in UTC). Not "newer than the night's log
+# folder": the folder's time moves with every file added to it.
 for store in continente pingo_doce auchan; do
-  f=$(find reports -maxdepth 1 -name "${store}-*.md" -newer "$NIGHT_DIR" 2>/dev/null | sort | tail -1)
+  f=$(find reports -maxdepth 1 -name "${store}-*.md" -newermt "$DAY 00:00" 2>/dev/null | sort | tail -1)
   [ -n "$f" ] && cp "$f" "$OUT/$store.md" || echo "no report from $store for this night" > "$OUT/$store.md"
 done
 
@@ -49,8 +51,18 @@ cat "logs/update-before-nightly-$DAY.log" > "$OUT/update.txt" 2>/dev/null || ech
     echo "--- $store: last lines"
     tail -n 30 "$NIGHT_DIR/$store.log" 2>/dev/null
   done
-  echo "--- every warning line (!!) of the night"
-  grep -h "!!" "$NIGHT_DIR"/*.log 2>/dev/null || echo "(none)"
+  # Only the store collections' warnings: the automatic checks print "!!" lines
+  # too, from a pretend store on the server itself (127.0.0.1) that they block
+  # on purpose, and a reader cannot tell those apart.
+  echo "--- every warning line (!!) of the three store collections"
+  grep -H "!!" "$NIGHT_DIR"/continente.log "$NIGHT_DIR"/pingodoce.log "$NIGHT_DIR"/auchan.log 2>/dev/null || echo "(none)"
+  # Why a step "needs a look": the end of its own log (e.g. matching running
+  # out of memory on 25 October 2026 - the summary alone does not say).
+  for step in $(grep -o '^| [^|]* | \*\*needs a look\*\*' "$NIGHT_DIR/summary.md" 2>/dev/null | sed -E 's/^\| ([^|]*[^ ]) +\|.*/\1/' | sort -u); do
+    for log in "$NIGHT_DIR/${step//:/-}.log" "$NIGHT_DIR/${step//:/-}-1.log" "$NIGHT_DIR/${step//:/-}-2.log"; do
+      [ -f "$log" ] && { echo "--- $(basename "$log"): last lines (this step needs a look)"; tail -n 25 "$log"; }
+    done
+  done
 } > "$OUT/logs-tail.txt"
 
 cd "$NOTES" || exit 0
