@@ -93,8 +93,11 @@ export async function classifyAuchanPage(url: string): Promise<{ status: AuchanP
 }
 
 export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
-  const html = await fetchHtml(url);
+  return parseAuchanPage(await fetchHtml(url), url);
+}
 
+/** Reading a page, apart from fetching it, so it can be checked on a saved one. */
+export function parseAuchanPage(html: string, url: string): ScrapeResult {
   const product = extractLdJsonBlocks(html).find(
     (block): block is SchemaProduct =>
       typeof block === "object" &&

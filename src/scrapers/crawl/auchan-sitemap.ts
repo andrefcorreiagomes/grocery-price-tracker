@@ -24,6 +24,8 @@ export const AUCHAN_SITEMAP_INDEX = "https://www.auchan.pt/sitemap_index.xml";
 export interface AuchanSitemap {
   /** every product id the product files list */
   ids: Set<string>;
+  /** each id's address, which names its shelf */
+  urls: Map<string, string>;
   /** entries per file, in the order the index lists them */
   perFile: { url: string; entries: number }[];
 }
@@ -44,9 +46,43 @@ export function auchanIdFromUrl(url: string): string | null {
 
 /** The ids one product file lists. Pure, for the checks. */
 export function idsFromProductSitemap(xml: string): string[] {
+  return urlsFromProductSitemap(xml).map(([id]) => id);
+}
+
+/** The ids one product file lists, each with its address. Pure, for the checks. */
+export function urlsFromProductSitemap(xml: string): [string, string][] {
   return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)]
-    .map((m) => auchanIdFromUrl(m[1]))
-    .filter((id): id is string => id !== null);
+    .map((m) => [auchanIdFromUrl(m[1]), m[1].replace(/&amp;/g, "&")] as const)
+    .filter((p): p is [string, string] => p[0] !== null);
+}
+
+/**
+ * The shelf an Auchan address names: ".../pt/alimentacao/mercearia/arroz/
+ * arroz-carolino-auchan-1kg/10.html" gives "alimentacao/mercearia/arroz".
+ * The address's words carry no accents ("alimentacao"), unlike the shelf on a
+ * listing tile ("alimentação"); the shelf decisions compare both without
+ * accents (sectionKey). Null when the address has no shelf. Pure.
+ */
+export function shelfFromAuchanUrl(url: string): string | null {
+  let parts: string[];
+  try {
+    parts = decodeURIComponent(new URL(url).pathname).split("/").filter(Boolean);
+  } catch {
+    return null;
+  }
+  // ["pt", shelf..., product-slug, "<id>.html"]
+  const shelf = parts.slice(1, -2);
+  return shelf.length ? shelf.join("/") : null;
+}
+
+/** A readable name from the address alone: "arroz-carolino-auchan-1kg" gives "arroz carolino auchan 1kg". Pure. */
+export function nameFromAuchanUrl(url: string): string {
+  try {
+    const parts = decodeURIComponent(new URL(url).pathname).split("/").filter(Boolean);
+    return (parts[parts.length - 2] ?? "").replace(/-+/g, " ").trim();
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -76,11 +112,15 @@ export async function readAuchanSitemap(): Promise<AuchanSitemap> {
   const files = productSitemapsFromIndex(await fetchHtml(AUCHAN_SITEMAP_INDEX));
   if (files.length === 0) throw new Error("the sitemap index listed no product file");
   const ids = new Set<string>();
+  const urls = new Map<string, string>();
   const perFile: { url: string; entries: number }[] = [];
   for (const url of files) {
-    const listed = idsFromProductSitemap(await fetchHtml(url));
-    for (const id of listed) ids.add(id);
+    const listed = urlsFromProductSitemap(await fetchHtml(url));
+    for (const [id, address] of listed) {
+      ids.add(id);
+      urls.set(id, address);
+    }
     perFile.push({ url, entries: listed.length });
   }
-  return { ids, perFile };
+  return { ids, urls, perFile };
 }

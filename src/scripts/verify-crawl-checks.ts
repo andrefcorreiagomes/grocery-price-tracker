@@ -7,7 +7,7 @@ import { buildRotationReport } from "../scrapers/crawl/rotation-report";
 import { compareWithBaseline, MIN_SECTION_FOR_DROP, sectionWarnings } from "../scrapers/crawl/history";
 import { detached } from "../scrapers/types";
 import { discoverProductUrls } from "../scrapers/crawl/continente-products";
-import { idsFromProductSitemap, missingProductVerdict } from "../scrapers/crawl/auchan-sitemap";
+import { idsFromProductSitemap, missingProductVerdict, nameFromAuchanUrl, shelfFromAuchanUrl, urlsFromProductSitemap } from "../scrapers/crawl/auchan-sitemap";
 import { productSitemapsFromIndex } from "../scrapers/crawl/sitemap-index";
 import { backlogOrder, looksLikeFood, nameFromProductUrl } from "../scrapers/crawl/continente-backlog";
 import { createServer } from "node:http";
@@ -79,6 +79,14 @@ function verifyAuchanSitemap() {
     "<url><loc>https://www.auchan.pt/pt/alimentacao/categoria-sem-produto/</loc></url></urlset>";
   check("a product file gives the ids we store, food or not; other addresses are ignored",
     idsFromProductSitemap(file).join() === "10,3466535", idsFromProductSitemap(file).join());
+  // The Auchan catch-up (26 October 2026) reads the shelf and a name from the address.
+  const rice = urlsFromProductSitemap(file)[0]?.[1] ?? "";
+  check("each id keeps its address", rice.endsWith("/arroz-carolino-auchan-1kg/10.html"), rice);
+  check("the address names the shelf, without the product's own words",
+    shelfFromAuchanUrl(rice) === "alimentacao/mercearia/arroz", String(shelfFromAuchanUrl(rice)));
+  check("and a readable name", nameFromAuchanUrl(rice) === "arroz carolino auchan 1kg", nameFromAuchanUrl(rice));
+  check("an address with accents encoded is read with them",
+    shelfFromAuchanUrl("https://www.auchan.pt/pt/biol%C3%B3gicos-e-alternativas/vegan/x/1.html") === "biológicos-e-alternativas/vegan");
 
   const listed = new Set(["1", "2"]);
   const v = (page: "gone" | "unavailable" | "alive" | "unreachable", id: string, list: Set<string> | null = listed) =>
