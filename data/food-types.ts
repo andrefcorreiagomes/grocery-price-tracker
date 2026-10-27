@@ -712,8 +712,12 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // seitan, tempeh and riced vegetables are ingredients too - but a name that
   // only CONTAINS one of them ("LUNCH BOWL BULGUR", "BOLONHESA SEITAN",
   // "TOPOKKI ... KIMCHI") can still be a meal. 17 October 2026.
+  // Protein powders are not meals either: on 26 October 2026 Auchan moved them
+  // to a shelf "refeições e proteína" ("meals and protein"), which made four of
+  // them ready meals. Only names that START with protein: "Falafel de Proteína
+  // Vegetal" stays a meal.
   { id: "refeicao", label: "Refeição pronta", unit: "kg", heads: ["refeicao"],
-    exclude: /\b(fuba|flocao|canjic\w*|canjiquinha|xerem|sagu|farofa|mandioca|palmito|chucrute|jalapeno|tofu|tempeh|riced|veggie rice)\b|^(bulgur|seitan|kimchi)\b|trigo para kibe|preparados? (koala|duncan|mississippi)|mistura preparada|base (de pinsa|sopa)/i },
+    exclude: /\b(fuba|flocao|canjic\w*|canjiquinha|xerem|sagu|farofa|mandioca|palmito|chucrute|jalapeno|tofu|tempeh|riced|veggie rice)\b|^(bulgur|seitan|kimchi)\b|^(mix )?proteinas?\b|trigo para kibe|preparados? (koala|duncan|mississippi)|mistura preparada|base (de pinsa|sopa)/i },
   // Savoury: the sweet ones (apple, chocolate, guava) are set aside with the
   // sweets. 17 October 2026.
   { id: "folhado", label: "Folhado", unit: "kg", heads: ["folhado"],

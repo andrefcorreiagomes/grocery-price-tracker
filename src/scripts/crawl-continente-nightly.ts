@@ -26,7 +26,7 @@ import {
   type CheckResult,
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
+import { countPromotionEndings, pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
 import { backlogOrder, isContinenteFood, saveGrouped } from "../scrapers/crawl/continente-backlog";
 import { buildDailyReport, mergeResultsByLabel, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
@@ -449,6 +449,10 @@ async function main() {
   }
 
   const held = writer.finish();
+  // A promotion reaching its end is the store's doing, not a misread number,
+  // and does not count towards the price alarm (as at Pingo Doce, 27 October 2026).
+  const promotionEnds = await countPromotionEndings(STORE, fieldsBefore, seenAt);
+  console.log(`price changes that were only a promotion ending: ${promotionEnds.toLocaleString()}`);
 
   // Guard 3 and the parser-regression brakes. Every one of these asks the same
   // question: is this many at once plausible as the STORE changing, or is it our
@@ -459,7 +463,7 @@ async function main() {
     swaps: held.swaps.length,
     lost: held.barcodesLost,
     compared: held.barcodesCompared,
-    changed: held.prices.changed,
+    changed: held.prices.changed - promotionEnds,
     priced: held.prices.changed + held.prices.unchanged,
     complete,
   });

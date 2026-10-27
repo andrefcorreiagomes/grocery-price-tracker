@@ -77,6 +77,36 @@ function fieldsOf(r: Row): PageFields {
   };
 }
 
+/**
+ * A price change that is only a promotion reaching its end: on promotion
+ * before, not now, and the new price is exactly the old crossed-out price.
+ * On 27 October 2026, 1,864 of Pingo Doce's 2,222 price changes were this, when
+ * a campaign ending on 26 October expired - and the price alarm, which takes a
+ * third of prices moving at once for a misread number, fired falsely. Pure.
+ */
+export function isPromotionEnding(before: PageFields, now: PageFields): boolean {
+  const cents = (v: number | null) => (v === null ? null : Math.round(v * 100));
+  return (
+    before.promotion === true &&
+    now.promotion !== true &&
+    before.regularPrice !== null &&
+    now.price !== null &&
+    cents(now.price) === cents(before.regularPrice) &&
+    cents(before.price) !== cents(now.price)
+  );
+}
+
+/** How many of tonight's price changes were only promotions ending (isPromotionEnding). */
+export async function countPromotionEndings(store: Store, before: Map<string, PageFields>, seenAt: Date): Promise<number> {
+  const rows = await prisma.catalogueProduct.findMany({ where: { store, lastSeenAt: seenAt }, select: SELECT });
+  let endings = 0;
+  for (const r of rows) {
+    const b = before.get(r.storeProductId);
+    if (b && isPromotionEnding(b, fieldsOf(r))) endings++;
+  }
+  return endings;
+}
+
 /** Every product's fields before the run writes over them. */
 export async function pageFieldsBefore(store: Store): Promise<Map<string, PageFields>> {
   const rows = await prisma.catalogueProduct.findMany({ where: { store }, select: SELECT });

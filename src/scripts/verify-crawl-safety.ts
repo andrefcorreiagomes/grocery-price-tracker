@@ -37,7 +37,7 @@ import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "
 import { buildGroups, shownOnSite } from "../lib/grouping";
 import { auchanBarcodeFromHtml } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { changedFields, pageFieldsBefore, recordPageChanges, recordSitemapDates, type PageFields } from "../scrapers/crawl/sitemap-dates";
+import { changedFields, isPromotionEnding, pageFieldsBefore, recordPageChanges, recordSitemapDates, type PageFields } from "../scrapers/crawl/sitemap-dates";
 import { cheapestPerStore } from "../lib/comparison";
 
 /**
@@ -565,6 +565,14 @@ async function verifySitemapDates() {
   console.log("\n  the sitemap-date test: what is kept each night");
   const base: PageFields = { price: 1.99, name: "Atum", brand: "Bom Petisco", size: "0.12 kg", shelf: "Mercearia", promotion: false, regularPrice: null, barcode: "5601234567897" };
   check("nothing changed, nothing kept", changedFields(base, { ...base, price: 1.9900000001 }).length === 0);
+  // A promotion reaching its end is not a misread price (27 October 2026).
+  const onOffer: PageFields = { ...base, price: 1.49, promotion: true, regularPrice: 1.99 };
+  check("a promotion ending, back to the crossed-out price, is recognised",
+    isPromotionEnding(onOffer, { ...base, price: 1.99, promotion: false, regularPrice: null }));
+  check("but not a new price, a promotion that continues, or one that ends at another price",
+    !isPromotionEnding(base, { ...base, price: 2.49 }) &&
+      !isPromotionEnding(onOffer, { ...onOffer, price: 1.39 }) &&
+      !isPromotionEnding(onOffer, { ...base, price: 2.29, promotion: false, regularPrice: null }));
   const diff = changedFields(base, { ...base, price: 2.19, name: "Atum em Azeite" });
   check("a new price and a new name are each kept, with before and after",
     diff.map((d) => `${d.field}:${d.before}>${d.after}`).join() === "price:1.99>2.19,name:Atum>Atum em Azeite", diff.map((d) => d.field).join());

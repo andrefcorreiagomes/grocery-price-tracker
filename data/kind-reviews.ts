@@ -1274,4 +1274,12 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 4, store: "AUCHAN", id: "3860732", name: "GOIABADA PREDILECTA TURMA DA MÓNICA 30G", kind: null, why: "Guava paste." },
   { batch: 4, store: "AUCHAN", id: "3927180", name: "PAPPARDELLE IGLO BOLONHESA 300G", kind: "refeicao", why: "A ready pasta dish, as at Continente." },
   { batch: 5, store: "AUCHAN", id: "997170", name: "RISOTTO RISO GALLO 4 QUEIJOS 175G", kind: "refeicao", why: "A ready risotto (group 4.16), moved by Auchan to arroz-e-massa/massas-especialidades on 22 October 2026." },
+  // 27 October 2026, approved by the user: verified kinds that Auchan's move of
+  // these products to new shelves on 26 October had changed (the nightly's
+  // verified-kinds check caught them).
+  { batch: 6, store: "AUCHAN", id: "3195459", name: "MIX PROTEÍNAS VEGETAIS SHINE CACAU BIO 250G", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
+  { batch: 6, store: "AUCHAN", id: "3195461", name: "MIX PROTEÍNAS VEGETAIS SHINE BANANA BIO 250G", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
+  { batch: 6, store: "AUCHAN", id: "3705241", name: "PROTEÍNA DE CÂNHAMO PRÓVIDA 250G", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
+  { batch: 6, store: "AUCHAN", id: "3773033", name: "PROTEINA CANHAMO SHINE 100GR", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
+  { batch: 6, store: "AUCHAN", id: "1178113", name: "PASTÉIS DELAVIUDA DE GEMA 300G", kind: "bolo", why: "Egg-yolk pastries, a cake as verified; moved to the chocolates shelf on 26 October 2026." },
 ];

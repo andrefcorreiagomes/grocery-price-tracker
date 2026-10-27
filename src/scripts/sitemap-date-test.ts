@@ -66,33 +66,51 @@ async function main() {
         where: { store, seenAt: { gt: from, lte: to } },
         select: { storeProductId: true, field: true, before: true, after: true },
       })).filter((c) => !(c.field === "size" && c.after === null && / un$/.test(c.before ?? "")));
-      const moved = new Set((await prisma.sitemapDate.findMany({ where: { store, firstSeenAt: to }, select: { storeProductId: true } })).map((d) => d.storeProductId));
+      // A date that moves the night AFTER counts too: we read the list at 00:05,
+      // but a store makes its list before then, so a change at midnight - a
+      // promotion ending - can only reach the next night's list (27 October
+      // 2026: 2,195 Pingo Doce promotions ended at midnight with no new date
+      // that night).
+      const datesOf = async (at: Date | undefined) =>
+        at ? (await prisma.sitemapDate.findMany({ where: { store, firstSeenAt: at }, select: { storeProductId: true } })).map((d) => d.storeProductId) : [];
+      const movedSame = new Set(await datesOf(to));
+      const next = nights[i + 1];
+      const movedNext = new Set(await datesOf(next));
+      const moved = new Set([...movedSame, ...movedNext]);
+      if (!next) console.log("  (the night after has not been read yet: a date that moves then is not counted here)");
       const read = await prisma.catalogueProduct.count({ where: { store, lastSeenAt: to } });
 
-      console.log(`  night of ${to.toISOString().slice(0, 10)}: ${read.toLocaleString()} pages read, ${moved.size.toLocaleString()} dates moved`);
-      const byField = new Map<string, { all: number; withDate: number }>();
+      // Pages read count only while they still carry this night's stamp, i.e. for the latest night.
+      console.log(`  night of ${to.toISOString().slice(0, 10)}: ${read ? `${read.toLocaleString()} pages read, ` : ""}${movedSame.size.toLocaleString()} dates moved`);
+      const byField = new Map<string, { all: number; withDate: number; sameNight: number }>();
       for (const c of changes) {
         const kind = c.field === "price" && (c.before === null || c.after === null) ? "price (became / stopped being unavailable)" : c.field;
-        const f = byField.get(kind) ?? { all: 0, withDate: 0 };
+        const f = byField.get(kind) ?? { all: 0, withDate: 0, sameNight: 0 };
         f.all++;
         if (moved.has(c.storeProductId)) f.withDate++;
+        if (movedSame.has(c.storeProductId)) f.sameNight++;
         byField.set(kind, f);
       }
       for (const [field, f] of [...byField].sort()) {
-        console.log(`    ${field.padEnd(44)} ${String(f.all).padStart(5)} changed, ${String(f.withDate).padStart(5)} with a new date, ${String(f.all - f.withDate).padStart(5)} WITHOUT`);
+        console.log(
+          `    ${field.padEnd(44)} ${String(f.all).padStart(5)} changed, ${String(f.withDate).padStart(5)} with a new date ` +
+            `(${f.sameNight} the same night), ${String(f.all - f.withDate).padStart(5)} WITHOUT`
+        );
       }
       const changedIds = new Set(changes.map((c) => c.storeProductId));
-      const silent = [...moved].filter((id) => !changedIds.has(id)).length;
+      const silent = [...movedSame].filter((id) => !changedIds.has(id)).length;
       console.log(`    dates that moved with no change we could see: ${silent.toLocaleString()}`);
       const p = byField.get("price");
-      if (p) {
+      // A night whose next night has not been read yet is left out of the
+      // running total: its dates may still move.
+      if (p && next) {
         pricesTotal += p.all;
         pricesWithDate += p.withDate;
       }
     }
     const misses = pricesTotal - pricesWithDate;
     console.log(
-      `  all nights: ${pricesWithDate} of ${pricesTotal} price changes came with a new date` +
+      `  all nights whose next night was read: ${pricesWithDate} of ${pricesTotal} price changes came with a new date (that night or the next)` +
         (!pricesTotal
           ? ""
           : pricesWithDate === 0
