@@ -26,7 +26,7 @@ import {
   type CheckResult,
 } from "../scrapers/crawl/product-checks";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { countPromotionEndings, pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
+import { countPromotionEndings, pageFieldsBefore, recordPageChanges } from "../scrapers/crawl/sitemap-dates";
 import { backlogOrder, isContinenteFood, saveGrouped } from "../scrapers/crawl/continente-backlog";
 import { buildDailyReport, mergeResultsByLabel, snapshotBefore, type DailyReport, type ProductNote } from "../scrapers/crawl/daily-report";
 import { buildRotationReport } from "../scrapers/crawl/rotation-report";
@@ -144,9 +144,12 @@ async function main() {
     console.log(`  could not read the sitemap: ${sitemapError}`);
     console.log("  skipping discovery for tonight; the price refresh continues");
   }
-  // The sitemap-date test: each product's date, whenever it changes.
-  const dates = await recordSitemapDates(STORE, sitemapLastmod, seenAt);
-  console.log(`  sitemap dates: ${dates.changed.toLocaleString()} changed since the last run, ${dates.first.toLocaleString()} recorded for the first time`);
+  // Continente's sitemap dates are no longer recorded (the user's decision,
+  // 28 October 2026). The test answered: since Continente began rebuilding
+  // its sitemap each night, the dates move for almost every address - 77,623
+  // of 78,305 on 28 October with no change on the page - so they cannot tell
+  // which pages changed, and recording them added about 78,000 rows (15 MB)
+  // a night. The dates are still read, to put the newest addresses first.
 
   // The last sitemap we BELIEVED is the baseline; everything since then is
   // evidence about whether a change is a glitch or the new normal. Both are

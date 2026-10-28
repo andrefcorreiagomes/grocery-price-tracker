@@ -18,7 +18,8 @@ import { prisma } from "../lib/db";
  * bound on the share that does not (exact binomial, Clopper-Pearson).
  */
 
-const STORES = ["CONTINENTE", "PINGO_DOCE"] as const;
+// Continente's dates are no longer recorded since 28 October 2026 (crawl-continente-nightly.ts).
+const STORES = ["PINGO_DOCE"] as const;
 
 /** One-sided 95% upper bound on a proportion when `misses` of `n` failed (Clopper-Pearson, by bisection). */
 function upperBound(misses: number, n: number): number {
