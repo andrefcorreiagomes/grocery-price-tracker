@@ -14,7 +14,7 @@ import {
 } from "../scrapers/crawl/auchan-health";
 import { MIN_ATTEMPTED, isPriceChurnStorm, PRICE_CHURN_LIMIT } from "../scrapers/crawl/reidentification";
 import { parseAuchanTilesDetailed, parseAuchanTotal } from "../scrapers/search/auchan";
-import { auchanStatusFromHtml } from "../scrapers/auchan";
+import { auchanStatusFromHtml, parseAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { recordDead, recordUnavailable, touchChecked, UNAVAILABLE_RECHECK_DAYS } from "../scrapers/crawl/product-checks";
 import { recordRun } from "../scrapers/crawl/history";
@@ -282,6 +282,18 @@ export async function verifyAuchanNightly(): Promise<number> {
   check(
     "OutOfStock with no price is still unavailable",
     auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { availability: OUT } })) === "unavailable"
+  );
+  // As on 4 of 5 never-held pages opened on 29 October 2026: InStock, no price.
+  check(
+    "InStock with no price reads as unavailable, not alive",
+    auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { url: {}, "@type": "Offer", priceCurrency: null, availability: "http://schema.org/InStock" } })) === "unavailable"
+  );
+  check(
+    "and its page is read, as a product with no price",
+    (() => {
+      const p = parseAuchanPage(ldPage({ "@type": "Product", name: "MEL HPERFECT CANELA 130G", offers: { availability: "http://schema.org/InStock" } }), "mel");
+      return p.price === null && p.name === "MEL HPERFECT CANELA 130G" && p.packageSize === 0.13;
+    })()
   );
   check(
     "a product with no availability stated reads as alive",

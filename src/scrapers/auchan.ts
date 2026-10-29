@@ -15,7 +15,8 @@ interface SchemaProduct {
  *
  *   alive       the page answers and the product is IN STOCK - live, just absent
  *               from the grid we walked (a hole in the walk).
- *   unavailable the page answers and the offer says OutOfStock. Listed, not
+ *   unavailable the page answers and the offer says OutOfStock, or carries no
+ *               price at all (since 29 October 2026). Listed, not
  *               sellable, not gone. Measured against the live site: out-of-stock
  *               products usually KEEP their price and flip `availability`, so the
  *               signal is availability, not a missing price. Its grid tile is
@@ -58,7 +59,17 @@ export function auchanStatusFromHtml(html: string): "alive" | "unavailable" | "g
       typeof block === "object" && block !== null && (block as SchemaProduct)["@type"] === "Product"
   );
   if (!product) return NOT_FOUND_PAGE.test(html) ? "gone" : "unreachable";
+  // A page with no price at all is not for sale online, whatever its
+  // availability says: 4 of 5 such pages opened on 29 October 2026 said
+  // InStock, with an empty price box (assumption 4.26). With no online price we
+  // take the store as not selling it (the user's rule, 29 October 2026).
+  if (!hasPrice(product)) return "unavailable";
   return NOT_SELLABLE.test(String(product.offers?.availability ?? "")) ? "unavailable" : "alive";
+}
+
+function hasPrice(product: SchemaProduct): boolean {
+  const price = product.offers?.price;
+  return price !== undefined && price !== null && String(price).trim() !== "";
 }
 
 /** The barcode in a product page's structured data (`gtin`), or null. */
@@ -105,8 +116,8 @@ export function parseAuchanPage(html: string, url: string): ScrapeResult {
       (block as SchemaProduct)["@type"] === "Product"
   );
 
-  if (!product || product.offers?.price === undefined) {
-    throw new PageReadError(`Auchan: could not find product/price data at ${url}`);
+  if (!product) {
+    throw new PageReadError(`Auchan: could not find product data at ${url}`);
   }
 
   const name = product.name ?? "";
@@ -114,7 +125,9 @@ export function parseAuchanPage(html: string, url: string): ScrapeResult {
   return {
     name,
     brand: product.brand?.name ?? null,
-    price: sellablePrice(Number(product.offers.price)),
+    // No price on the page: listed, not for sale online (auchanStatusFromHtml).
+    // Until 29 October 2026 such a page was unreadable and the product never saved.
+    price: hasPrice(product) ? sellablePrice(Number(product.offers?.price)) : null,
     ean: product.gtin ?? null,
     categoryPath: null,
     // Auchan writes the size into the product name itself - "BACON EXTRA CUBOS
@@ -123,7 +136,7 @@ export function parseAuchanPage(html: string, url: string): ScrapeResult {
     // source here, and no separate label needs parsing.
     packageSize: parseSize(name)?.total ?? null,
     packageUnit: parseSize(name)?.unit ?? null,
-    ...parsePromotion(product.offers.priceValidUntil),
+    ...parsePromotion(product.offers?.priceValidUntil),
     // Not read here: Auchan's nightly takes the store's per-kilo figure from its
     // listing tiles, and which figure on this page is the product's own (not a
     // carousel's) has not been checked.
