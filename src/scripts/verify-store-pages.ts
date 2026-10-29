@@ -48,6 +48,14 @@ const UNAVAILABLE =
   product("Bolo") +
   `<div class="product-promotion-info"><span class="product-promo-end">Promo&ccedil;&atilde;o at&eacute; 26/10</span></div><div class="prices"><div class="price"><span class="sales">0,00 &euro;</span><span class="strike-through list"><span class="value" content="2.10">2,10 &euro;</span></span></div></div>`;
 
+/** Gelado de Café Caramel Latte (992086), 29 October 2026: unavailable, the price shown as the word "null". */
+const UNAVAILABLE_NULL =
+  product("Gelado de Café Caramel Latte") +
+  `<div class="add-to-cart" data-endpoint-add-to-cart="/on/demandware.store/Sites-pingo-doce-Site/default/Cart-AddProduct"> <div class="product-unavailable"> <div class="btn btn-product-unavailable" aria-label="product unavailable"> <span>Indispon&iacute;vel</span> </div> </div></div>` +
+  `<div class="prices"> <div class="price"> <span class="price-container"> <span class="sales"> <span class="value" content="null"></span> null </span> </span> </div> </div>`;
+/** The same price box with no "product unavailable" box: not enough to call it unavailable. */
+const NULL_ALONE = product("Gelado") + UNAVAILABLE_NULL.slice(UNAVAILABLE_NULL.indexOf(`<div class="prices">`));
+
 /**
  * Whole product pages for the two readers that read one page per product
  * (code review M13). Unlike the pieces above these are REBUILT, not copied:
@@ -113,6 +121,15 @@ export function verifyStorePages(): number {
   check("a page with no promotion box is not one", !parsePingoDocePage(PLAIN, "plain").onPromotion);
   const unavailable = parsePingoDocePage(UNAVAILABLE, "unavailable");
   check("a product not for sale is never on promotion", unavailable.price === null && !unavailable.onPromotion);
+  const unavailableNull = parsePingoDocePage(UNAVAILABLE_NULL, "unavailable-null");
+  check("\"null\" with the unavailable box is not for sale, and is read", unavailableNull.price === null && unavailableNull.name === "Gelado de Café Caramel Latte");
+  let nullAlone = "read";
+  try {
+    parsePingoDocePage(NULL_ALONE, "null-alone");
+  } catch (e) {
+    nullAlone = (e as Error).message;
+  }
+  check("\"null\" without the unavailable box is still unreadable", nullAlone !== "read", nullAlone.slice(0, 60));
   console.log("\n  a zero is never a price, at any store (code review M9)");
   check("0, one cent, nothing and an unreadable number are no price",
     [0, 0.01, null, undefined, NaN].every((v) => sellablePrice(v) === null));

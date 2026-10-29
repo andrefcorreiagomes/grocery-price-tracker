@@ -46,8 +46,15 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   const $ = cheerio.load(html);
   const priceText = $(".prices .price").first().text().trim();
   const parsed = parsePortuguesePrice(priceText);
+  // An unavailable product can also show the word "null" where the price goes
+  // ("null", "null/Kg"), with the same "product unavailable" box beside it: it
+  // is "0,00 €" in another form. Until 29 October 2026 such a page counted as
+  // unreadable, so the product was neither saved nor checked and went on
+  // showing an older night's state (992086 and 1014381, 0,00 € on the 28th,
+  // "null" on the 29th). Only with the box: a "null" alone stays unreadable.
+  const unavailableNull = parsed === null && /^null\b/.test(priceText) && $(".product-unavailable").length > 0;
 
-  if (parsed === null) {
+  if (parsed === null && !unavailableNull) {
     throw new PageReadError(
       `Pingo Doce: could not find/parse price ("${priceText}") at ${url}`
     );
@@ -68,7 +75,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
   // a yogurt, a tin of frankfurters - and nothing in a supermarket costs a
   // cent. The next cheapest real price is EUR 0.05, so the two groups do not
   // overlap and the cut is unambiguous.
-  const price = sellablePrice(parsed);
+  const price = unavailableNull ? null : sellablePrice(parsed);
 
   // "12,49 €/Kg" in the price itself means the price is already per kilo, and
   // the size label is what one item weighs. Read from `priceText`, the very
