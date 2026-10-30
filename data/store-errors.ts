@@ -65,13 +65,16 @@ const sizeText = (s: { packageSize: number | null; unit: string | null }) =>
  * Has the store's data moved since the entry was made? `stored` is null when
  * the product is not in the catalogue at all. Sizes are compared as numbers,
  * not text: arithmetic stores 30 x 30 g as 0.8999999999999999 kg, which is
- * not a change.
+ * not a change. Nor is half a percent: a size worked out from a price and the
+ * store's rounded per-kilo figure moves with every price change (the Bollycao
+ * croissant went 0.75, 0.751, 0.75 kg, 22-30 October 2026); a store fixing
+ * its data moves it tenfold.
  */
 export function storeErrorStatus(entry: StoreError, stored: StoredState | null): StoreErrorStatus {
   if (stored === null || stored.delisted) return { kind: "gone" };
   const a = entry.listedSize.packageSize;
   const b = stored.packageSize;
-  const sameSize = a === null || b === null ? a === b : Math.abs(a - b) <= 1e-6 * Math.max(a, b);
+  const sameSize = a === null || b === null ? a === b : Math.abs(a - b) <= 0.005 * Math.max(a, b);
   if (sameSize && (a === null || entry.listedSize.unit === stored.unit)) return { kind: "unchanged" };
   return { kind: "changed", was: sizeText(entry.listedSize), now: sizeText(stored) };
 }
@@ -165,6 +168,24 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: 'price 1.69 €, name "115 (72) G", Auchan\'s per-kilo figure 2.35 €/Kg on its listing tile',
     checkedOn: "2026-10-04",
     listedSize: { packageSize: 0.719, unit: "kg" },
+  },
+  {
+    store: "AUCHAN",
+    storeProductId: "4083257",
+    name: "POSTAS BACALHAU RIBERALVES ED. ESPECIAL NATAL 15KG",
+    problem: "The name says 15 kg; Auchan's own per-kilo figure makes it 1.5 kg, so it read as 4.36 €/kg, the cheapest frozen cod steaks.",
+    evidence: '"43.59 €/Kg" beside "65,39 €" on the product page (65.39 / 43.59 = 1.5 kg)',
+    checkedOn: "2026-10-30",
+    listedSize: { packageSize: 15, unit: "kg" },
+  },
+  {
+    store: "AUCHAN",
+    storeProductId: "2967517",
+    name: "SAPATEIRA UNIDADE 450G",
+    problem: "The name says 450 g, but the crab is sold by the kilo at 15.99 €/kg; read as 35.53 €/kg.",
+    evidence: '"Quant. Mínima = 1Kg (1 un)", "15.99 €/un", "15,99 € /Kg" on the product page',
+    checkedOn: "2026-10-30",
+    listedSize: { packageSize: 0.45, unit: "kg" },
   },
 ];
 

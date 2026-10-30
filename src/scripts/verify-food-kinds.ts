@@ -525,6 +525,8 @@ function verifyFoodTypes(): number {
   const entry = STORE_ERRORS.find((e) => e.storeProductId === "988950")!;
   check("the store's size unchanged: nothing to do yet",
     storeErrorStatus(entry, { packageSize: 3.36, unit: "kg", delisted: false }).kind === "unchanged");
+  check("a rounding wobble is not a change (0.751 against 0.75 kg)",
+    storeErrorStatus(entry, { packageSize: 3.364, unit: "kg", delisted: false }).kind === "unchanged");
   const fixed = storeErrorStatus(entry, { packageSize: 0.336, unit: "kg", delisted: false });
   check("the store's size changed: look again now, not in 30 days",
     fixed.kind === "changed" && fixed.was === "3.36 kg" && fixed.now === "0.336 kg");

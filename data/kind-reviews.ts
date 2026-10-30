@@ -1282,4 +1282,9 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 6, store: "AUCHAN", id: "3705241", name: "PROTEÍNA DE CÂNHAMO PRÓVIDA 250G", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
   { batch: 6, store: "AUCHAN", id: "3773033", name: "PROTEINA CANHAMO SHINE 100GR", kind: null, why: "A protein powder, not a meal; moved to 'refeições e proteína' on 26 October 2026." },
   { batch: 6, store: "AUCHAN", id: "1178113", name: "PASTÉIS DELAVIUDA DE GEMA 300G", kind: "bolo", why: "Egg-yolk pastries, a cake as verified; moved to the chocolates shelf on 26 October 2026." },
+  // 30 October 2026: shelf moves on the night of 30 October that the
+  // verified-kinds check caught; each keeps the kind it was verified with.
+  { batch: 7, store: "AUCHAN", id: "3685068", name: "CALENDARIO ADVENTO BIO CUPPER 24 SAQUETAS", kind: "infusao", why: "A tea advent calendar, infusão as verified; moved to the organic 'chá e infusões' shelf, which names two kinds, on 30 October 2026." },
+  { batch: 7, store: "AUCHAN", id: "3815095", name: "CALENDÁRIO ADVENTO ENGLISH TEA VERMELHO 25 SAQUETAS", kind: "infusao", why: "As 3685068, the same move." },
+  { batch: 7, store: "CONTINENTE", id: "8404056", name: "Pasta de Atum Snock", kind: null, why: "A tuna spread, not a meal, as verified; back on sale on 30 October 2026 on the 'Grab&Go' ready-meals shelf." },
 ];
