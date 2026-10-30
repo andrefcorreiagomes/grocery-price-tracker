@@ -165,7 +165,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // so it is listed first and claims the names that say "francês".
   { id: "alho-frances", label: "Alho francês", unit: "kg", heads: ["alho"], require: /alho.?franc/i },
   { id: "alho", label: "Alho", unit: "kg", heads: ["alho"], exclude: /alho.?franc/i },
-  { id: "couve", label: "Couve", unit: "kg", heads: ["couve"] },
+  // "Couve Brócolo" is broccoli: Continente's 2.19/kg one sat here while its
+  // cheapest "broccoli" was a 9.97/kg bag. 30 October 2026.
+  { id: "couve", label: "Couve", unit: "kg", heads: ["couve"], exclude: /brocol/i },
   { id: "maca", label: "Maçã", unit: "kg", heads: ["maca"] },
   { id: "ervilha", label: "Ervilha", unit: "kg", heads: ["ervilha"] },
   // Not "Cebola Frita Crocante", a topping. 20 October 2026.
@@ -183,8 +185,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "abobora", label: "Abóbora", unit: "kg", heads: ["abobora"] },
   // Not creamed spinach, a side dish. 21 October 2026.
   { id: "espinafre", label: "Espinafre", unit: "kg", heads: ["espinafre"], exclude: /\bnatas\b/i },
-  // Not chocolate-coated strawberries. 21 October 2026.
-  { id: "morango", label: "Morango", nameOnly: true, unit: "kg", heads: ["morango"], exclude: /chocolate/i },
+  // Not chocolate-coated strawberries. 21 October 2026. Nor mixes with other
+  // fruit: "MORANGOS E AMORAS ... DESIDRATADO", "MORANGO E KIWI PEDAÇOS".
+  // 30 October 2026.
+  { id: "morango", label: "Morango", nameOnly: true, unit: "kg", heads: ["morango"], exclude: /chocolate|amora|kiwi/i },
   { id: "cenoura", label: "Cenoura", unit: "kg", heads: ["cenoura"] },
   { id: "alface", label: "Alface", nameOnly: true, unit: "kg", heads: ["alface"] },
   // Chocolate-covered raspberries are a sweet, not fruit. 29 October 2026.
@@ -235,7 +239,7 @@ export const FOOD_TYPES: readonly FoodType[] = [
     exclude: /ralado|leite|bebida|\bagua\b|creme|chips|\boleo\b|farinha|\bdoces?\b|chocolate|bolacha|iogurte|gelado/i },
   { id: "papaia", label: "Papaia", unit: "kg", heads: ["papaia", "mamao"], exclude: /desidrat|\bsecas?\b|sumo/i },
   { id: "maracuja", label: "Maracujá", unit: "kg", heads: ["maracuja"], exclude: /sumo|nectar|polpa|iogurte|gelado|\bdoce\b/i },
-  { id: "brocolo", label: "Brócolos", unit: "kg", heads: ["brocolo", "brocoli"], exclude: /sopa|creme|pure|gratinad/i },
+  { id: "brocolo", label: "Brócolos", unit: "kg", heads: ["brocolo", "brocoli", "couve"], require: /brocol/i, exclude: /sopa|creme|pure|gratinad/i },
   { id: "curgete", label: "Curgete", unit: "kg", heads: ["curgete", "courgette"], exclude: /sopa|creme|pure|esparguete/i },
   { id: "beringela", label: "Beringela", unit: "kg", heads: ["beringela"], exclude: /pasta|creme|pate/i },
   { id: "grelo", label: "Grelos", unit: "kg", heads: ["grelo"] },

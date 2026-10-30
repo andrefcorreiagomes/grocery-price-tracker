@@ -978,6 +978,29 @@ function verifyFoodTree(): number {
   check("fragrant rice is not smoked", !labelsOf("arroz", "Arroz Thai Perfumado Caçarola").includes("fumado") &&
     labelsOf("salmao", "Salmão Fumado da Noruega").includes("fumado"));
   check("M/GORDO is semi-skimmed milk", subKindOf("leite", "LEITE UHT GRESSO M/GORDO PACK POUPANÇA 8 X1L") === "meio-gordo");
+  // Forms and varieties found by the comparison check, 30 October 2026.
+  check("nuts in the shell are a form apart from kernels",
+    labelsOf("avela", "Avelã com Casca Agromontenegro").includes("casca") &&
+    !labelsOf("avela", "Miolo de Avelã com Pele Continente").includes("casca"));
+  check("cooked lobster apart from raw, but every crab alike",
+    labelsOf("lavagante", "Lavagante Cozido").includes("cozido") &&
+    !labelsOf("lavagante", "LAVAGANTE CANADA FRESCO UNIDADE 400 G").includes("cozido") &&
+    !labelsOf("sapateira", "Sapateira Cozida Fresca").includes("cozido"));
+  check("a family pie and a pasty are forms of a pie",
+    labelsOf("empada", "Empadão de Bacalhau Riberalves").includes("empadao") &&
+    labelsOf("empada", "MINI EMPANADAS AUCHAN ATUM 500G").includes("empanada") &&
+    subKindOf("empada", "Empadão de Pescada e Legumes") === "peixe");
+  check("seasoned meat apart from plain",
+    labelsOf("porco", "Entrecosto de Porco Preto Temperado com Ervas Finas Valbolota").includes("temperado") &&
+    !labelsOf("porco", "Entremeada com Osso Continente").includes("temperado"));
+  check("cauliflower and cabbage are not one comparison",
+    subKindOf("couve", "COUVE-FLOR AUCHAN COZIDA 660(390)G") === "flor" &&
+    subKindOf("couve", "Couve Branca Monolith") === "branca" &&
+    subKindOf("couve", "Couve Lombarda/Saboia Continente") === "lombarda");
+  check("couve brócolo is broccoli; a strawberry mix is not strawberry",
+    classifyFoodType("Couve Brócolo Continente", "CONTINENTE", "Frutas e Legumes/Legumes") === "brocolo" &&
+    classifyFoodType("MORANGOS E AMORAS BOTANIC DESIDRATADO 12G", "AUCHAN", "Frutas e Legumes/Fruta") !== "morango");
+  check("pork chops from the loin are chops", subKindOf("porco", "Costeletas do Lombo de Porco Continente") === "costeleta");
   check("Granarolo is a brand, not grana", subKindOf("queijo", "Queijo Ricotta Proteína Granarolo") !== "parmesao" &&
     subKindOf("queijo", "Queijo Grana Padano DOP 16 Meses") === "parmesao");
   check("a cheese spread is a spread whatever the cheese", subKindOf("queijo", "Creme de Queijo para Barrar Emmental Continente") === "barrar");

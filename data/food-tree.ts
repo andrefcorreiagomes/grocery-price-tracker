@@ -141,9 +141,11 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("perna", "Perna e coxa", /perna|coxa|perninha|coto/), // x0.56
     s("asa", "Asa", /\basas?\b/), // x0.33
   ],
+  // Chops before loin: "Costeletas do Lombo" are chops, and 7 of them were
+  // the loin comparison's cheapest. 30 October 2026.
   porco: [
-    s("lombo", "Lombo", /lombo|lombinho/), // x1.14
     s("costeleta", "Costeleta", /costelet/), // x0.71
+    s("lombo", "Lombo", /lombo|lombinho/), // x1.14
     s("entrecosto", "Entrecosto e entremeada", /entrecosto|costela|entremeada|barriga/), // x0.93
     s("febras", "Febras e bifanas", /febra|bifana|bife/), // x0.86
     s("secretos", "Secretos, plumas e presas", /secret|pluma|presa|abanico|lagarto/), // x2.43
@@ -174,6 +176,22 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("filete", "Filete", /filete/), // x1.11
     s("posta", "Posta e medalhão", /posta|medalh|mimo|tranche/), // x1.30
     s("inteira", "Inteira", /inteir|rabo na boca|pescadinha/), // x0.50
+  ],
+  // One "Couve" put cauliflower, Brussels sprouts, kale and cabbage in one
+  // comparison: Auchan's cooked cauliflower jar against Continente's
+  // sauerkraut. Varieties from the 77 names on sale, 30 October 2026; a name
+  // that says none (a ready meal "com legumes e salsicha") is hidden as "Outros".
+  couve: [
+    s("flor", "Couve-flor", /\bflor\b/),
+    s("bruxelas", "Couve de Bruxelas", /bruxelas/),
+    s("kale", "Kale", /\bkale\b/),
+    s("chinesa", "Couve chinesa e pak choi", /chinesa|pak ?choi/),
+    s("fermentada", "Fermentada (chucrute)", /fermentad|chucrute|salgad/),
+    s("roxa", "Couve roxa", /\brox[ao]\b/),
+    s("lombarda", "Couve lombarda (saboia)", /lombard|saboia/),
+    s("coracao", "Couve coração", /coracao/),
+    s("portuguesa", "Couve portuguesa e galega", /portuguesa|penca|galega|caldo verde/),
+    s("branca", "Couve branca (repolho)", /branc[ao]|repolho/),
   ],
   camarao: [
     s("miolo", "Miolo", /miolo|descascad/), // x1.40
@@ -346,9 +364,11 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("vegetal", "Vegetal", /vegan|vegetal|cem porcento|veganissim/),
     s("carne", "De carne", /./),
   ],
+  // Fish before plant: "Empadão de Pescada e Legumes" was filed as plant-based.
+  // 30 October 2026.
   empada: [
-    s("vegetal", "Vegetal", /vegan|soja|legumes|veggis|vegetal/),
     s("peixe", "De peixe", /atum|bacalhau|pescada|peixe|marisco|camarao/),
+    s("vegetal", "Vegetal", /vegan|soja|legumes|veggis|vegetal/),
     s("aves", "De frango, galinha e pato", /galinha|frango|pato|peru/),
     s("carne", "De carne", /./),
   ],
@@ -391,7 +411,7 @@ export const CATCH_ALL_SUB_KINDS: Record<string, string[]> = { farinha: ["outras
  * decision, 29 October 2026): the labels that are only a form, and the kinds
  * whose sub-kinds are only forms.
  */
-export const FORM_LABELS = new Set(["fatiado", "filete", "peca"]);
+export const FORM_LABELS = new Set(["fatiado", "filete", "peca", "casca", "cozido", "empadao", "empanada", "temperado"]);
 export const FORM_SUB_KIND_KINDS = new Set(["canela", "piri-piri-seco", "pimenta"]);
 
 export interface Label {
@@ -481,6 +501,21 @@ export const LABELS: Label[] = [
   // Fresh cod is not the salted dried "bacalhau" Portugal means: "BACALHAU
   // FRESCO KG" at 5.99 was the cheapest whole salted cod. 29 October 2026.
   { id: "fresco", label: "Fresco (não salgado)", match: /\bfresco\b/, kinds: ["bacalhau"] },
+  // More forms, 30 October 2026. Nuts in the shell against kernels: hazelnuts
+  // in the shell at 9.97/kg against kernels at 20-21/kg (part of the weight is
+  // shell). Measured: 21 names say "com casca"; a kernel says "miolo" or nothing.
+  { id: "casca", label: "Com casca", match: /\bcom casca\b|\bc ?\/ ?casca\b/, kinds: ["amendoa", "amendoim", "avela", "noz", "pistacio", "pinhao", "semente-abobora"] },
+  // Cooked shellfish against raw: "Lavagante Cozido" against a live Canadian
+  // lobster. Not "sapateira": nearly every crab is sold cooked, and Auchan's
+  // and Pingo Doce's names often do not say so (13 names, 30 October 2026).
+  { id: "cozido", label: "Cozido", match: /\bcozid[oa]s?\b/, kinds: ["camarao", "lavagante", "lagosta", "mexilhao", "polvo", "pota"] },
+  // A family pie, a pasty and a small pie: Riberalves' 300 g cod "empadão"
+  // against Auchan's mini tuna "empanadas", 4.5 times apart.
+  { id: "empadao", label: "Empadão", match: /\bempadao\b/, kinds: ["empada"] },
+  { id: "empanada", label: "Empanada", match: /\bempanadas?\b/, kinds: ["empada"] },
+  // Seasoned or marinated meat against plain: seasoned black-pork ribs were
+  // Continente's cheapest against plain ones. 22 meat names say so.
+  { id: "temperado", label: "Temperado", match: /temperad|marinad/, categories: ["carne"] },
   { id: "bio", label: "Biológico", match: /\bbio\b|biologic/ },
   // Pingo Doce sells its lactose-free milk as "... Livre" - but "Ovos de Ar
   // Livre" are free-range eggs. 21 October 2026.
