@@ -43,7 +43,7 @@ export interface StoreError {
    * tell when the store's size CHANGES, which every crawl re-reads. A change is
    * the cue to look again now rather than when the re-check falls due.
    */
-  listedSize: { packageSize: number | null; unit: "kg" | "l" | null };
+  listedSize: { packageSize: number | null; unit: "kg" | "l" | "un" | null };
 }
 
 /** What the latest crawl stored for a listed product. */
@@ -79,6 +79,28 @@ export function storeErrorStatus(entry: StoreError, stored: StoredState | null):
 export const RECHECK_AFTER_DAYS = 30;
 
 export const STORE_ERRORS: StoreError[] = [
+  // Continente's per-item figure for these two Lavazza boxes is per BOX of
+  // capsules, not per capsule, so the count worked out from it is wrong: the
+  // same barcode is Auchan's "60UN" and "30 UN". Found by the comparison check
+  // of 29 October 2026, from stored data (no page opened).
+  {
+    store: "CONTINENTE",
+    storeProductId: "8844842",
+    name: "Cápsulas de Café Qualitá Oro Int 8 Lavazza",
+    problem: "Read as 4 capsules from the page's 4,85 €/un at 19,39 €; the box is 60 capsules (Auchan, same barcode).",
+    evidence: '"4,85 €/un" beside a price of 19,39 €; barcode 8000070084735 is "60UN" at Auchan',
+    checkedOn: "2026-10-29",
+    listedSize: { packageSize: 4, unit: "un" },
+  },
+  {
+    store: "CONTINENTE",
+    storeProductId: "8844800",
+    name: "Cápsulas de Café Crema e Gusto Int 12 Lavazza",
+    problem: "Read as 8 capsules from the page's 1,25 €/un at 9,99 €; the box is 30 capsules (Auchan, same barcode).",
+    evidence: '"1,25 €/un" beside a price of 9,99 €; barcode 8000070053823 is "30 UN" at Auchan',
+    checkedOn: "2026-10-29",
+    listedSize: { packageSize: 8, unit: "un" },
+  },
   {
     store: "PINGO_DOCE",
     storeProductId: "988950",

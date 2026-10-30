@@ -84,9 +84,27 @@ export function eggCountFromUnitPrice(
   return countFromUnitPrice(price, shownUnitPrice, shownUnitPriceUnit, EGGS);
 }
 
-/** The capsule count a name states, or null: "30 UN", "10 Cápsulas", "x16". */
+/**
+ * Nescafé Dolce Gusto and Starbucks milk drinks take two capsules a cup, and
+ * Auchan counts their boxes in CUPS: "CAPPUCINO 8UN" is the box of 16 capsules
+ * Continente and Pingo Doce sell as 16. Measured on 29 October 2026 on the six
+ * pairs sharing a barcode: every one 2 to 1. Neo pods are one a cup.
+ */
+const TWO_CAPSULE_DRINK = /cappuc|macchiat|machiat|white mocha|toffee|pumpkin|chococino/;
+
+/** The capsule count a name states, or null: "30 UN", "10 Cápsulas", "x16", "93+7 UN". */
 export function capsuleCountFromName(name: string): number | null {
-  return countFromName(name, CAPSULES);
+  const n = stripAccents(name).toLowerCase();
+  // Free capsules count: "93+7 UN" and "93 UN + 7 UN OFERTA" are boxes of 100.
+  // The second number alone was read on 29 October 2026, a box of 7.
+  const plus = n.match(/\b(\d{1,3})\s*(?:un|uni|unid|unidades)?\s*\+\s*(\d{1,3})\s*(?:un|uni|unid|unidades|capsulas?|caps)\b/);
+  if (plus) {
+    const total = Number(plus[1]) + Number(plus[2]);
+    return total <= CAPSULES.max ? total : null;
+  }
+  const count = countFromName(name, CAPSULES);
+  const cups = /\b(6|8)\s*un\b/.test(n) && /dolce gusto|\bndg\b/.test(n) && !/\bneo\b/.test(n) && TWO_CAPSULE_DRINK.test(n);
+  return count !== null && cups ? count * 2 : count;
 }
 
 export function capsuleCountFromUnitPrice(

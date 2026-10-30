@@ -209,7 +209,21 @@ export function parseSize(name: string): ParsedSize | null {
   // unit: "10 L" keeps its meaning, "10 L'Or" does not.
   if (/\d\s*l\s*['’]/.test(flat)) return null;
 
-  const m = flat.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
+  // A tin's full and drained weights, "PÊSSEGO ... 840 (480)G": the one the
+  // other chains give is the size, so tins compare like with like (the user's
+  // rule, 29 October 2026). Measured that day on 105 products Auchan shares a
+  // barcode with Continente or Pingo Doce: the other chain gives the FULL weight
+  // for 83 (tuna, sardines, sausages, mushrooms, pulses...), the DRAINED one
+  // only for olives (4) and lupins (1) - jars sold by what is left without the
+  // brine. Until then the bracket hid the unit from the first number, and
+  // Auchan's tins got whichever weight its own per-kilo figure was based on.
+  const drained = /azeiton|tremoc/.test(flat);
+  const tin = flat.replace(
+    /(\d+(?:[.,]\d+)?)\s*\(\s*(\d+(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(?=(?:kg|gr?s?|g)\b)/g,
+    (_, full: string, net: string) => `${drained ? net : full} `
+  );
+
+  const m = tin.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
   if (!m) return null;
 
   const packCount = m[1] ? Number(m[1]) : 1;
@@ -309,7 +323,7 @@ export function parseSize(name: string): ParsedSize | null {
   // 2026) 18-33% dearer per kilo than they are. Added only when the second
   // amount is in the same dimension; anything else keeps the first alone.
   let total = packCount * eachBase;
-  const extra = flat.slice((m.index ?? 0) + m[0].length).match(/^\s*\+\s*(\d+(?:[.,]\d+)?\s*(?:kg|gr?s?|g|lt?|ml|cl))\b/);
+  const extra = tin.slice((m.index ?? 0) + m[0].length).match(/^\s*\+\s*(\d+(?:[.,]\d+)?\s*(?:kg|gr?s?|g|lt?|ml|cl))\b/);
   const added = extra ? parseSize(extra[1]) : null;
   if (added && added.unit === unit) total += added.total;
 

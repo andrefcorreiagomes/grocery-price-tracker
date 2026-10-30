@@ -106,12 +106,18 @@ export interface SubKind {
 
 const s = (id: string, label: string, match: RegExp): SubKind => ({ id, label, match });
 
+// Plant-based meat substitutes, by the words and brands the three chains use.
+// 29 October 2026.
+const PLANT = /vegetal|vegetarian|vegan|\bveg\b|veggie|\bveg in\b|\bsoja\b|heura|beyond|seitan|tofu|green cuisine|garden gourmet|alterveg|linda mccartney|revolugreen|vegplanet|vegalia|wheaty|veggis|cem porcento|proteina vegetal/;
+
 // Beef: the same cuts whatever the animal's age.
 const BEEF: SubKind[] = [
   s("bifes", "Bifes", /\bbifes?\b|bifinho|escalope/),
-  s("pecas", "Lombo, vazia e alcatra", /lombo|vazia|alcatra|maminha|picanha|acem|pojadouro|rosbife|entrecote|ribeye|tomahawk|fraldinha/),
+  // Shoulder and chuck ("Pá e Acém de Vitelão") are stewing cuts; they were in
+  // the loin comparison at half its price. 29 October 2026.
+  s("pecas", "Lombo, vazia e alcatra", /^(?!.*(\bpa\b|acem)).*(lombo|vazia|alcatra|maminha|picanha|pojadouro|rosbife|entrecote|ribeye|tomahawk|fraldinha)/),
   s("costeleta", "Costeleta e chuleta", /costelet|chuleta|t-?bone/),
-  s("estufar", "Para estufar e cozer", /estufar|cozer|guisar|cozido|jardineira|\bcubos?\b/),
+  s("estufar", "Para estufar e cozer", /estufar|cozer|guisar|cozido|jardineira|\bcubos?\b|acem|\bpa\b/),
   s("picada", "Picada", /picad/),
 ];
 
@@ -186,17 +192,24 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     // cheese spread the cheapest goat's cheese). Not "queijinho" alone, which
     // is any small cheese. 21 October 2026.
     s("barrar", "Para barrar", /barrar|philadelphia|creme/), // x0.85
+    // Grated before the cheese it is made of: grated Flamengo was compared with
+    // a block of it. A form apart (the user's decision, 29 October 2026).
+    s("ralado", "Ralado", /ralad/), // x1.04
     s("flamengo", "Flamengo", /flamengo/), // x0.70
     s("mozzarella", "Mozzarella", /mozzarell|mozarel/), // x0.87
-    s("ralado", "Ralado", /ralad/), // x1.04
+    // Processed cheese made with grana ("FUNDIDO C. GRANA PADANO", Inalpi's
+    // "Al Grana Padano" slices) was the cheapest Parmesan. 29 October 2026.
+    s("fundido", "Fundido", /fundid|\bal grana\b/),
     // A whole word: the brand Granarolo made a ricotta the cheapest Parmesan.
     s("parmesao", "Parmesão e grana", /parmes|\bgrana\b|parmigiano/), // x1.80
     s("brie", "Brie e camembert", /brie|camembert/), // x1.18
     s("cheddar", "Cheddar", /cheddar/), // x1.27
     s("emmental", "Emmental", /emmental|emental/), // x0.93
     s("gouda", "Gouda", /gouda/), // x1.28
-    s("cabra", "Cabra", /cabra/), // x1.43
-    s("ovelha", "Ovelha", /ovelha|serra da estrela|azeitao|evora|nisa|serpa/), // x1.35
+    // Fresh goat's and sheep's cheese go to "Fresco": a fresh sheep's cheese was
+    // the cheapest sheep's cheese against a cured one. 29 October 2026.
+    s("cabra", "Cabra", /^(?!.*\bfresc).*cabra/), // x1.43
+    s("ovelha", "Ovelha", /^(?!.*\bfresc).*(ovelha|serra da estrela|azeitao|evora|nisa|serpa)/), // x1.35
     s("fresco", "Fresco", /fresco/), // x0.70
   ],
   iogurte: [
@@ -221,7 +234,10 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("agulha", "Agulha", /agulha|\blongo\b/), // x0.62
   ],
   massa: [
-    s("fresca", "Fresca e recheada", /fresca|tortellini|ravioli|gnocchi|recheada|girasoli|tortelloni/), // x1.49
+    // Stuffed pasta apart from plain fresh pasta: a fresh tagliatelle was
+    // compared with a vegetable ravioli in tomato sauce. 29 October 2026.
+    s("recheada", "Recheada", /tortellini|ravioli|recheada|girasoli|tortelloni|cappelletti|agnolotti|panzerotti/),
+    s("fresca", "Fresca", /fresca|gnocchi/), // x1.49 (with the stuffed, before 29 October 2026)
     s("lasanha", "Folhas de lasanha e canelone", /lasanha|canelon|cannelloni/), // x1.00
     s("longa", "Esparguete e massas longas", /esparguete|spaghetti|linguine|tagliatelle|fettuccine|talharim/), // x0.70
     s("espirais", "Espirais e fusilli", /espira|fusilli/), // x0.64
@@ -257,6 +273,8 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("branco", "Branco", /branco|granulado|refinado|\bfino\b|\bpo\b/), // x0.68
   ],
   cafe: [
+    // A soluble cappuccino or mocha mix is not soluble coffee. 29 October 2026.
+    s("preparado", "Cappuccino e preparados", /cappuc|mocha|latte|3 ?em ?1|com leite/),
     s("soluvel", "Solúvel", /soluvel|instant|nescafe/), // x1.48
     s("grao", "Em grão", /\bgrao\b/), // x0.88
     s("moido", "Moído", /moid/), // x0.87
@@ -279,8 +297,73 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("com-sal", "Com sal", /com sal|\bsal\b|salgad/),
   ],
   batata: [
-    s("preparada", "Preparada (palitos, cubos, para forno)", /palito|airfryer|forno|\bcubos?\b|rodelas|salteada|gratin|vapor/), // x2.24
+    // Wedges and frozen roasting quarters were "para cozer". 29 October 2026.
+    s("preparada", "Preparada (palitos, cubos, para forno)", /palito|airfryer|forno|\bcubos?\b|rodelas|salteada|gratin|vapor|wedge|gomos|quartos|mccain|mediterr/), // x2.24
     s("cozer", "Para cozer", /./), // x0.74
+  ],
+  // By animal, and plant-based apart (the user's decision, 29 October 2026):
+  // minced turkey was compared with minced beef, a Beyond Meat sausage with a
+  // pork one, fish nuggets with chicken nuggets. A product whose name names no
+  // animal stays out of the comparison, as any "Outros" does.
+  "carne-picada": [
+    s("mista", "Mista", /mist|bovino ?\/ ?suino|porco e (vaca|novilho)/),
+    s("bovino", "Bovino", /bovin|vaca|novilh|vitel|angus|carnalentejana|mertolengo|minhota|wagyu/),
+    s("porco", "Porco", /porco|suin/),
+    s("aves", "Frango e peru", /frango|peru|aves|galinha/),
+  ],
+  hamburguer: [
+    s("vegetal", "Vegetal", PLANT),
+    s("mista", "Misto", /mist|bovino ?\/ ?suino/),
+    s("bovino", "Bovino", /bovin|vaca|novilh|vitel|angus|carnalentejana|mertolengo|minhota|wagyu|acores/),
+    s("porco", "Porco", /porco|suin/),
+    s("aves", "Frango e peru", /frango|peru|aves|galinha/),
+    s("peixe", "Peixe", /atum|salmao|peixe|pescada|bacalhau/),
+  ],
+  almondega: [
+    s("vegetal", "Vegetal", PLANT),
+    s("peixe", "Peixe", /peixe|atum|pescada|bacalhau|salmao/),
+    s("mista", "Mista", /mist|bovino ?\/ ?suino/),
+    s("bovino", "Bovino", /bovin|vaca|novilh|vitel|angus|carnalentejana|mertolengo/),
+    s("porco", "Porco", /porco|suin/),
+    s("aves", "Frango e peru", /frango|peru|aves|galinha/),
+  ],
+  nugget: [
+    s("vegetal", "Vegetal", PLANT),
+    s("peixe", "Peixe", /peixe|pescada|salmao|bacalhau|atum/),
+    s("aves", "Frango e peru", /frango|peru|galinha/),
+  ],
+  "bebida-vegetal": [
+    s("mista", "Mistura", /(soja|aveia|amendoa|arroz|coco|avela|caju)s?\b.*\b(e|com|\+) ?(soja|aveia|amendoa|arroz|coco|avela|caju)|arroz coco/),
+    s("soja", "Soja", /soja/),
+    s("aveia", "Aveia", /aveia|oat/),
+    s("amendoa", "Amêndoa", /amendoa/),
+    s("arroz", "Arroz", /arroz/),
+    s("coco", "Coco", /coco/),
+    s("avela", "Avelã", /avela/),
+  ],
+  pate: [
+    s("peixe", "De peixe e marisco", /atum|sardinha|cavala|salmao|caranguejo|marisco|bacalhau|polvo|espadilha|anchova|truta|peixe|camarao/),
+    s("vegetal", "Vegetal", /vegan|vegetal|cem porcento|veganissim/),
+    s("carne", "De carne", /./),
+  ],
+  empada: [
+    s("vegetal", "Vegetal", /vegan|soja|legumes|veggis|vegetal/),
+    s("peixe", "De peixe", /atum|bacalhau|pescada|peixe|marisco|camarao/),
+    s("aves", "De frango, galinha e pato", /galinha|frango|pato|peru/),
+    s("carne", "De carne", /./),
+  ],
+  // Forms of one spice, compared apart (the user's decision, 29 October 2026):
+  // cinnamon sticks against ground cinnamon were 2.7 times apart, whole chilli
+  // pods against ground 5 times. A pepper grinder holds whole peppercorns.
+  canela: [s("pau", "Em pau", /\bpau\b/), s("moida", "Moída", /./)],
+  "piri-piri-seco": [s("inteiro", "Em vagem ou inteiro", /vagem|inteir/), s("moido", "Moído", /./)],
+  pimenta: [s("grao", "Em grão ou com moinho", /\bgrao\b|moinho/), s("moida", "Moída", /./)],
+  // Baker's yeast and baking powder are both "fermento" and never swapped: yeast
+  // was in the own-brand row against baking powder at a third of its price.
+  // 29 October 2026.
+  fermento: [
+    s("padeiro", "De padeiro", /padeiro|levedura|fermento biologico/),
+    s("po", "Em pó", /./),
   ],
   feijao: [
     // Butter beans are their own bean, not red ones. 21 October 2026.
@@ -291,6 +374,25 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("preto", "Preto", /preto/),
   ],
 };
+
+/**
+ * Catch-alls: a whole kind, or a sub-kind, whose products are too unlike to
+ * compare - a "cheapest" among them answers nothing. Hidden from the site like
+ * "Outros" (the user's decision, 29 October 2026: flour "Outras" put oat flour
+ * against almond flour, almost 8 times dearer, and "Refeição pronta" a
+ * tabbouleh against breaded chicken). To be split into real types later.
+ */
+export const CATCH_ALL_KINDS = new Set(["refeicao", "salada-pronta"]);
+export const CATCH_ALL_SUB_KINDS: Record<string, string[]> = { farinha: ["outras"] };
+
+/**
+ * Forms of one food that are compared apart but are still the same food, so a
+ * page can also say which is cheapest per kilo in ANY form (the user's
+ * decision, 29 October 2026): the labels that are only a form, and the kinds
+ * whose sub-kinds are only forms.
+ */
+export const FORM_LABELS = new Set(["fatiado", "filete", "peca"]);
+export const FORM_SUB_KIND_KINDS = new Set(["canela", "piri-piri-seco", "pimenta"]);
 
 export interface Label {
   id: string;
@@ -323,11 +425,20 @@ export const LABELS: Label[] = [
     // pulses and vegetables, "cozido" means the cooked jar rather than dried.
     // Fruit "em calda" (in syrup) is tinned: Pingo Doce's tinned peaches were
     // its cheapest fresh peach. 21 October 2026.
-    match: /\blatas?\b|conserva|\bfrasco\b|\bem (azeite|oleo|agua|tomate|molho|escabeche|calda)\b|ao natural|\(\d+\)|\bcozid[oa]s?\b/,
+    match: /\blatas?\b|conserva|\bfrasco\b|\bem (azeite|oleo|agua|tomate|molho|escabeche|calda)\b|ao natural|\(\d+\)/,
     // Whatever a chain files under its tinned-goods shelf is tinned, though
-    // the name may not say so ("Atum Posta Natural"). 18 October 2026.
-    shelf: /conserva/,
+    // the name may not say so ("Atum Posta Natural"). 18 October 2026. Not
+    // Auchan's "conservas/vegetais-secos", which is DRY pulses: a 1 kg bag of
+    // lentils was in the tinned comparison. 29 October 2026.
+    shelf: /conserva(?!.*\bsecos?\b)(?!.*-secos)/,
     categories: ["peixe", "legumes", "leguminosas", "fruta", "charcutaria"],
+  },
+  {
+    // "Cozido" means the cooked jar only for vegetables and pulses. Cooked
+    // seafood from the fish counter ("Mexilhão Cozido Refrigerado", "Miolo de
+    // Camarão Cozido Embalado", "POLVO COZIDO METADE") is not tinned, and was
+    // compared with tins. 29 October 2026.
+    id: "lata", label: "Em lata ou frasco", match: /\bcozid[oa]s?\b/, categories: ["legumes", "leguminosas"],
   },
   {
     // Tinned fish names say more ways than other tins: "Filetes Cavala Óleo
@@ -353,6 +464,23 @@ export const LABELS: Label[] = [
   { id: "fumado", label: "Fumado", match: /\b(de)?fumad/ },
   // Not "frutos secos" (nuts), which names a whole aisle.
   { id: "seco", label: "Seco ou desidratado", match: /(?<!frutos )\bsec[oa]s?\b|desidratad/ },
+  // Forms compared apart (the user's decision, 29 October 2026): a whole 8.5 kg
+  // ham leg was the cheapest ham against 200 g of slices; sardine fillets
+  // against whole sardines. Each page adds one line with the cheapest per kilo
+  // in any form (FORM_LABELS below).
+  { id: "fatiado", label: "Fatiado", match: /fatia|fatiad|laminad/, kinds: ["presunto", "queijo", "chourico", "paio", "salame"] },
+  { id: "filete", label: "Filetes", match: /filete/, kinds: ["sardinha", "carapau", "cavala", "dourada", "robalo", "truta", "corvina", "red-fish", "linguado"] },
+  // A whole or half ham leg, or a piece of one, is a third form beside slices
+  // and packets: an 8.5 kg leg with the bone was the cheapest Iberian ham.
+  { id: "peca", label: "Em peça", match: /inteir|com osso|\bpeca\b|quartos|tabua|meio presunto|desossad/, kinds: ["presunto"] },
+  // Plant-based sausages, mortadella and the like apart from meat ones, in the
+  // kinds with no animal split. 29 October 2026.
+  { id: "vegetal", label: "Vegetal", match: PLANT, categories: ["charcutaria"] },
+  // Desiccated coconut strips and flakes against fresh coconut pieces. 29 October 2026.
+  { id: "seco", label: "Seco ou desidratado", match: /ralad|\btiras\b|\bflocos?\b/, kinds: ["coco"] },
+  // Fresh cod is not the salted dried "bacalhau" Portugal means: "BACALHAU
+  // FRESCO KG" at 5.99 was the cheapest whole salted cod. 29 October 2026.
+  { id: "fresco", label: "Fresco (não salgado)", match: /\bfresco\b/, kinds: ["bacalhau"] },
   { id: "bio", label: "Biológico", match: /\bbio\b|biologic/ },
   // Pingo Doce sells its lactose-free milk as "... Livre" - but "Ovos de Ar
   // Livre" are free-range eggs. 21 October 2026.

@@ -171,7 +171,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Not "Cebola Frita Crocante", a topping. 20 October 2026.
   { id: "cebola", label: "Cebola", unit: "kg", heads: ["cebola"], exclude: /\bfrita\b|crocante/i },
   { id: "pera", label: "Pera", unit: "kg", heads: ["pera"] },
-  { id: "pimento", label: "Pimento", unit: "kg", heads: ["pimento"] },
+  // Stuffed peppers (with cod) are a ready dish, not peppers. 29 October 2026.
+  { id: "pimento", label: "Pimento", unit: "kg", heads: ["pimento"], exclude: /recheado/i },
   { id: "melao", label: "Melão", unit: "kg", heads: ["melao"] },
   // Not "Ameixa d'Elvas", plums candied in syrup. 20 October 2026.
   { id: "ameixa", label: "Ameixa", unit: "kg", heads: ["ameixa"], exclude: /elvas|\bcalda\b/i },
@@ -186,7 +187,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "morango", label: "Morango", nameOnly: true, unit: "kg", heads: ["morango"], exclude: /chocolate/i },
   { id: "cenoura", label: "Cenoura", unit: "kg", heads: ["cenoura"] },
   { id: "alface", label: "Alface", nameOnly: true, unit: "kg", heads: ["alface"] },
-  { id: "framboesa", label: "Framboesa", unit: "kg", heads: ["framboesa"] },
+  // Chocolate-covered raspberries are a sweet, not fruit. 29 October 2026.
+  { id: "framboesa", label: "Framboesa", unit: "kg", heads: ["framboesa"], exclude: /chocolate/i },
   { id: "melancia", label: "Melancia", unit: "kg", heads: ["melancia"] },
   { id: "laranja", label: "Laranja", nameOnly: true, unit: "kg", heads: ["laranja"] },
   { id: "kiwi", label: "Kiwi", unit: "kg", heads: ["kiwi"] },
@@ -208,7 +210,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // 17 October 2026: each is sold at all three chains, 4 to 27 products.
   // Fresh fruit, not dried or candied (a different price per kilo).
   { id: "banana", label: "Banana", unit: "kg", heads: ["banana"],
-    exclude: /chips|frita|snack|desidrat|\bsecas?\b|bolo|\bpao\b|gelado|iogurte|sumo|batido/i },
+    // "BANANA ASSAR" is a cooking banana (plantain), not a dessert banana.
+    // 29 October 2026.
+    exclude: /chips|frita|snack|desidrat|\bsecas?\b|bolo|\bpao\b|gelado|iogurte|sumo|batido|\bassar\b|platano/i },
   { id: "abacate", label: "Abacate", unit: "kg", heads: ["abacate"], exclude: /guacamole|\boleo\b/i },
   { id: "limao", label: "Limão", unit: "kg", heads: ["limao"],
     exclude: /sumo|limonada|refresco|\bcha\b|infus|tarte|bolo|bolacha|gelado|iogurte|\bdoce\b/i },
@@ -243,7 +247,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
     exclude: /molho|picante|mexican|\btex\b|nacho|\bdip\b|chunky|\bsalsa e\b.*\bmolho\b|old el paso|\bsuave\b/i },
   { id: "hortela", label: "Hortelã", unit: "kg", heads: ["hortela"],
     exclude: /\bcha\b|infus|rebucad|pastilha|chocolate|licor|\bxarope\b|pimenta/i },
-  { id: "manjericao", label: "Manjericão", unit: "kg", heads: ["manjericao"], exclude: /\bmolho\b|pesto|\bseco\b|desidrat/i },
+  // A basil plant in a pot is not cut basil. 29 October 2026.
+  { id: "manjericao", label: "Manjericão", unit: "kg", heads: ["manjericao"], exclude: /\bmolho\b|pesto|\bseco\b|desidrat|\bvaso\b/i },
   // Ground ginger is a dried spice, many times the price per kilo of the fresh
   // root, so a kind of its own. 20 October 2026.
   { id: "gengibre-po", label: "Gengibre em pó", nameOnly: true, unit: "kg", heads: ["gengibre"],
@@ -260,7 +265,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Auchan shelves quail under "pato-e-mais-aves" (duck and other birds), and
   // a shelf naming one food decides - so five quail products became duck,
   // one of them the cheapest "duck" in the country at EUR 1.25, a price per bird.
-  { id: "pato", label: "Pato", unit: "kg", heads: ["pato"], exclude: /codorni|perdiz|faisao/i },
+  // Shredded cooked duck ("PATO DESFIADO") is a ready dish. 29 October 2026.
+  { id: "pato", label: "Pato", unit: "kg", heads: ["pato"], exclude: /codorni|perdiz|faisao|desfiad/i },
   { id: "porco", label: "Porco", unit: "kg", heads: ["porco", "suino", "leitao"] },
   // Meat, not offal: a beef kidney was the cheapest "beef". 17 October 2026.
   // Beef in two kinds (decided 18 October 2026): calf, whose name always says
@@ -300,7 +306,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "bacon", label: "Bacon", unit: "kg", heads: ["bacon", "pancetta"], require: /\bbacon\b|\bpancetta\b|\bbarriga fumada\b/i },
   { id: "almondega", label: "Almôndega", unit: "kg", heads: ["almondega"] },
   { id: "mortadela", label: "Mortadela", unit: "kg", heads: ["mortadela"] },
-  { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"] },
+  // San Jacobos are breaded ham and cheese, not nuggets. 29 October 2026.
+  { id: "nugget", label: "Nugget", unit: "kg", heads: ["nugget"], exclude: /san jacob/i },
   // "Paio York" is a cooked ham, not the smoked sausage. 20 October 2026.
   { id: "paio", label: "Paio", unit: "kg", heads: ["paio"], exclude: /\byork\b/i },
   // Not "Salame de Chocolate", a dessert - the cheapest salame at all three
@@ -446,7 +453,9 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Not peanut or other nut butters. 20 October 2026.
   // Nor coconut butter ("MANTEIGA SEARA DE CÔCO"). 21 October 2026.
   { id: "manteiga", label: "Manteiga", nameOnly: true, unit: "kg", heads: ["manteiga"], exclude: /amendoim|amendoa|caju|avela|pistacio|cacau|\bcoco\b/i },
-  { id: "kefir", label: "Kefir", unit: "l", heads: ["kefir"] },
+  // "either": most kefir is sold by weight (105 of 113 sized, 29 October 2026),
+  // the drinkable kind by volume; "l" alone left most of it out.
+  { id: "kefir", label: "Kefir", unit: "either", heads: ["kefir"] },
   { id: "pudim", label: "Pudim", hidden: "sweets", unit: "kg", heads: ["pudim"] },
   // Plant-based yoghurts go by brand names too: Alpro's "Yofu", Sojasun's
   // "Sojagurte", the "Cocogurte" of several makers. Approved in review batch 1,
@@ -498,7 +507,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // Not a tomate sauce with garlic ("PASSATA TOMATE ... CEBOLA E ALHO").
   // 21 October 2026.
   { id: "molho-alho", label: "Molho de alho", unit: "either", heads: ["molho"], require: /molho de alho|\balho\b/i, exclude: /\bcom molho\b|piri|pesto|soja|tomate|passata|tempero/i },
-  { id: "barbecue", label: "Molho barbecue", unit: "either", heads: ["molho"], require: /barbecue|\bbbq\b/i, exclude: /\bcom molho\b/i },
+  // A teriyaki sauce labelled "BBQ KOREAN STYLE" is not barbecue sauce. 29 October 2026.
+  { id: "barbecue", label: "Molho barbecue", unit: "either", heads: ["molho"], require: /barbecue|\bbbq\b/i, exclude: /\bcom molho\b|teriyaki/i },
   { id: "molho-tomate", label: "Molho de tomate", unit: "either", heads: ["molho"], require: /\btomate\b/i, exclude: /\bcom molho\b|ketchup/i },
   // massa the pasta, not massa the dough
   // Ravioli and tortellini are filled fresh pasta (a sub-kind), not a kind of
@@ -616,11 +626,14 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "arando", label: "Arandos", unit: "kg", heads: ["arando", "cranberry"], exclude: /chocolate|frutos secos/i },
   { id: "linhaca", label: "Linhaça", unit: "kg", heads: ["semente", "linhaca"], require: /linhaca/i, exclude: /\bpao\b|barra|bolacha|\boleo\b/i },
   { id: "canhamo", label: "Sementes de cânhamo", unit: "kg", heads: ["semente", "canhamo"], require: /canhamo/i, exclude: /\boleo\b|proteina|bebida/i },
-  { id: "amendoim", label: "Amendoim", unit: "kg", heads: ["amendoim"] },
+  // Caramelised or chocolate peanuts are sweets. Honey-roasted ones stay
+  // peanuts, as verified in an earlier review. 29 October 2026.
+  { id: "amendoim", label: "Amendoim", unit: "kg", heads: ["amendoim"], exclude: /caramel|chocolate/i },
   { id: "mostarda", label: "Mostarda", unit: "kg", heads: ["mostarda"] },
   // Sweetcorn, not cornflakes, which the read past "flocos" would otherwise reach.
   // "Milho para Pipocas" is popcorn kernels, not sweetcorn. 20 October 2026.
-  { id: "milho", label: "Milho", unit: "kg", heads: ["milho"], exclude: /\bflocos?\b|pipoca/i },
+  // "Milho Frito" is a fried snack, not corn. 29 October 2026.
+  { id: "milho", label: "Milho", unit: "kg", heads: ["milho"], exclude: /\bflocos?\b|pipoca|frito|torrado/i },
   // The three chains sell the same flatbreads as "tortilhas" and "wraps".
   // A filled wrap ("Wrap de Atum") is a sandwich, not the flatbread.
   { id: "tortilha", label: "Tortilha e wrap", unit: "kg", heads: ["tortilha", "wrap"],
@@ -665,8 +678,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "marmelada", label: "Marmelada", hidden: "sweets", unit: "kg", heads: ["marmelada"] },
   { id: "lentilha", label: "Lentilha", unit: "kg", heads: ["lentilha"] },
   // "Grão Vasco" is a Dão wine. 20 October 2026.
-  { id: "grao", label: "Grão", unit: "kg", heads: ["grao"], exclude: /vinho/i },
-  { id: "tremoco", label: "Tremoço", unit: "kg", heads: ["tremoco"] },
+  // Chickpeas "com legumes" are a ready dish, and a flavoured lupin snack
+  // ("TARWI LIMÃO & COMINHOS") is not plain lupins. 29 October 2026.
+  { id: "grao", label: "Grão", unit: "kg", heads: ["grao"], exclude: /vinho|\bcom (legumes|espinafres|chourico|bacalhau|carne|atum)\b/i },
+  { id: "tremoco", label: "Tremoço", unit: "kg", heads: ["tremoco"], exclude: /tarwi|\blimao\b|cominho|picante|piri/i },
   // Everything here is a powder, sold by weight. The 13 products recorded by
   // volume were not yeast at all - vanilla essence and food colouring, which
   // arrived through the shelf rather than the name - so the name must now say

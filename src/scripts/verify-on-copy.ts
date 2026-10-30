@@ -26,6 +26,17 @@ async function main() {
   await prisma.$disconnect();
 
   try {
+    // The copy is classified with today's rules first, as the nightly does
+    // before its checks. Before the night, the server tests new code on a copy
+    // of the PREVIOUS night's database: a new rule for kinds of food would fail
+    // the check that every kind stored is today's, and the update be undone
+    // (found 29 October 2026). About 10 seconds; it writes the copy only.
+    const classify = spawnSync("npx tsx src/scripts/classify-food-types.ts", {
+      shell: true,
+      stdio: "ignore",
+      env: { ...process.env, DATABASE_URL: `file:${copy}` },
+    });
+    if (classify.status !== 0) console.log("classifying the copy failed; the checks run on it as it is");
     const run = spawnSync("npx tsx --expose-gc src/scripts/verify-nightly.ts", {
       shell: true,
       stdio: "inherit",

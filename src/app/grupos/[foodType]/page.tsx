@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { comparisonSlug, getFoodTypePage, getFreshness, MAX_NAMED_GROUPS, type NamedGroups } from "@/lib/grupos";
+import {
+  comparisonSlug,
+  getFoodTypePage,
+  getFreshness,
+  MAX_NAMED_GROUPS,
+  type FoodTypePage as FoodPage,
+  type NamedGroups,
+} from "@/lib/grupos";
 import type { ComparisonGroup } from "@/lib/comparison-groups";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
 import type { Cell } from "@/lib/comparison";
@@ -36,9 +43,15 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
     );
   }
   if (cell.kind === "no-size") {
+    // Sized, but the other way: a food compared both per kilo and per litre
+    // ("Kefir", "Maionese") showed "Sem peso indicado" for a jar sold by weight
+    // in the ranking per litre, which blamed the store (29 October 2026).
+    const other = cell.example.packageSize !== null && cell.example.unit !== unit ? cell.example.unit : null;
     return (
       <div className={styles.cell}>
-        <span className={styles.unknown}>Sem peso indicado</span>
+        <span className={styles.unknown}>
+          {other === "kg" ? "Vendido ao peso (kg)" : other === "l" ? "Vendido ao volume (L)" : "Sem peso indicado"}
+        </span>
         <span className={styles.product}>{cell.example.name}</span>
       </div>
     );
@@ -208,6 +221,28 @@ function unitShown(groups: ComparisonGroup[], g: ComparisonGroup): boolean {
   return groups.some((o) => o !== g && o.title === g.title);
 }
 
+/**
+ * A comparison, and after the last of a food's forms (sliced or not, fillets or
+ * whole fish) the cheapest per kilo in any of them - the forms are compared
+ * apart, and this still answers the question across them (29 October 2026).
+ */
+function GroupBlockWithAnyForm({ g, page }: { g: ComparisonGroup; page: FoodPage }) {
+  const line = page.anyForm.find((a) => a.afterKey === g.key);
+  return (
+    <>
+      <GroupBlock group={g} showUnit={unitShown(page.groups, g)} kindId={page.id} />
+      {line && (
+        <p className={styles.note}>
+          Em qualquer forma ({line.titles.join(", ")}), o mais barato ao{" "}
+          {line.unit === "kg" ? "quilo" : line.unit === "l" ? "litro" : "unidade"} é{" "}
+          <strong>{line.productName}</strong> no {STORE_LABELS[line.store as keyof typeof STORE_LABELS]}, a{" "}
+          {euros(line.unitPrice)} €/{UNIT_LABEL[line.unit]}.
+        </p>
+      )}
+    </>
+  );
+}
+
 export default async function FoodTypePage({
   params,
 }: {
@@ -248,7 +283,7 @@ export default async function FoodTypePage({
       )}
 
       {page.groups.map((g) => (
-        <GroupBlock key={g.key} group={g} showUnit={unitShown(page.groups, g)} kindId={page.id} />
+        <GroupBlockWithAnyForm key={g.key} g={g} page={page} />
       ))}
 
       {page.groups.length === 0 && (
@@ -261,8 +296,8 @@ export default async function FoodTypePage({
       {page.notCompared > 0 && page.groups.length > 0 && (
         <p className={styles.note}>
           {page.notCompared} produto{page.notCompared === 1 ? " fica" : "s ficam"} de fora:
-          pertence{page.notCompared === 1 ? "" : "m"} a comparações que só uma cadeia
-          vende, ou sem peso indicado.
+          de tipos que só uma cadeia vende, sem peso indicado, ou que não
+          cabe{page.notCompared === 1 ? "" : "m"} em nenhum dos tipos acima.
         </p>
       )}
 

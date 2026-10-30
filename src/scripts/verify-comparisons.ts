@@ -367,7 +367,10 @@ function verifyComparisonGroups(): number {
   check("frozen breast is never cheaper than fresh by mixing them", groups.find((g) => g.title === "Peito e bifes")?.cheapestPrice === 7);
   check("groups follow the tree's order, products with no sub-kind last", titles[0] === "Peito e bifes" && titles[titles.length - 1] === "Outros");
   check("a group one chain sells is kept but not shown", groups.some((g) => g.subKind === "asa") && !shownGroups(groups).some((g) => g.subKind === "asa"));
-  check("two chains are enough to show a group", shownGroups(groups).length === 3 && MIN_CHAINS === 2);
+  check("two chains are enough to show a group", shownGroups(groups).length === 2 && MIN_CHAINS === 2);
+  // The user's decision, 29 October 2026: "Outros" mixes unlike products.
+  check("\"Outros\" is never shown, even with two chains", groups.some((g) => g.title === "Outros" && g.storesCompared === 2) && !shownGroups(groups).some((g) => g.others));
+  check("a kind with no sub-kinds is not \"Outros\"", !comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.others);
   check("the main group is plain before labelled", mainGroup(groups)?.title === "Peito e bifes");
   check("a kind with no sub-kinds is titled by its own name", comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.title === "Banana");
   return failures - before;

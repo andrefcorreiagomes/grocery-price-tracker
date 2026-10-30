@@ -151,7 +151,9 @@ function cheapestOf(
     byStore.set(
       store,
       best === null
-        ? { kind: "no-size", example: here[0] }
+        ? // One sized the other way (grams in a ranking per litre) says more than
+          // one with no size at all: the page names how it is sold.
+          { kind: "no-size", example: here.find((p) => p.packageSize !== null && p.unit !== measuredIn && measuredIn !== undefined) ?? here[0] }
         : { kind: "price", unitPrice: best.unitPrice, product: best.product }
     );
   }

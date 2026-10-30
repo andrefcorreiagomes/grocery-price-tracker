@@ -11,7 +11,17 @@ import {
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { CATEGORIES } from "../../data/food-tree";
 import { categoryOf } from "./food-tree";
-import { comparisonGroups, mainGroup, shownGroups, type ComparisonGroup, type TreeProduct } from "./comparison-groups";
+import {
+  anyFormLines,
+  comparisonGroups,
+  isCatchAllKind,
+  type AnyForm,
+  leftOutOfComparisons,
+  mainGroup,
+  shownGroups,
+  type ComparisonGroup,
+  type TreeProduct,
+} from "./comparison-groups";
 import { STORE_ORDER } from "./stores";
 import { unitPrice } from "./pricing";
 import { promotionOf, type Promotion } from "./promotion";
@@ -70,6 +80,8 @@ export interface FoodTypePage {
    * least two chains can be priced in (src/lib/comparison-groups.ts).
    */
   groups: ComparisonGroup[];
+  /** "the cheapest per kilo in any form", under comparisons that differ only by form */
+  anyForm: AnyForm[];
   /** products in groups too thin to compare (fewer than two chains priced) */
   notCompared: number;
   /** the confirmed same-product groups, one block per unit the kind is measured in */
@@ -80,8 +92,9 @@ export interface FoodTypePage {
 
 export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage | null> {
   const type = FOOD_TYPE_BY_ID.get(foodTypeId);
-  // Set aside for later (sweets, drinks): no page, exactly as for an unknown id.
-  if (!type || type.hidden) return null;
+  // Set aside for later (sweets, drinks), or a catch-all kind (comparison-groups.ts):
+  // no page, exactly as for an unknown id.
+  if (!type || type.hidden || isCatchAllKind(foodTypeId)) return null;
 
   const rows = await rowsFor(foodTypeId);
   if (rows.length === 0) return null;
@@ -101,6 +114,7 @@ export async function getFoodTypePage(foodTypeId: string): Promise<FoodTypePage 
     label: type.label,
     category: category ? { id: category.id, label: category.label } : null,
     groups,
+    anyForm: anyFormLines(foodTypeId, groups),
     notCompared,
     named,
     productCount: rows.length,
@@ -341,7 +355,7 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
         prices: { select: { price: true, firstSeenAt: true, lastSeenAt: true }, orderBy: { firstSeenAt: "asc" } },
       },
     })
-  ).filter((r) => sameLabels(r.labels));
+  ).filter((r) => sameLabels(r.labels) && !leftOutOfComparisons(r.name));
 
   // Each product's prices as stretches of days: [from, to) while a later price
   // follows, [from, to] for the last one.
@@ -494,7 +508,7 @@ export async function getNamedGroups(
   const byGroup = new Map<string, ComparableProduct[]>();
   for (const m of allMembers) {
     const product = byId.get(m.productId);
-    if (!product) continue;
+    if (!product || leftOutOfComparisons(product.name)) continue;
     const list = byGroup.get(m.groupId) ?? [];
     list.push(product);
     byGroup.set(m.groupId, list);
