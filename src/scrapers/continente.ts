@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
-import { detached, finiteOrNull, PageReadError, sellablePrice, type ScrapeResult } from "./types";
+import { detached, finiteOrNull, NOT_SELLABLE, PageReadError, sellablePrice, type ScrapeResult } from "./types";
 import { sectionKey } from "../lib/store-sections";
 import { productIdFromUrl } from "./crawl/product-id";
 
@@ -9,7 +9,7 @@ interface SchemaProduct {
   "@type"?: string;
   name?: string;
   brand?: { name?: string };
-  offers?: { price?: string | number };
+  offers?: { price?: string | number; availability?: string };
 }
 
 /**
@@ -55,7 +55,14 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   // every one of them - measured, 0 of 124 products until this was allowed for.
   const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
   // 0 or unreadable: listed, not for sale now (sellablePrice, the rule at every store).
-  const price = sellablePrice(Number(product.offers.price));
+  const shownPrice = sellablePrice(Number(product.offers.price));
+  // Out of stock: listed, not for sale now, as at Auchan and Pingo Doce (the
+  // owner's decision, 31 October 2026). The page keeps a price and says
+  // "Indisponível" on its add-to-cart button: 13 of 100 products opened at
+  // random that day, the data and the button agreeing on all of them. One, a
+  // 6-pack of milk, showed one carton's price. The shown price still reads the
+  // size below, so a product out of stock keeps its size.
+  const price = NOT_SELLABLE.test(String(product.offers.availability ?? "")) ? null : shownPrice;
 
   // Scoped to the product's own price box: the page has exactly one, while
   // carousels of other products elsewhere carry their own per-kilo prices.
@@ -68,8 +75,8 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     correctedSize(
       product.name ?? "",
       parsePackageSize($(".ct-pdp--unit").first().text().trim()),
-      pricedPerUnit(headline, price)
-    ) ?? sizeFromUnitPrice(secondary, price);
+      pricedPerUnit(headline, shownPrice)
+    ) ?? sizeFromUnitPrice(secondary, shownPrice);
 
   return {
     name: product.name ?? "",
@@ -86,7 +93,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     ...parsePromotion(html, price),
     // Usually the line under the price; for goods sold by weight, the price
     // itself is per kilo ("2,49€/kg") and the line under it is per item.
-    shownUnitPrice: pricedPerUnit(headline, price) ? parseShownUnitPrice(headline) : parseShownUnitPrice(secondary),
+    shownUnitPrice: pricedPerUnit(headline, shownPrice) ? parseShownUnitPrice(headline) : parseShownUnitPrice(secondary),
   };
 }
 

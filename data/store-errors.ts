@@ -170,19 +170,11 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-10-29",
     listedSize: { packageSize: 8, unit: "un" },
   },
-  // Out of stock, but Continente's page still shows a price: the price of ONE
-  // carton for the pack of six, so 0.22 EUR a litre. The page reader does not
-  // yet read "out of stock" at Continente; until it does, this one sits out.
-  // Found by the crawl report of 31 October 2026 (7.74 to 1.29, a 6x move).
-  {
-    store: "CONTINENTE",
-    storeProductId: "8168224",
-    name: "Leite Meio Gordo Bio Prado Verde",
-    problem: "A pack of 6 x 1 L priced 1.29 € (one carton's price) while out of stock: 0.22 €/l, the cheapest milk by far.",
-    evidence: '"emb. 6 x 1 lt", "1,29€", "0,22€/lt", "Indisponível" and schema.org "OutOfStock" on the product page; 7.74 € the night before',
-    checkedOn: "2026-10-31",
-    listedSize: { packageSize: 6, unit: "l" },
-  },
+  // Continente's "Leite Meio Gordo Bio Prado Verde" (8168224) was listed here on
+  // 31 October 2026: out of stock, its page showed one carton's price for the
+  // pack of six. Taken off the same day, the owner's decision: the page reader
+  // now gives an out-of-stock product no price, so it sits out by itself and
+  // is compared again once back in stock.
   {
     store: "PINGO_DOCE",
     storeProductId: "988950",

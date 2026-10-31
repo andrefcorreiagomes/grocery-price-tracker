@@ -99,6 +99,13 @@ export function sellablePrice(value: number | null | undefined): number | null {
 }
 
 /**
+ * schema.org availability values that mean "listed but not sellable right now".
+ * Auchan and Continente both keep a price on an out-of-stock product's page and
+ * flip only this, so the price alone does not say it is for sale.
+ */
+export const NOT_SELLABLE = /OutOfStock|SoldOut|Discontinued|BackOrder|PreOrder/i;
+
+/**
  * These two guards exist because the types above are compile-time only.
  * `Number("abc")` is NaN and NaN *is* a `number`; `new Date("x")` is an Invalid
  * Date and still a `Date`. Both would satisfy the interface and land in the

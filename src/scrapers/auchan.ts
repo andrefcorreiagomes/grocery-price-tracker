@@ -1,6 +1,6 @@
 import { parseSize } from "../lib/sizes";
 import { extractLdJsonBlocks, fetchHtml, HttpError } from "./http";
-import { PageReadError, sellablePrice, validDateOrNull, type ScrapeResult } from "./types";
+import { NOT_SELLABLE, PageReadError, sellablePrice, validDateOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -33,9 +33,6 @@ export type AuchanPageStatus = "alive" | "unavailable" | "gone" | "unreachable";
 
 /** Auchan's own "not found" page, served with 200 for a withdrawn product. */
 const NOT_FOUND_PAGE = /N[ãa]o temos o que procura/i;
-
-/** schema.org availability values that mean "listed but not sellable right now". */
-const NOT_SELLABLE = /OutOfStock|SoldOut|Discontinued|BackOrder|PreOrder/i;
 
 /**
  * The status decision for a page that LOADED, split out so it can be tested from

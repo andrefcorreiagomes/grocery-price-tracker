@@ -139,6 +139,28 @@ export function verifyStorePages(): number {
     "co"
   );
   check("Continente: a page priced 0 is listed, not for sale", zeroAtContinente.price === null && !zeroAtContinente.onPromotion);
+  // Out of stock (31 October 2026): the milk 8168224 as its page read that day,
+  // one carton's price for a pack of six.
+  const coStock = (availability: string | null) =>
+    parseContinentePage(
+      `<script type="application/ld+json">{"@type":"Product","name":"Leite Meio Gordo Bio Prado Verde","offers":{"price":"1.29"${
+        availability === null ? "" : `,"availability":"${availability}"`
+      }}}</script>` +
+        `<div class="ct-pdp--prices"><span class="pwc-tile--price-primary">1,29€</span><span class="pwc-tile--price-secondary">0,22€/lt</span></div>` +
+        `<div class="ct-pdp--unit">emb. 6 x 1 lt</div>` +
+        `&quot;pre_discount_price&quot;:1.49`,
+      "co-stock"
+    );
+  const outOfStock = coStock("https://schema.org/OutOfStock");
+  check("Continente: a priced but OutOfStock page is listed, not for sale", outOfStock.price === null && !outOfStock.onPromotion);
+  check(
+    "and it keeps its size, read with the price the page shows",
+    outOfStock.packageSize === 6 && outOfStock.packageUnit === "l",
+    `${outOfStock.packageSize} ${outOfStock.packageUnit}`
+  );
+  check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").price === null);
+  check("an InStock page keeps its price", coStock("https://schema.org/InStock").price === 1.29);
+  check("a page that states no availability keeps its price", coStock(null).price === 1.29);
   const tile = (price: string) =>
     `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));

@@ -661,6 +661,10 @@ async function main() {
       sitemapUnknown: [],
       baseline: { runs: baseline.runs, since: baseline.since },
       previousRun,
+      // An out-of-stock product has no price (parseContinentePage, 31 October
+      // 2026): 13 of 100 products opened at random that day. Warn well above it.
+      unpricedIsStock: true,
+      maxUnpricedShare: 0.3,
     });
     report = {
       ...full,

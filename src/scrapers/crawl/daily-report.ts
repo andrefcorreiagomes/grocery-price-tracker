@@ -380,6 +380,12 @@ export interface ReportInput {
    * on every one.
    */
   unpricedIsStock?: boolean;
+  /**
+   * With `unpricedIsStock`, the share of products on sale that may have no
+   * price before the report warns that the price reader may have broken. For a
+   * store whose crawler does not watch that share itself (Continente).
+   */
+  maxUnpricedShare?: number;
 }
 
 export async function buildDailyReport(input: ReportInput): Promise<DailyReport> {
@@ -559,6 +565,12 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   }
   for (const d of input.drift) warnings.push(d);
   if (missingPrice > 0 && !input.unpricedIsStock) warnings.push(`${missingPrice} product(s) have no price`);
+  if (input.unpricedIsStock && input.maxUnpricedShare !== undefined && total > 0 && missingPrice / total > input.maxUnpricedShare) {
+    warnings.push(
+      `${missingPrice} of ${total} products on sale (${Math.round((100 * missingPrice) / total)}%) have no price, ` +
+        `more than the ${Math.round(100 * input.maxUnpricedShare)}% expected - the price reader may have broken`
+    );
+  }
   if (missingUrl > 0) warnings.push(`${missingUrl} product(s) have no url`);
   if (slowdown !== null && slowdown > SLOWDOWN) {
     warnings.push(`requests are ${slowdown.toFixed(1)}x slower than last run - possible throttling`);
