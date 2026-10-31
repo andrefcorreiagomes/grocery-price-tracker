@@ -43,6 +43,24 @@ export interface ParsedSize {
 export const SOLD_PER_KG =
   /(\bkg\b\s*$)|(\d\s*(?:kg|g)?\s+a\s+\d+(?:[.,]\d+)?\s*kg\s*\)?\s*$)|\bgranel\b|\bao\s+quilo\b|\bpor\s+kg\b/i;
 
+const TINNED_FISH = {
+  fish: /\b(atum|sardinh\w*|cavala|petingas?|carapaus?|polvo|lulas?|pota|chocos?|mexilh\w*|berbigao|ameijoas?|bacalhau|salmao|anchovas?|biqueirao|ventresca|enguias?|lampreia|arenques?|caranguejo|bonito|melva|ovas)\b/,
+  tin: /\(\s*\d{2,}|\blatas?\b|conserva|\bem (azeite|oleo|agua|tomate|molho|escabeche)\b|ao natural|\bazeite\b|\boleo\b|\bmolho\b|escabeche|picante/,
+  not: /panad|congelad|fresc|fumad/,
+};
+
+/**
+ * Is this, by its name, a tin of fish or seafood? Tinned fish is compared by
+ * its drained weight (the owner's decision, 31 October 2026). A fish word and
+ * a sign of a tin: two weights "120 (84) G", the tin or its liquid ("em
+ * azeite", "ao natural", "escabeche"...). Not breaded, frozen or fresh fish.
+ */
+export function isTinnedFish(name: string): boolean {
+  const flat = stripAccents(name).toLowerCase();
+  return TINNED_FISH.fish.test(flat) && TINNED_FISH.tin.test(flat) && !TINNED_FISH.not.test(flat);
+}
+
+
 /** What Auchan's own per-unit figure says about a product's size. */
 export interface TileSize {
   packageSize: number | null;
@@ -132,6 +150,13 @@ export function reconcileTileSize(tile: { total: number; unit: SizeUnit }, name:
 
   const ratio = tile.total / named.total;
   if (Math.abs(ratio - 1) <= 0.1) return { packageSize: named.total, unit: named.unit, sizeSource: "listing" };
+  // Tinned fish named by one weight, the full one ("ATUM RAMIREZ EM TOMATE
+  // 120GR"): the store's figure is on the drained weight, which is what tinned
+  // fish is compared by (31 October 2026). A drained weight is roughly 55-75%
+  // of the full one; 40% is the lowest believed.
+  if (isTinnedFish(name) && ratio < 0.9 && ratio >= 0.4) {
+    return { packageSize: tile.total, unit: tile.unit, sizeSource: "listing" };
+  }
   // Two to nine only. Ten is not a missed pack count but Auchan's own error:
   // some figures are a price per 100 g labelled per kilo, which makes "GEL
   // MYPROTEIN ... 60G" look like 601 g. A real ten-pack says "10X" in its name,
@@ -217,11 +242,25 @@ export function parseSize(name: string): ParsedSize | null {
   // only for olives (4) and lupins (1) - jars sold by what is left without the
   // brine. Until then the bracket hid the unit from the first number, and
   // Auchan's tins got whichever weight its own per-kilo figure was based on.
+  //
+  // Tinned FISH is compared by its drained weight (the owner's decision, 31
+  // October 2026): Pingo Doce gives no other (12 of 20 pages opened that day
+  // say "Peso Líquido Escorrido", none gives the full weight), and every
+  // store's own price per kilo is on it. The drained weight is the smaller
+  // number, whichever side of the bracket it is on: "120 (84) G" and
+  // Auchan's "(85)120G". Every other name reads as before.
   const drained = /azeiton|tremoc/.test(flat);
-  const tin = flat.replace(
-    /(\d+(?:[.,]\d+)?)\s*\(\s*(\d+(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(?=(?:kg|gr?s?|g)\b)/g,
-    (_, full: string, net: string) => `${drained ? net : full} `
-  );
+  const fish = isTinnedFish(flat);
+  const smaller = (a: string, b: string) => (Number(a.replace(",", ".")) <= Number(b.replace(",", ".")) ? a : b);
+  const tin = flat
+    .replace(
+      /(\d+(?:[.,]\d+)?)\s*\(\s*(\d+(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(?=(?:kg|gr?s?|g)\b)/g,
+      (_, full: string, net: string) => `${fish ? smaller(full, net) : drained ? net : full} `
+    )
+    .replace(
+      /\(\s*(\d{2,}(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(\d+(?:[.,]\d+)?)\s*(?=(?:kg|gr?s?|g)\b)/g,
+      (whole: string, first: string, second: string) => (fish ? `${smaller(first, second)} ` : whole)
+    );
 
   const m = tin.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);
   if (!m) return null;

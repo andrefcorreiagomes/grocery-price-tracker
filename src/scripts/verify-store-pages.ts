@@ -161,6 +161,20 @@ export function verifyStorePages(): number {
   check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").price === null);
   check("an InStock page keeps its price", coStock("https://schema.org/InStock").price === 1.29);
   check("a page that states no availability keeps its price", coStock(null).price === 1.29);
+  // Tinned fish by its drained weight (31 October 2026): the label as on
+  // Ramirez tuna's page that day, at 1,49 EUR and 17,33 EUR/kg.
+  const coTin = (name: string, label: string) =>
+    parseContinentePage(
+      `<script type="application/ld+json">{"@type":"Product","name":"${name}","offers":{"price":"1.49"}}</script>` +
+        `<div class="ct-pdp--prices"><span class="pwc-tile--price-primary">1,49€</span><span class="pwc-tile--price-secondary">17,33€/kg</span></div>` +
+        `<div class="ct-pdp--unit">${label}</div>`,
+      "co-tin"
+    );
+  const tuna = coTin("Atum em Azeite Ramirez", "emb. 120 gr (peso escorrido 86 gr)");
+  check("Continente: tinned fish is the drained weight on its label", tuna.packageSize === 0.086, String(tuna.packageSize));
+  check("a tin that is not fish keeps the full weight",
+    coTin("Feijão Encarnado Cozido Compal", "emb. 540 gr (peso escorrido 400 gr)").packageSize === 0.54);
+  check("a fish tin with one weight on its label keeps it", coTin("Atum Posta em Azeite Santa Catarina", "emb. 80 gr").packageSize === 0.08);
   const tile = (price: string) =>
     `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));

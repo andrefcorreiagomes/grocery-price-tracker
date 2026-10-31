@@ -6,7 +6,7 @@ import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
-import { auchanTileSize, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
+import { auchanTileSize, isTinnedFish, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
 import { classifyCandidate, qualifierMismatch, type Candidate } from "../lib/matching";
 import { foldPlural, matchesTerm } from "../lib/text";
 import { productTokens } from "../lib/candidates";
@@ -455,6 +455,29 @@ function verifyFoodTypes(): number {
   check("a gram range is still a net weight", near(size("PÊSSEGO FERBAR METADES 810 A 860G")?.total, 0.86));
   check("and an age is not an amount", near(size("BEBIDA LACTEA NESTLÉ BOLACHA MARIA CRESCIMENTO 3+ 1L")?.total, 1));
 
+  // Tinned fish by its drained weight (the owner's decision, 31 October 2026);
+  // every other tin as on 29 October. Names as Auchan writes them.
+  console.log("\n  tinned fish: compared by the drained weight");
+  check("a tuna tin's drained weight", near(size("ATUM POSTA AUCHAN EM ÓLEO 120 (78) G")?.total, 0.078));
+  check("written without spaces, and a large tin", near(size("ATUM POSTA BOM PETISCO EM AZEITE 385(251)G")?.total, 0.251));
+  check("the drained weight first, in Auchan's other order",
+    near(size("SARDINHA AUCHAN COLLECTION SEM PELE E SEM ESPINHA (85)120G")?.total, 0.085));
+  check("mussels and squid too", near(size("MEXILHÕES AUCHAN AO NATURAL 111(69)G")?.total, 0.069) &&
+    near(size("POTA PEDAÇOS AUCHAN EM TINTA 115 (72) G")?.total, 0.072));
+  check("a tin that is not fish keeps its full weight", near(size("SALSICHAS NOBRE COCKTAIL FRASCO 360(190)G")?.total, 0.36) &&
+    near(size("BAKED BEANS HEINZ C/TOMATE 415(466)G")?.total, 0.415));
+  check("olives keep the drained weight, as before", near(size("AZEITONAS VERDES AUCHAN 350(150)G")?.total, 0.15));
+  check("a pâté in oil, one weight, is that weight", near(size("Patê de Atum em Azeite La Piara 75g")?.total, 0.075));
+  check("fresh, frozen and breaded fish are not tins",
+    !isTinnedFish("LOMBO DE ATUM FRESCO 300G") && !isTinnedFish("PINÇAS DE CARANGUEJO AUCHAN PANADAS 8UN 250G") &&
+      !isTinnedFish("Filetes de Pescada em Azeite e Alho") && isTinnedFish("Atum Posta ao Natural Continente Equilíbrio"));
+  check("nor is a chocolate", !isTinnedFish("Chocolate de Leite com Avelãs em Azeite"));
+  check("Auchan's figure on the drained weight wins over a name giving only the full one",
+    reconcileTileSize({ total: 0.084, unit: "kg" }, "ATUM RAMIREZ EM TOMATE 120GR")?.packageSize === 0.084);
+  check("but not a figure ten times off", reconcileTileSize({ total: 0.719, unit: "kg" }, "ATUM RAMIREZ EM TOMATE 120GR") === undefined);
+  check("and a name with both weights keeps the drained one when the figure agrees",
+    reconcileTileSize({ total: 0.084, unit: "kg" }, "ATUM AO NATURAL RAMIREZ 120(84)G")?.packageSize === 0.084);
+
   // Auchan's figure against the name: the figure decides only where it helps.
   const rec = (total: number, unit: "kg" | "l", name: string) => reconcileTileSize({ total, unit }, name);
   check("an impossible figure loses to the name", rec(399, "kg", "LASANHA IGLO BOLONHESA 300G") === undefined,
@@ -580,9 +603,18 @@ function verifyFoodTypes(): number {
   check("the name changed: sits out", !withConfirmedSize({ ...crab, name: "SAPATEIRA COZIDA 450G" }).sizeConfirmed);
   check("the store's size changed: sits out", !withConfirmedSize({ ...crab, packageSize: 0.5 }).sizeConfirmed);
 
+  const withoutTrueSize = { ...entry, trueSize: undefined };
   check("an entry without a confirmed size never gets one",
-    !withConfirmedSize({ ...crackers, shownUnitPrice: 1.19, shownUnitPriceUnit: "kg" }).sizeConfirmed &&
-      !comparable(withConfirmedSize({ ...crackers, shownUnitPrice: 1.19, shownUnitPriceUnit: "kg" }), "bolacha"));
+    confirmedSize(withoutTrueSize, { ...crackers, shownUnitPrice: 1.19, shownUnitPriceUnit: "kg" }) === null);
+  // Proven by the same name and price at the other two stores (31 October 2026).
+  const crackersNow = withConfirmedSize({ ...crackers, price: 2.79, shownUnitPrice: 0.83, shownUnitPriceUnit: "kg" });
+  check("Pingo Doce's tomato crackers are compared at 280 g, not 3.36 kg",
+    crackersNow.packageSize === 0.28 && crackersNow.sizeConfirmed === true && comparable(crackersNow, "bolacha"));
+  check("its name changed: they sit out again",
+    !withConfirmedSize({ ...crackers, name: "Bolachas Crackers Tomate 280g", shownUnitPrice: 0.83, shownUnitPriceUnit: "kg" }).sizeConfirmed);
+  const milka = { storeProductId: "1004958", store: "PINGO_DOCE", name: "Bolachas Mini Animals Pack 5", brand: "Milka",
+    price: 1.79, packageSize: 0.995, unit: "kg", shownUnitPrice: 1.8, shownUnitPriceUnit: "kg" };
+  check("and the Milka biscuits at 99.5 g", withConfirmedSize(milka).packageSize === 0.0995);
   check("a product not on the list is passed through untouched",
     withConfirmedSize({ ...cod, storeProductId: "1" }).packageSize === 15 && !withConfirmedSize({ ...cod, storeProductId: "1" }).sizeConfirmed);
   check("every confirmed size is positive, and every weaker check records the figure it watches",

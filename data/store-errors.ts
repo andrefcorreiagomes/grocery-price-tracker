@@ -231,22 +231,35 @@ export const STORE_ERRORS: StoreError[] = [
   {
     store: "PINGO_DOCE",
     storeProductId: "988950",
-    name: "Bolachas Crackers Sabor a Tomate (Gran Pavesi)",
-    problem: "The page gives the pack as 3.36 kg; a pack of crackers weighs a few hundred grams.",
-    evidence: '"3.36 Kg | 1,19 €/Kg" in the size label, beside a price of 3,99 €',
-    checkedOn: "2026-10-04",
+    // The name exactly as Pingo Doce lists it: a confirmed size holds only
+    // while it is unchanged. The brand is Gran Pavesi.
+    name: "Bolachas Crackers Sabor a Tomate",
+    problem: "The page gives the pack as 3.36 kg - exactly 12 x 280 g, a case of twelve; a pack of crackers is 280 g.",
+    evidence:
+      '"3.36 Kg | 1,19 €/Kg" in the size label, beside a price of 3,99 € (2,79 € and 0,83 €/Kg on 31 Oct); ' +
+      "no barcode on the page. Continente (8139766) and Auchan (3868082) sell Gran Pavesi tomato crackers as 280 g at 3,99 €",
+    checkedOn: "2026-10-31",
     listedSize: { packageSize: 3.36, unit: "kg" },
+    // Proven by the same name and price at the other two stores, Pingo Doce
+    // showing no barcode: enough proof, the owner's decision of 31 October
+    // 2026, for the AI review to re-check now and then.
+    trueSize: { packageSize: 0.28, unit: "kg", holdsWhile: "listing-unchanged", listedFigure: { unit: "kg", equalsPrice: false } },
   },
   {
     store: "PINGO_DOCE",
     storeProductId: "1004958",
-    name: "Bolachas Mini Animals Pack 5 (Milka)",
+    // As Pingo Doce lists it; the brand is Milka.
+    name: "Bolachas Mini Animals Pack 5",
     problem:
       "The page gives five small bags of Milka biscuits as 0.995 kg, which at 1.79 € would make them about the " +
-      "cheapest biscuits per kilo in the country; most likely 99.5 g, with the decimal point one place off.",
-    evidence: '"0.995 Kg | 1,8 €/Kg" in the size label, beside a price of 1,79 €',
-    checkedOn: "2026-10-04",
+      "cheapest biscuits per kilo in the country; they are 99.5 g, with the decimal point one place off.",
+    evidence:
+      '"0.995 Kg | 1,8 €/Kg" in the size label, beside a price of 1,79 € (the same on 31 Oct); no barcode on the page. ' +
+      'Continente (8787933) sells Milka Mini Animals as 99.5 g at the same 1,79 €, Auchan (4009007) as "99.5G"',
+    checkedOn: "2026-10-31",
     listedSize: { packageSize: 0.995, unit: "kg" },
+    // Proven as the crackers above: the owner's decision, 31 October 2026.
+    trueSize: { packageSize: 0.0995, unit: "kg", holdsWhile: "listing-unchanged", listedFigure: { unit: "kg", equalsPrice: false } },
   },
   {
     store: "AUCHAN",
@@ -288,8 +301,9 @@ export const STORE_ERRORS: StoreError[] = [
   // Two Auchan squid tins (3949703, 3949811, "115 (72) G") were listed here
   // from 4 to 31 October 2026: Auchan's per-kilo figure made them 719 g. Since
   // the full-weight rule for tins (29 October) the size is read from the name,
-  // 115 g, and they are compared correctly; taken off on 31 October 2026, the
-  // owner's decision.
+  // and they are compared correctly; taken off on 31 October 2026, the
+  // owner's decision. (115 g then; 72 g drained since tinned fish is compared
+  // by its drained weight, the same day.)
   {
     store: "AUCHAN",
     storeProductId: "4083257",
