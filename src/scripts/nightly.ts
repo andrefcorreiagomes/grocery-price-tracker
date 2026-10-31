@@ -261,7 +261,7 @@ async function main() {
       const text = readFileSync(r.log, "utf8");
       const kinds = text.match(/(\d+) kinds of food with at least one comparable product/)?.[1];
       const odd = text.match(/with at least one problem:\s+(\d+)/)?.[1];
-      const stale = (text.match(/STORE DATA CHANGED|NO LONGER IN THE CATALOGUE|RE-CHECK DUE/g) ?? []).length;
+      const stale = (text.match(/STORE DATA CHANGED|NO LONGER IN THE CATALOGUE|RE-CHECK DUE|CONFIRMED SIZE NO LONGER HOLDS/g) ?? []).length;
       if (kinds) note = `${odd} of ${kinds} kinds have a price that looks odd; ${stale} known store errors to look at again`;
     }
     if (a.script === "check:saves") {

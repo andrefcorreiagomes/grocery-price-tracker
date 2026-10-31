@@ -37,6 +37,11 @@ export interface ComparableProduct {
   onPromotion?: boolean | null;
   regularPrice?: number | null;
   promoEndsAt?: Date | null;
+  /**
+   * The size is a confirmed true size from data/store-errors.ts, put in place
+   * by `withConfirmedSize` while the store's listing still bears it out.
+   */
+  sizeConfirmed?: boolean;
 }
 
 /** What one store has to say about one kind of food. */
@@ -84,8 +89,9 @@ export function comparable(
   if (p.price === null || p.packageSize === null || p.packageSize <= 0) return false;
   if (p.unit !== "kg" && p.unit !== "l" && p.unit !== "un") return false;
   // The store's own data is wrong (data/store-errors.ts): its price per kilo
-  // would be impossible, so it sits out, as if its size were unknown.
-  if (isStoreError(p.store, p.storeProductId)) return false;
+  // would be impossible, so it sits out, as if its size were unknown - unless
+  // its true size is confirmed and still holds.
+  if (isStoreError(p.store, p.storeProductId) && !p.sizeConfirmed) return false;
 
   if (measuredIn) return p.unit === measuredIn;
 

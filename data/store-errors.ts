@@ -24,6 +24,14 @@
  * Looking means reading the product's page, which is a request to the store and
  * is done by hand, never automatically. Removing an entry is a person's
  * decision too.
+ *
+ * CONFIRMED SIZES (the owner's decision, 31 October 2026). Where the store's
+ * own pages prove the true size - not where we only guess it - an entry may
+ * carry `trueSize`. The product then takes part in comparisons at that size
+ * instead of sitting out, but only while the store's listing still looks as it
+ * did when the size was confirmed (`confirmedSize`); the moment it does not,
+ * the product sits out again and the nightly check says so. The price is never
+ * replaced: it is still the store's price of the night.
  */
 
 export interface StoreError {
@@ -44,6 +52,38 @@ export interface StoreError {
    * the cue to look again now rather than when the re-check falls due.
    */
   listedSize: { packageSize: number | null; unit: "kg" | "l" | "un" | null };
+  /** The true size, proven by the store's own pages; see CONFIRMED SIZES above. */
+  trueSize?: TrueSize;
+}
+
+export interface TrueSize {
+  packageSize: number;
+  unit: "kg" | "l" | "un";
+  /**
+   * What must still be true each night for the size to be used:
+   *
+   *   "store-figure"       the store's own price per kilo (or litre) still gives
+   *                        this size: price / figure, within 1%. A strong check,
+   *                        made against the store's data every night.
+   *   "listing-unchanged"  the name, the store's size and the store's per-unit
+   *                        figure look as they did (`listedFigure`). Weaker: a
+   *                        change the listing does not show - a crab sold at a
+   *                        fixed price instead of by the kilo, with the same
+   *                        tile - is only caught when the page is looked at again.
+   */
+  holdsWhile: "store-figure" | "listing-unchanged";
+  /** for "listing-unchanged": the unit of the store's figure, and whether it equalled the price */
+  listedFigure?: { unit: "kg" | "l" | "un"; equalsPrice: boolean };
+}
+
+/** What the latest crawl stored for a product, as far as a confirmed size needs it. */
+export interface ListingNow {
+  name: string;
+  price: number | null;
+  packageSize: number | null;
+  unit: string | null;
+  shownUnitPrice?: number | null;
+  shownUnitPriceUnit?: string | null;
 }
 
 /** What the latest crawl stored for a listed product. */
@@ -77,6 +117,32 @@ export function storeErrorStatus(entry: StoreError, stored: StoredState | null):
   const sameSize = a === null || b === null ? a === b : Math.abs(a - b) <= 0.005 * Math.max(a, b);
   if (sameSize && (a === null || entry.listedSize.unit === stored.unit)) return { kind: "unchanged" };
   return { kind: "changed", was: sizeText(entry.listedSize), now: sizeText(stored) };
+}
+
+/**
+ * The entry's true size, if what the store shows now still bears it out; null
+ * when the entry has none or it no longer holds. Null is the safe answer: the
+ * product sits out of comparisons, as every store error did before.
+ */
+export function confirmedSize(
+  entry: StoreError,
+  now: ListingNow
+): { packageSize: number; unit: "kg" | "l" | "un" } | null {
+  const t = entry.trueSize;
+  if (!t || now.price === null || !(now.price > 0)) return null;
+  const figure = now.shownUnitPrice ?? null;
+  const size = { packageSize: t.packageSize, unit: t.unit };
+
+  if (t.holdsWhile === "store-figure") {
+    if (figure === null || !(figure > 0) || now.shownUnitPriceUnit !== t.unit) return null;
+    return Math.abs(now.price / figure - t.packageSize) <= 0.01 * t.packageSize ? size : null;
+  }
+
+  const was = t.listedFigure;
+  if (!was || now.name !== entry.name) return null;
+  if (storeErrorStatus(entry, { packageSize: now.packageSize, unit: now.unit, delisted: false }).kind !== "unchanged") return null;
+  if (figure === null || now.shownUnitPriceUnit !== was.unit) return null;
+  return (Math.abs(figure - now.price) <= 0.005) === was.equalsPrice ? size : null;
 }
 
 export const RECHECK_AFTER_DAYS = 30;
@@ -177,6 +243,9 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: '"43.59 €/Kg" beside "65,39 €" on the product page (65.39 / 43.59 = 1.5 kg)',
     checkedOn: "2026-10-30",
     listedSize: { packageSize: 15, unit: "kg" },
+    // Auchan's own per-kilo figure is read every night, so the 1.5 kg is
+    // checked against the store every night.
+    trueSize: { packageSize: 1.5, unit: "kg", holdsWhile: "store-figure" },
   },
   {
     store: "AUCHAN",
@@ -186,12 +255,33 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: '"Quant. Mínima = 1Kg (1 un)", "15.99 €/un", "15,99 € /Kg" on the product page',
     checkedOn: "2026-10-30",
     listedSize: { packageSize: 0.45, unit: "kg" },
+    // The price is per kilo, so the size is 1 kg. The listing tile shows only
+    // a per-item figure equal to the price, which cannot confirm that: the
+    // weaker check, until the page is looked at again.
+    trueSize: {
+      packageSize: 1, unit: "kg", holdsWhile: "listing-unchanged",
+      listedFigure: { unit: "un", equalsPrice: true },
+    },
   },
 ];
 
-const KEYS = new Set(STORE_ERRORS.map((e) => `${e.store}:${e.storeProductId}`));
+const BY_KEY = new Map(STORE_ERRORS.map((e) => [`${e.store}:${e.storeProductId}`, e]));
 
 /** Is this product's data known to be wrong at the store? */
 export function isStoreError(store: string, storeProductId: string): boolean {
-  return KEYS.has(`${store}:${storeProductId}`);
+  return BY_KEY.has(`${store}:${storeProductId}`);
+}
+
+/**
+ * The row with its confirmed true size in place of the store's, marked
+ * `sizeConfirmed` so the comparison lets it take part; any other row unchanged.
+ * Applied where rows are read for comparing, so the database keeps exactly what
+ * the store showed.
+ */
+export function withConfirmedSize<T extends ListingNow & { store: string; storeProductId: string }>(
+  row: T
+): T & { sizeConfirmed?: boolean } {
+  const entry = BY_KEY.get(`${row.store}:${row.storeProductId}`);
+  const size = entry ? confirmedSize(entry, row) : null;
+  return size ? { ...row, ...size, sizeConfirmed: true } : row;
 }

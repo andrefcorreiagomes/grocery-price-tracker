@@ -15,7 +15,7 @@ import { nameFromUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { correctedSize, implausiblePodSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
 import { cheapestPerStore, comparable, unitsFor, type ComparableProduct } from "../lib/comparison";
 import { promotionOf } from "../lib/promotion";
-import { isStoreError, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
+import { confirmedSize, isStoreError, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
 
 /**
  * Checks of the kinds of food: the classifier, the stores' food sections, the
@@ -538,6 +538,58 @@ function verifyFoodTypes(): number {
   check("every entry is dated, evidenced and unique",
     STORE_ERRORS.every((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.checkedOn) && e.evidence.length > 0 && e.problem.length > 0) &&
       new Set(STORE_ERRORS.map((e) => `${e.store}:${e.storeProductId}`)).size === STORE_ERRORS.length);
+
+  // Confirmed true sizes: compared at them only while the store's listing
+  // bears them out. Figures as stored on the night of 30 October 2026.
+  console.log("\n  confirmed sizes: compared at the true size while the listing bears it out");
+  const cod = {
+    storeProductId: "4083257", store: "AUCHAN", name: "POSTAS BACALHAU RIBERALVES ED. ESPECIAL NATAL 15KG",
+    brand: "Riberalves", price: 65.39, packageSize: 15, unit: "kg", shownUnitPrice: 43.59, shownUnitPriceUnit: "kg",
+  };
+  const codNow = withConfirmedSize(cod);
+  const codCell = cheapestPerStore([codNow], "bacalhau").get("AUCHAN");
+  check("the cod box is compared at 1.5 kg, as Auchan's own figure says",
+    codNow.packageSize === 1.5 && codNow.sizeConfirmed === true && codCell?.kind === "price" &&
+      Math.abs(codCell.unitPrice - 43.59) < 0.01,
+    codCell?.kind === "price" ? `${codCell.unitPrice.toFixed(2)} €/kg` : codCell?.kind);
+  check("a new price with Auchan's figure moving with it still holds", withConfirmedSize({ ...cod, price: 59.99, shownUnitPrice: 39.99 }).sizeConfirmed === true);
+  check("Auchan's figure giving another size (1 kg): the cod sits out again",
+    !withConfirmedSize({ ...cod, shownUnitPrice: 65.39 }).sizeConfirmed &&
+      !comparable(withConfirmedSize({ ...cod, shownUnitPrice: 65.39 }), "bacalhau"));
+  check("no figure, a per-item figure, or no price: it sits out",
+    !withConfirmedSize({ ...cod, shownUnitPrice: null }).sizeConfirmed &&
+      !withConfirmedSize({ ...cod, shownUnitPriceUnit: "un" }).sizeConfirmed &&
+      !withConfirmedSize({ ...cod, price: null }).sizeConfirmed);
+  check("the name fixed to 1.5KG: the figure still agrees, so it still holds (and the entry is flagged as changed)",
+    withConfirmedSize({ ...cod, name: "POSTAS BACALHAU RIBERALVES 1.5KG", packageSize: 1.5 }).sizeConfirmed === true &&
+      storeErrorStatus(STORE_ERRORS.find((e) => e.storeProductId === "4083257")!,
+        { packageSize: 1.5, unit: "kg", delisted: false }).kind === "changed");
+
+  const crab = {
+    storeProductId: "2967517", store: "AUCHAN", name: "SAPATEIRA UNIDADE 450G",
+    brand: "", price: 15.99, packageSize: 0.45, unit: "kg", shownUnitPrice: 15.99, shownUnitPriceUnit: "un",
+  };
+  const crabNow = withConfirmedSize(crab);
+  check("the crab is compared per kilo at its price, 15.99 €/kg",
+    crabNow.packageSize === 1 && crabNow.sizeConfirmed === true && comparable(crabNow, "sapateira"));
+  check("a new price, the tile still showing it per item: still holds",
+    withConfirmedSize({ ...crab, price: 16.49, shownUnitPrice: 16.49 }).sizeConfirmed === true);
+  check("the figure no longer equal to the price: the crab sits out",
+    !withConfirmedSize({ ...crab, shownUnitPrice: 35.53 }).sizeConfirmed);
+  check("a figure per kilo instead of per item: sits out", !withConfirmedSize({ ...crab, shownUnitPriceUnit: "kg" }).sizeConfirmed);
+  check("the name changed: sits out", !withConfirmedSize({ ...crab, name: "SAPATEIRA COZIDA 450G" }).sizeConfirmed);
+  check("the store's size changed: sits out", !withConfirmedSize({ ...crab, packageSize: 0.5 }).sizeConfirmed);
+
+  check("an entry without a confirmed size never gets one",
+    !withConfirmedSize({ ...crackers, shownUnitPrice: 1.19, shownUnitPriceUnit: "kg" }).sizeConfirmed &&
+      !comparable(withConfirmedSize({ ...crackers, shownUnitPrice: 1.19, shownUnitPriceUnit: "kg" }), "bolacha"));
+  check("a product not on the list is passed through untouched",
+    withConfirmedSize({ ...cod, storeProductId: "1" }).packageSize === 15 && !withConfirmedSize({ ...cod, storeProductId: "1" }).sizeConfirmed);
+  check("every confirmed size is positive, and every weaker check records the figure it watches",
+    STORE_ERRORS.every((e) => !e.trueSize || (e.trueSize.packageSize > 0 &&
+      (e.trueSize.holdsWhile === "store-figure" || e.trueSize.listedFigure !== undefined))));
+  check("an entry is read straight from the list: the cod's own entry gives 1.5 kg",
+    confirmedSize(STORE_ERRORS.find((e) => e.storeProductId === "4083257")!, cod)?.packageSize === 1.5);
 
   // Auchan's own per-unit figure on its listing tiles. Prices and figures as
   // they appeared on three live listings, 4 October 2026.

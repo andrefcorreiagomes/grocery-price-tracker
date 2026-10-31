@@ -10,6 +10,7 @@ import {
 } from "./comparison";
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { CATEGORIES } from "../../data/food-tree";
+import { withConfirmedSize } from "../../data/store-errors";
 import { categoryOf } from "./food-tree";
 import {
   anyFormLines,
@@ -62,13 +63,15 @@ async function currentOnly() {
 
 /** Rows of one food type, with their place in the tree. */
 async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
-  return prisma.catalogueProduct.findMany({
+  const rows = await prisma.catalogueProduct.findMany({
     where: { foodType: foodTypeId, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
+  return rows.map((r) => withConfirmedSize(r));
 }
 
 export interface FoodTypePage {
@@ -186,10 +189,11 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
     select: {
       storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
   const byType = new Map<string, TreeProduct[]>();
-  for (const row of rows) {
+  for (const row of rows.map((r) => withConfirmedSize(r))) {
     const list = byType.get(row.foodType as string) ?? [];
     list.push(row);
     byType.set(row.foodType as string, list);
@@ -352,10 +356,15 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
       where: { foodType: kindId, subKind: sub === "" ? null : sub },
       select: {
         storeProductId: true, store: true, name: true, brand: true, packageSize: true, unit: true, labels: true,
+        price: true, shownUnitPrice: true, shownUnitPriceUnit: true,
         prices: { select: { price: true, firstSeenAt: true, lastSeenAt: true }, orderBy: { firstSeenAt: "asc" } },
       },
     })
-  ).filter((r) => sameLabels(r.labels) && !leftOutOfComparisons(r.name));
+  )
+    .filter((r) => sameLabels(r.labels) && !leftOutOfComparisons(r.name))
+    // A confirmed size is judged on what the store shows now, and then holds
+    // for the product's past prices too: the same product, the same size.
+    .map((r) => withConfirmedSize(r));
 
   // Each product's prices as stretches of days: [from, to) while a later price
   // follows, [from, to] for the last one.
@@ -462,11 +471,12 @@ export async function getNamedGroups(
     select: {
       id: true, storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
   if (rows.length === 0) return { shown: [], comparable: 0, found: 0 };
 
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byId = new Map(rows.map((r) => [r.id, withConfirmedSize(r)]));
 
   // Only groups that are current and passed every check the site needs
   // (shownOnSite: no store with two unproven products, every barcode agreeing
@@ -500,9 +510,10 @@ export async function getNamedGroups(
       select: {
         id: true, storeProductId: true, store: true, name: true, brand: true,
         price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
+        shownUnitPrice: true, shownUnitPriceUnit: true,
       },
     });
-    for (const o of others) byId.set(o.id, o);
+    for (const o of others) byId.set(o.id, withConfirmedSize(o));
   }
 
   const byGroup = new Map<string, ComparableProduct[]>();

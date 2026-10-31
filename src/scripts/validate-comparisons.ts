@@ -1,4 +1,4 @@
-import { RECHECK_AFTER_DAYS, STORE_ERRORS, storeErrorStatus } from "../../data/store-errors";
+import { confirmedSize, RECHECK_AFTER_DAYS, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
 import { prisma } from "../lib/db";
 import {
   cheapestPerStore,
@@ -216,9 +216,9 @@ async function main() {
     where: { foodType: { not: null }, delistedAt: null },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, foodType: true,
+      price: true, packageSize: true, unit: true, foodType: true, shownUnitPrice: true, shownUnitPriceUnit: true,
     },
-  })) as (ComparableProduct & { foodType: string })[];
+  })).map((r) => withConfirmedSize(r)) as (ComparableProduct & { foodType: string })[];
 
   const byType = new Map<string, ComparableProduct[]>();
   for (const r of rows) {
@@ -276,11 +276,16 @@ async function main() {
   // Products kept out of comparisons because the store's own data is wrong.
   // Listed every run so none is forgotten, and flagged once its check is old:
   // stores correct their data, and an entry must not outlive its error.
-  console.log(`\nknown store errors, kept out of comparisons (data/store-errors.ts): ${STORE_ERRORS.length}\n`);
+  console.log(
+    `\nknown store errors, kept out of comparisons unless their true size is confirmed (data/store-errors.ts): ${STORE_ERRORS.length}\n`
+  );
   for (const e of STORE_ERRORS) {
     const row = await prisma.catalogueProduct.findUnique({
       where: { store_storeProductId: { store: e.store, storeProductId: e.storeProductId } },
-      select: { packageSize: true, unit: true, delistedAt: true },
+      select: {
+        name: true, price: true, packageSize: true, unit: true, delistedAt: true,
+        shownUnitPrice: true, shownUnitPriceUnit: true,
+      },
     });
     const status = storeErrorStatus(
       e,
@@ -298,6 +303,16 @@ async function main() {
     console.log(`  ${e.store.padEnd(11)} ${e.storeProductId.padEnd(9)} ${e.name}`);
     console.log(`    ${e.problem}`);
     console.log(`    ${verdict}`);
+    // A confirmed true size: compared at it while the listing bears it out.
+    if (e.trueSize && row && row.delistedAt === null) {
+      const size = `${e.trueSize.packageSize} ${e.trueSize.unit}`;
+      console.log(
+        confirmedSize(e, row)
+          ? `    compared at its confirmed size, ${size}: the store's listing still bears it out`
+          : `    CONFIRMED SIZE NO LONGER HOLDS: ${size} was confirmed, but the store's listing has changed; ` +
+            "left out of comparisons until the page is looked at again"
+      );
+    }
   }
 }
 
