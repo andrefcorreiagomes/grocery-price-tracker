@@ -74,6 +74,49 @@ export interface TrueSize {
   holdsWhile: "store-figure" | "listing-unchanged";
   /** for "listing-unchanged": the unit of the store's figure, and whether it equalled the price */
   listedFigure?: { unit: "kg" | "l" | "un"; equalsPrice: boolean };
+  /**
+   * Where the proof is another store selling the same barcode at this size (31
+   * October 2026): that product. The nightly check (`sameBarcodeProblem`) says
+   * CONFIRMED SIZE NO LONGER HOLDS when it stops bearing the size out, for a
+   * person to look; the comparison itself rests on `holdsWhile`.
+   */
+  sameBarcodeAt?: { store: StoreError["store"]; storeProductId: string };
+}
+
+/** What the latest crawl stored for a product, as far as the same-barcode check needs it. */
+export interface BarcodeListing {
+  ean: string | null;
+  price: number | null;
+  packageSize: number | null;
+  unit: string | null;
+  delisted: boolean;
+}
+
+/** How far apart the two stores' prices may be before the barcode no longer vouches for the size. */
+export const SAME_BARCODE_PRICE_RATIO = 1.5;
+
+/**
+ * Why the other store's product no longer vouches for the true size, or null
+ * while it does: still on sale, still the same barcode, still that size (within
+ * 1%), and a price within SAME_BARCODE_PRICE_RATIO of this one - a much dearer
+ * or cheaper pack would suggest a different size after all.
+ */
+export function sameBarcodeProblem(entry: StoreError, here: BarcodeListing | null, there: BarcodeListing | null): string | null {
+  const t = entry.trueSize;
+  const at = t?.sameBarcodeAt;
+  if (!t || !at) return null;
+  const where = `${at.store} ${at.storeProductId}`;
+  if (!here || here.ean === null) return `this product's barcode is no longer known`;
+  if (!there || there.delisted) return `${where} is no longer on sale`;
+  if (there.ean !== here.ean) return `${where} no longer has the same barcode`;
+  if (there.unit !== t.unit || there.packageSize === null || Math.abs(there.packageSize - t.packageSize) > 0.01 * t.packageSize) {
+    return `${where} now shows ${sizeText(there)}`;
+  }
+  if (here.price !== null && there.price !== null) {
+    const ratio = Math.max(here.price, there.price) / Math.min(here.price, there.price);
+    if (ratio > SAME_BARCODE_PRICE_RATIO) return `${where} costs ${there.price} €, against ${here.price} € here`;
+  }
+  return null;
 }
 
 /** What the latest crawl stored for a product, as far as a confirmed size needs it. */
@@ -160,6 +203,11 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: '"4,85 €/un" beside a price of 19,39 €; barcode 8000070084735 is "60UN" at Auchan',
     checkedOn: "2026-10-29",
     listedSize: { packageSize: 4, unit: "un" },
+    trueSize: {
+      packageSize: 60, unit: "un", holdsWhile: "listing-unchanged",
+      listedFigure: { unit: "un", equalsPrice: false },
+      sameBarcodeAt: { store: "AUCHAN", storeProductId: "4029984" },
+    },
   },
   {
     store: "CONTINENTE",
@@ -169,6 +217,11 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: '"1,25 €/un" beside a price of 9,99 €; barcode 8000070053823 is "30 UN" at Auchan',
     checkedOn: "2026-10-29",
     listedSize: { packageSize: 8, unit: "un" },
+    trueSize: {
+      packageSize: 30, unit: "un", holdsWhile: "listing-unchanged",
+      listedFigure: { unit: "un", equalsPrice: false },
+      sameBarcodeAt: { store: "AUCHAN", storeProductId: "4030046" },
+    },
   },
   // Continente's "Leite Meio Gordo Bio Prado Verde" (8168224) was listed here on
   // 31 October 2026: out of stock, its page showed one carton's price for the
@@ -205,6 +258,12 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: 'price 1.10 €, name "30X30G", Auchan\'s per-kilo figure "3.67 €/Kg" on its product page',
     checkedOn: "2026-10-04",
     listedSize: { packageSize: 0.9, unit: "kg" },
+    // Continente sells the same barcode (8445291111165) as one 30 g bar, at the same 1.10 €.
+    trueSize: {
+      packageSize: 0.03, unit: "kg", holdsWhile: "listing-unchanged",
+      listedFigure: { unit: "kg", equalsPrice: false },
+      sameBarcodeAt: { store: "CONTINENTE", storeProductId: "8005509" },
+    },
   },
   {
     store: "AUCHAN",
@@ -219,6 +278,12 @@ export const STORE_ERRORS: StoreError[] = [
     evidence: 'price 0.99 € (1.45 € on 22 Oct), name "1UN", Auchan\'s per-kilo figure 1.32 €/Kg on its listing tile',
     checkedOn: "2026-10-22",
     listedSize: { packageSize: 0.751, unit: "kg" },
+    // Continente sells the same barcode (5601028125420) as 75 g, at the same 0.99 €.
+    trueSize: {
+      packageSize: 0.075, unit: "kg", holdsWhile: "listing-unchanged",
+      listedFigure: { unit: "kg", equalsPrice: false },
+      sameBarcodeAt: { store: "CONTINENTE", storeProductId: "8952813" },
+    },
   },
   // Two Auchan squid tins (3949703, 3949811, "115 (72) G") were listed here
   // from 4 to 31 October 2026: Auchan's per-kilo figure made them 719 g. Since

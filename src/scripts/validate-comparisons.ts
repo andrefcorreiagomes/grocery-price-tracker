@@ -1,4 +1,4 @@
-import { confirmedSize, RECHECK_AFTER_DAYS, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
+import { confirmedSize, RECHECK_AFTER_DAYS, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
 import { prisma } from "../lib/db";
 import {
   cheapestPerStore,
@@ -312,6 +312,22 @@ async function main() {
           : `    CONFIRMED SIZE NO LONGER HOLDS: ${size} was confirmed, but the store's listing has changed; ` +
             "left out of comparisons until the page is looked at again"
       );
+      // Proven by the same barcode at another store: does that product still say so?
+      const at = e.trueSize.sameBarcodeAt;
+      if (at) {
+        const listing = { ean: true, price: true, packageSize: true, unit: true, delistedAt: true } as const;
+        const [here, there] = await Promise.all([
+          prisma.catalogueProduct.findUnique({ where: { store_storeProductId: { store: e.store, storeProductId: e.storeProductId } }, select: listing }),
+          prisma.catalogueProduct.findUnique({ where: { store_storeProductId: { store: at.store, storeProductId: at.storeProductId } }, select: listing }),
+        ]);
+        const asListing = (r: typeof here) => (r ? { ...r, delisted: r.delistedAt !== null } : null);
+        const problem = sameBarcodeProblem(e, asListing(here), asListing(there));
+        console.log(
+          problem === null
+            ? `    the same barcode at ${at.store} ${at.storeProductId} still shows ${size}`
+            : `    CONFIRMED SIZE NO LONGER HOLDS: ${problem} - look at both pages and decide whether ${size} still holds`
+        );
+      }
     }
   }
 }

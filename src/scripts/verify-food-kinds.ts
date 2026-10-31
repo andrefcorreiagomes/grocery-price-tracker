@@ -15,7 +15,7 @@ import { nameFromUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { correctedSize, implausiblePodSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
 import { cheapestPerStore, comparable, unitsFor, type ComparableProduct } from "../lib/comparison";
 import { promotionOf } from "../lib/promotion";
-import { confirmedSize, isStoreError, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
+import { confirmedSize, isStoreError, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
 
 /**
  * Checks of the kinds of food: the classifier, the stores' food sections, the
@@ -590,6 +590,47 @@ function verifyFoodTypes(): number {
       (e.trueSize.holdsWhile === "store-figure" || e.trueSize.listedFigure !== undefined))));
   check("an entry is read straight from the list: the cod's own entry gives 1.5 kg",
     confirmedSize(STORE_ERRORS.find((e) => e.storeProductId === "4083257")!, cod)?.packageSize === 1.5);
+
+  // Proven by the same barcode at another store (31 October 2026), as the
+  // server's database held them that day.
+  console.log("\n  confirmed sizes proven by the same barcode at another store");
+  const oro = {
+    storeProductId: "8844842", store: "CONTINENTE", name: "Cápsulas de Café Qualitá Oro Int 8 Lavazza",
+    brand: "Lavazza", price: 19.39, packageSize: 4, unit: "un", shownUnitPrice: 4.85, shownUnitPriceUnit: "un",
+  };
+  check("the Lavazza Oro box is compared at 60 capsules", withConfirmedSize(oro).packageSize === 60 && withConfirmedSize(oro).sizeConfirmed === true);
+  check("a new price moves Continente's 4-capsule reading: it sits out until looked at",
+    !withConfirmedSize({ ...oro, price: 21.99, packageSize: 4.53 }).sizeConfirmed);
+  const gusto = { ...oro, storeProductId: "8844800", name: "Cápsulas de Café Crema e Gusto Int 12 Lavazza", price: 9.99, packageSize: 8, shownUnitPrice: 1.25 };
+  check("the Crema e Gusto box at 30 capsules", withConfirmedSize(gusto).packageSize === 30);
+  const bar = {
+    storeProductId: "3739748", store: "AUCHAN", name: "SNACK NESTLÉ EXTRAFINO 30X30G",
+    brand: "Nestlé", price: 1.1, packageSize: 0.8999999999999999, unit: "kg", shownUnitPrice: 3.67, shownUnitPriceUnit: "kg",
+  };
+  check("the Extrafino bar at 30 g", withConfirmedSize(bar).packageSize === 0.03);
+  const bollycao = {
+    storeProductId: "4068801", store: "AUCHAN", name: "CROISSANTS BOLLYCAO RECHEIO CACAU E AVELÃ 1UN",
+    brand: "Bollycao", price: 0.99, packageSize: 0.75, unit: "kg", shownUnitPrice: 1.32, shownUnitPriceUnit: "kg",
+  };
+  check("the Bollycao at 75 g, its figure's rounding (0.75 against 0.751) no change", withConfirmedSize(bollycao).packageSize === 0.075);
+  check("Auchan's figure fixed to the true one (13.20 €/kg): the listing changed, it sits out and is flagged",
+    !withConfirmedSize({ ...bollycao, packageSize: 0.075, shownUnitPrice: 13.2 }).sizeConfirmed);
+
+  const oroEntry = STORE_ERRORS.find((e) => e.storeProductId === "8844842")!;
+  const listing = (over: Partial<Parameters<typeof sameBarcodeProblem>[1] & object> = {}) =>
+    ({ ean: "8000070084735", price: 19.39, packageSize: 4, unit: "un", delisted: false, ...over });
+  const auchanOro = (over = {}) => ({ ean: "8000070084735", price: 21.99, packageSize: 60, unit: "un", delisted: false, ...over });
+  check("Auchan's same barcode at 60 capsules and 21.99 €: the size holds", sameBarcodeProblem(oroEntry, listing(), auchanOro()) === null);
+  check("Auchan's product gone: flagged", sameBarcodeProblem(oroEntry, listing(), auchanOro({ delisted: true })) !== null &&
+    sameBarcodeProblem(oroEntry, listing(), null) !== null);
+  check("another barcode there: flagged", sameBarcodeProblem(oroEntry, listing(), auchanOro({ ean: "1" })) !== null);
+  check("another size there (40 capsules): flagged", sameBarcodeProblem(oroEntry, listing(), auchanOro({ packageSize: 40 })) !== null);
+  check("prices more than 1.5 times apart: flagged", sameBarcodeProblem(oroEntry, listing(), auchanOro({ price: 32 })) !== null);
+  check("no barcode known here: flagged", sameBarcodeProblem(oroEntry, listing({ ean: null }), auchanOro()) !== null);
+  check("an entry proven otherwise is never flagged by this check",
+    sameBarcodeProblem(STORE_ERRORS.find((e) => e.storeProductId === "4083257")!, listing(), null) === null);
+  check("every barcode proof names a product at ANOTHER store",
+    STORE_ERRORS.every((e) => !e.trueSize?.sameBarcodeAt || e.trueSize.sameBarcodeAt.store !== e.store));
 
   // Auchan's own per-unit figure on its listing tiles. Prices and figures as
   // they appeared on three live listings, 4 October 2026.

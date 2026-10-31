@@ -1,7 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { prisma } from "../lib/db";
-import { FOOD_TYPE_BY_ID } from "../lib/food-types";
-import { getFoodTypePage, getFreshness, currentSince } from "../lib/grupos";
+import { getComparableFoodTypes, getFoodTypePage, getFreshness, currentSince } from "../lib/grupos";
 import { parseSize } from "../lib/sizes";
 import type { Cell } from "../lib/comparison";
 
@@ -127,9 +126,11 @@ async function main() {
   const findings: Finding[] = [];
   let pages = 0;
   let rowsChecked = 0;
-  for (const type of FOOD_TYPE_BY_ID.values()) {
-    if (type.hidden) continue;
-    const page = await getFoodTypePage(type.id);
+  // The pages the site's food list shows. Until 31 October 2026 every kind
+  // with a page was counted, 217 against the site's 215: lobster and cereal
+  // drinks have a page with no comparison in it, which the list leaves out.
+  for (const { id } of await getComparableFoodTypes()) {
+    const page = await getFoodTypePage(id);
     if (!page) continue;
     pages++;
     for (const g of page.groups) {
