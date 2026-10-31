@@ -170,6 +170,19 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-10-29",
     listedSize: { packageSize: 8, unit: "un" },
   },
+  // Out of stock, but Continente's page still shows a price: the price of ONE
+  // carton for the pack of six, so 0.22 EUR a litre. The page reader does not
+  // yet read "out of stock" at Continente; until it does, this one sits out.
+  // Found by the crawl report of 31 October 2026 (7.74 to 1.29, a 6x move).
+  {
+    store: "CONTINENTE",
+    storeProductId: "8168224",
+    name: "Leite Meio Gordo Bio Prado Verde",
+    problem: "A pack of 6 x 1 L priced 1.29 € (one carton's price) while out of stock: 0.22 €/l, the cheapest milk by far.",
+    evidence: '"emb. 6 x 1 lt", "1,29€", "0,22€/lt", "Indisponível" and schema.org "OutOfStock" on the product page; 7.74 € the night before',
+    checkedOn: "2026-10-31",
+    listedSize: { packageSize: 6, unit: "l" },
+  },
   {
     store: "PINGO_DOCE",
     storeProductId: "988950",
@@ -215,26 +228,11 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-10-22",
     listedSize: { packageSize: 0.751, unit: "kg" },
   },
-  {
-    store: "AUCHAN",
-    storeProductId: "3949703",
-    name: "POTA PEDAÇOS AUCHAN EM MOLHO AMERICANO 115 (72) G",
-    problem:
-      "Auchan's per-kilo figure implies 719 g for a tin the name gives as 115 g (72 g drained): ten times too much.",
-    evidence: 'price 1.59 €, name "115 (72) G", Auchan\'s per-kilo figure 2.21 €/Kg on its listing tile',
-    checkedOn: "2026-10-04",
-    listedSize: { packageSize: 0.719, unit: "kg" },
-  },
-  {
-    store: "AUCHAN",
-    storeProductId: "3949811",
-    name: "POTA PEDAÇOS AUCHAN EM TINTA 115 (72) G",
-    problem:
-      "Auchan's per-kilo figure implies 719 g for a tin the name gives as 115 g (72 g drained): ten times too much.",
-    evidence: 'price 1.69 €, name "115 (72) G", Auchan\'s per-kilo figure 2.35 €/Kg on its listing tile',
-    checkedOn: "2026-10-04",
-    listedSize: { packageSize: 0.719, unit: "kg" },
-  },
+  // Two Auchan squid tins (3949703, 3949811, "115 (72) G") were listed here
+  // from 4 to 31 October 2026: Auchan's per-kilo figure made them 719 g. Since
+  // the full-weight rule for tins (29 October) the size is read from the name,
+  // 115 g, and they are compared correctly; taken off on 31 October 2026, the
+  // owner's decision.
   {
     store: "AUCHAN",
     storeProductId: "4083257",

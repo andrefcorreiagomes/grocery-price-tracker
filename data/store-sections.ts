@@ -93,6 +93,9 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       Destaques: "mixed",
       "Sugestões Continente": "mixed",
       "Folhetos Pesquisa": "mixed",
+      // The store's search page, listed in its category sitemap from 31 October
+      // 2026 with no products of its own; decided like the flyer search.
+      Pesquisa: "mixed",
 
       Limpeza: "non-food",
       // Holds baby food too; baby food is its own piece of work.
