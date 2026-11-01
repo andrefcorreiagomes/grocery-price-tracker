@@ -122,6 +122,8 @@ export interface AuchanCrawlResult {
   tilesKept: number;
   /** well-formed tiles carrying no price: out of stock, skipped, benign */
   tilesUnpriced: number;
+  /** tiles showing a price but marked out of stock, kept with their price (TileParse.markedUnavailable) */
+  tilesMarkedUnavailable: number;
   /** tiles broken in a way a healthy grid never is - the tile-yield alarm's numerator */
   tilesMalformed: number;
   /** tiles that parsed but carried no category, so were dropped as non-food */
@@ -231,6 +233,7 @@ export async function crawlAuchan(
   let tilesSeen = 0;
   let tilesKept = 0;
   let tilesUnpriced = 0;
+  let tilesMarkedUnavailable = 0;
   let tilesMalformed = 0;
   let withoutCategory = 0;
   let publishedTotal = 0;
@@ -246,6 +249,7 @@ export async function crawlAuchan(
         tilesSeen += parse.seen;
         tilesKept += parse.hits.length;
         tilesUnpriced += parse.unpriced;
+        tilesMarkedUnavailable += parse.markedUnavailable;
         tilesMalformed += parse.malformed;
         withoutCategory += parse.withoutCategory;
         delivered += parse.seen;
@@ -334,6 +338,7 @@ export async function crawlAuchan(
     tilesSeen,
     tilesKept,
     tilesUnpriced,
+    tilesMarkedUnavailable,
     tilesMalformed,
     withoutCategory,
     publishedTotal,

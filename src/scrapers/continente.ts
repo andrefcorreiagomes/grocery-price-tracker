@@ -55,14 +55,13 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   // every one of them - measured, 0 of 124 products until this was allowed for.
   const eanMatch = html.match(/[?&](?:amp;)?ean=(\d+)/i);
   // 0 or unreadable: listed, not for sale now (sellablePrice, the rule at every store).
-  const shownPrice = sellablePrice(Number(product.offers.price));
-  // Out of stock: listed, not for sale now, as at Auchan and Pingo Doce (the
-  // owner's decision, 31 October 2026). The page keeps a price and says
-  // "Indisponível" on its add-to-cart button: 13 of 100 products opened at
-  // random that day, the data and the button agreeing on all of them. One, a
-  // 6-pack of milk, showed one carton's price. The shown price still reads the
-  // size below, so a product out of stock keeps its size.
-  const price = NOT_SELLABLE.test(String(product.offers.availability ?? "")) ? null : shownPrice;
+  const price = sellablePrice(Number(product.offers.price));
+  // Out of stock: the page keeps a price and says "Indisponível" on its
+  // add-to-cart button - 13 of 100 products opened at random on 31 October
+  // 2026, the data and the button agreeing on all of them. The price is kept
+  // and the product marked (the owner's rule, 1 November 2026); for one night,
+  // 1 November, it was thrown away instead.
+  const outOfStock = price === null || NOT_SELLABLE.test(String(product.offers.availability ?? ""));
 
   // Scoped to the product's own price box: the page has exactly one, while
   // carousels of other products elsewhere carry their own per-kilo prices.
@@ -75,8 +74,8 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     correctedSize(
       product.name ?? "",
       parsePackageSize($(".ct-pdp--unit").first().text().trim()),
-      pricedPerUnit(headline, shownPrice)
-    ) ?? sizeFromUnitPrice(secondary, shownPrice);
+      pricedPerUnit(headline, price)
+    ) ?? sizeFromUnitPrice(secondary, price);
 
   return {
     name: product.name ?? "",
@@ -84,6 +83,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     // it's sold under their own fresh-food program, not literally unbranded
     brand: product.brand?.name || "Continente",
     price,
+    outOfStock,
     // detached: a capture from `html` would otherwise keep the whole 2 MB page
     // alive for as long as this row exists. See `detached` in types.ts.
     ean: eanMatch ? detached(eanMatch[1]) : null,
@@ -93,7 +93,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     ...parsePromotion(html, price),
     // Usually the line under the price; for goods sold by weight, the price
     // itself is per kilo ("2,49€/kg") and the line under it is per item.
-    shownUnitPrice: pricedPerUnit(headline, shownPrice) ? parseShownUnitPrice(headline) : parseShownUnitPrice(secondary),
+    shownUnitPrice: pricedPerUnit(headline, price) ? parseShownUnitPrice(headline) : parseShownUnitPrice(secondary),
   };
 }
 

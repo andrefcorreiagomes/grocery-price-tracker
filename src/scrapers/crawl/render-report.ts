@@ -394,6 +394,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           }),
           `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
           `  listed without a price: ${g.tilesUnpriced.toLocaleString()} (out of stock, skipped - not a fault)`,
+          ...(g.tilesMarkedUnavailable !== undefined
+            ? [`  marked out of stock:  ${g.tilesMarkedUnavailable.toLocaleString()} (${((100 * g.tilesMarkedUnavailable) / Math.max(1, g.tilesKept)).toFixed(1)}% of those kept; price kept, marked out of stock; about 9% expected)`]
+            : []),
           `  MALFORMED tiles:      ${g.tilesMalformed.toLocaleString()}` +
             (g.tilesMalformed === 0
               ? "  (the parser read every tile it should)"
@@ -673,9 +676,11 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
         "normal, five hundred means a parser broke.",
       [
         `  ${report.quality.total} products on sale; missing price ${report.quality.missingPrice}` +
-          // Every store keeps a product listed but not for sale as a row with
-          // no price, since 22 October 2026 (code review H7).
-          " (listed but not for sale - kept with no price), " +
+          // A product listed but not for sale is kept: with no price when the
+          // store shows none (Pingo Doce's "0,00"), with the price it shows and
+          // marked out of stock otherwise (the owner's rule, 1 November 2026).
+          " (listed with no price shown), " +
+          (report.quality.outOfStock !== undefined ? `marked out of stock ${report.quality.outOfStock} (price kept where shown), ` : "") +
           `brand ${report.quality.missingBrand}, category ${report.quality.missingCategory}, ` +
           `url ${report.quality.missingUrl}`,
         // Its reader fills an empty brand with "Continente", the store's own

@@ -26,6 +26,7 @@ import {
   isEmptyCategoryStorm,
   isTileYieldCollapse,
   isUnderCollectedWalk,
+  markedUnavailableReason,
   shouldConfirmAbsences,
   tileHealthReasons,
   truncatedWalks,
@@ -385,6 +386,7 @@ async function main() {
     tilesSeen: walk.tilesSeen,
     tilesKept: walk.tilesKept,
     tilesUnpriced: walk.tilesUnpriced,
+    tilesMarkedUnavailable: walk.tilesMarkedUnavailable,
     tilesMalformed: walk.tilesMalformed,
     withoutCategory: walk.withoutCategory,
     segments: [...segmentCounts].sort((a, b) => b.count - a.count),
@@ -507,6 +509,10 @@ async function main() {
         `prices moved this run - grocery prices are sticky, so the price reader is probably reading the wrong number. ` +
         `NOTE: prices are written as the walk runs, so these rows already exist and share this run's seenAt.`
     );
+  }
+  {
+    const reason = markedUnavailableReason({ marked: walk.tilesMarkedUnavailable, kept: walk.tilesKept, complete });
+    if (reason) report = escalate(report, "WARN", reason);
   }
   if (alive.length > 0) {
     report = escalate(

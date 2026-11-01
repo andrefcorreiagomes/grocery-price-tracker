@@ -157,6 +157,7 @@ export async function fetchPingoDoceProducts(
       id: target.storeProductId,
       name: product.name,
       price: product.price,
+      outOfStock: product.outOfStock,
       brand: product.brand || "Pingo Doce",
       // From the URL, not the page: the breadcrumb gives the leaf alone.
       category: target.categoryPath,

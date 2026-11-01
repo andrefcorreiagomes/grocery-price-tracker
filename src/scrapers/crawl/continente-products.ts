@@ -332,6 +332,7 @@ export async function fetchProducts(
       id: target.storeProductId,
       name: product.name,
       price: product.price,
+      outOfStock: product.outOfStock,
       brand: product.brand || "Continente",
       category: shelf,
       url: addressToStore(target, product.finalUrl),

@@ -4,6 +4,7 @@ import {
   cheapestPerStore,
   comparable,
   comparableStoreCount,
+  forSaleNow,
   STORES,
   type Cell,
   type ComparableProduct,
@@ -217,8 +218,10 @@ async function main() {
     select: {
       storeProductId: true, store: true, name: true, brand: true,
       price: true, packageSize: true, unit: true, foodType: true, shownUnitPrice: true, shownUnitPriceUnit: true,
+      unavailableAt: true,
     },
-  })).map((r) => withConfirmedSize(r)) as (ComparableProduct & { foodType: string })[];
+    // Out of stock sits out, as on the site (forSaleNow).
+  })).map((r) => forSaleNow(withConfirmedSize(r))) as (ComparableProduct & { foodType: string })[];
 
   const byType = new Map<string, ComparableProduct[]>();
   for (const r of rows) {

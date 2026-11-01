@@ -280,7 +280,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 firstSeenAt: seenAt,
                 lastSeenAt: seenAt,
                 lastCheckedAt: seenAt,
-                unavailableAt: p.price === null ? seenAt : null,
+                unavailableAt: p.price === null || p.outOfStock ? seenAt : null,
                 ...enrichment(p),
               },
               update: {
@@ -301,7 +301,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 deadCount: 0,
                 delistedAt: null,
                 delistReason: null,
-                unavailableAt: p.price === null ? seenAt : null,
+                unavailableAt: p.price === null || p.outOfStock ? seenAt : null,
                 ...enrichment(p),
               },
               select: { id: true, price: true },

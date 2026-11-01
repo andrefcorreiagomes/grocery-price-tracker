@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import {
   cheapestStores,
   comparable,
+  forSaleNow,
   namedGroup,
   unitsFor,
   type Cell,
@@ -67,11 +68,11 @@ async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
     where: { foodType: foodTypeId, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
-  return rows.map((r) => withConfirmedSize(r));
+  return rows.map((r) => forSaleNow(withConfirmedSize(r)));
 }
 
 export interface FoodTypePage {
@@ -188,12 +189,12 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
     where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
     select: {
       storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
   const byType = new Map<string, TreeProduct[]>();
-  for (const row of rows.map((r) => withConfirmedSize(r))) {
+  for (const row of rows.map((r) => forSaleNow(withConfirmedSize(r)))) {
     const list = byType.get(row.foodType as string) ?? [];
     list.push(row);
     byType.set(row.foodType as string, list);
@@ -470,13 +471,13 @@ export async function getNamedGroups(
     where: { foodType: foodTypeId, delistedAt: null, ...current },
     select: {
       id: true, storeProductId: true, store: true, name: true, brand: true,
-      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
+      price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
   });
   if (rows.length === 0) return { shown: [], comparable: 0, found: 0 };
 
-  const byId = new Map(rows.map((r) => [r.id, withConfirmedSize(r)]));
+  const byId = new Map(rows.map((r) => [r.id, forSaleNow(withConfirmedSize(r))]));
 
   // Only groups that are current and passed every check the site needs
   // (shownOnSite: no store with two unproven products, every barcode agreeing
@@ -509,11 +510,11 @@ export async function getNamedGroups(
       where: { id: { in: otherIds.slice(i, i + 500) }, delistedAt: null, ...current },
       select: {
         id: true, storeProductId: true, store: true, name: true, brand: true,
-        price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true,
+        price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
         shownUnitPrice: true, shownUnitPriceUnit: true,
       },
     });
-    for (const o of others) byId.set(o.id, withConfirmedSize(o));
+    for (const o of others) byId.set(o.id, forSaleNow(withConfirmedSize(o)));
   }
 
   const byGroup = new Map<string, ComparableProduct[]>();

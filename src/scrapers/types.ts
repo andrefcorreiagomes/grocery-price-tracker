@@ -18,6 +18,13 @@ export interface ScrapeResult {
    * product at the top of every cheapest-per-store ranking.
    */
   price: number | null;
+  /**
+   * The store says it cannot be sold now: out of stock, or no price at all.
+   * The price it shows is kept in `price` all the same - the owner's rule, 1
+   * November 2026: "if it has a price, save its price, but mark it out of
+   * stock" - and the comparisons leave the product out while this is true.
+   */
+  outOfStock: boolean;
   ean: string | null;
   /**
    * The store's own category path for this product, when the page carries it.

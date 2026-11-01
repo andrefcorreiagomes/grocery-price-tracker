@@ -413,11 +413,11 @@ export async function stopTrackingMovedOut(
  * now: listed but unavailable (out of stock). Stamps `unavailableAt`, which the
  * next crawl re-checks (see UNAVAILABLE_RECHECK_DAYS), and touches the clock.
  *
- * The same rule at every store since 22 October 2026 (code review H7): kept,
- * with NO current price, and never counted as gone. So the price goes - the
- * price history keeps it - where Auchan's out-of-stock products used to keep
- * showing their last price for up to two weeks; and the dead-night counter is
- * reset, because the page answered.
+ * Kept, never counted as gone, and the dead-night counter reset, because the
+ * page answered. The last price stays: the marker alone keeps the product out
+ * of the comparisons (the owner's rule, 1 November 2026: "if it has a price,
+ * save its price, but mark it out of stock"). From 22 October to 1 November
+ * 2026 the price was erased here instead.
  */
 export async function recordUnavailable(
   store: Store,
@@ -427,7 +427,7 @@ export async function recordUnavailable(
   await forEachBatch(storeProductIds, async (slice) => {
     await prisma.catalogueProduct.updateMany({
       where: { store, storeProductId: { in: slice } },
-      data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt, price: null, deadCount: 0 },
+      data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt, deadCount: 0 },
     });
   });
 }

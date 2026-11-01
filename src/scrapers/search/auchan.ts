@@ -40,6 +40,12 @@ export interface TileParse {
   seen: number;
   /** well-formed tiles that simply carry no price: out of stock, skipped, benign */
   unpriced: number;
+  /**
+   * Tiles that show a price but are marked out of stock (`auc-product-unavailable`):
+   * kept with that price and marked out of stock. About 9% expected (31 October 2026 sample);
+   * near zero would mean the grid pages stopped carrying the mark.
+   */
+  markedUnavailable: number;
   /** tiles broken in a way a healthy grid never is: bad JSON, or a missing id/name/url */
   malformed: number;
   /** hits that parsed but carry no category path */
@@ -56,6 +62,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
   const hits: SearchHit[] = [];
   let seen = 0;
   let unpriced = 0;
+  let markedUnavailable = 0;
   let malformed = 0;
   let withoutCategory = 0;
 
@@ -95,18 +102,28 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     const category = gtm.category ?? "";
     if (category === "") withoutCategory++;
 
-    const price = Number(gtm.price);
-    const promotion = auchanTilePromotion($(el).find(".auc-price__stricked, .strike-through").first().text(), price);
+    // An out-of-stock tile still shows a price: Auchan greys it, adds the class
+    // `auc-product-unavailable` and an "Indisponível online" box in place of the
+    // buy button. Checked 31 October 2026 on one shelf page: the 1 marked tile's
+    // page said OutOfStock, the 23 unmarked all InStock. Kept with the price it
+    // shows and marked out of stock - the owner's rule, 1 November 2026, as at
+    // Continente - not skipped: a skipped product looks missing to the nightly,
+    // which would open its page to find out why.
+    const outOfStock = $(el).hasClass("auc-product-unavailable");
+    if (outOfStock) markedUnavailable++;
+    const shownPrice = Number(gtm.price);
+    const promotion = auchanTilePromotion($(el).find(".auc-price__stricked, .strike-through").first().text(), shownPrice);
     // Auchan's own per-kilo or per-item figure, printed on every tile measured.
     // When it settles the size, the size goes with the tile; when it does not,
     // the field stays absent and the name decides later, as it always did.
     const figure = $(el).find(".auc-measures--price-per-unit").first().text().replace(/\s+/g, " ").trim();
-    const size = figure ? auchanTileSize(price, figure, gtm.name) : undefined;
+    const size = figure ? auchanTileSize(shownPrice, figure, gtm.name) : undefined;
 
     hits.push({
       id: gtm.id,
       name: gtm.name,
-      price,
+      price: shownPrice,
+      outOfStock,
       brand: gtm.brand ?? "",
       category,
       url: urls.absoluteProductUrl,
@@ -121,7 +138,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     });
   });
 
-  return { hits, seen, unpriced, malformed, withoutCategory };
+  return { hits, seen, unpriced, markedUnavailable, malformed, withoutCategory };
 }
 
 /**

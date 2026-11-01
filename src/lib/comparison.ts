@@ -65,6 +65,16 @@ export type Cell =
    */
   | { kind: "no-size"; example: ComparableProduct };
 
+/**
+ * A row as the comparisons see it: no price while the store marks the product
+ * out of stock. The price the store shows is still saved, and its history kept
+ * (the owner's rule, 1 November 2026: keep the price, mark the product out of
+ * stock, check it every night) - it just cannot be "the cheapest".
+ */
+export function forSaleNow<T extends { price: number | null; unavailableAt: Date | null }>(row: T): T {
+  return row.unavailableAt === null ? row : { ...row, price: null };
+}
+
 /** Every store the app compares, in the order the page shows them. */
 export const STORES = STORE_ORDER;
 

@@ -2,11 +2,17 @@ export interface SearchHit {
   id: string;
   name: string;
   /**
-   * Null only from the product-page crawlers, for a product listed without a
-   * sellable price. Listing tiles omit those products entirely, so a row built
-   * from a grid always has a number here.
+   * Null for a product listed without a sellable price, from the product-page
+   * crawlers (Pingo Doce's "0,00 EUR"). A tile with no price at all is omitted.
    */
   price: number | null;
+  /**
+   * The store marks it out of stock (a product page, or an Auchan listing tile
+   * with the out-of-stock mark). Its shown price stays in `price`; the product
+   * is saved with the "not for sale since" marker and left out of the
+   * comparisons (the owner's rule, 1 November 2026). Missing means false.
+   */
+  outOfStock?: boolean;
   brand: string;
   category: string;
   url: string;

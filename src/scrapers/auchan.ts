@@ -125,6 +125,9 @@ export function parseAuchanPage(html: string, url: string): ScrapeResult {
     // No price on the page: listed, not for sale online (auchanStatusFromHtml).
     // Until 29 October 2026 such a page was unreadable and the product never saved.
     price: hasPrice(product) ? sellablePrice(Number(product.offers?.price)) : null,
+    // Out of stock keeps the price the page shows, marked (the owner's rule,
+    // 1 November 2026); no price at all is not for sale online either.
+    outOfStock: auchanStatusFromHtml(html) === "unavailable",
     ean: product.gtin ?? null,
     categoryPath: null,
     // Auchan writes the size into the product name itself - "BACON EXTRA CUBOS

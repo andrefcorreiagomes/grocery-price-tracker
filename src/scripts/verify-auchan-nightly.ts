@@ -8,6 +8,7 @@ import {
   isTileYieldCollapse,
   isTruncatedWalk,
   isUnderCollectedWalk,
+  markedUnavailableReason,
   shouldConfirmAbsences,
   truncatedWalks,
   type SegmentCount,
@@ -106,6 +107,12 @@ export async function verifyAuchanNightly(): Promise<number> {
     "a full grid with an imperfect parse yield is not truncated",
     !isTruncatedWalk({ delivered: 55_200, published: 55_200, failedDepartments: [], complete: true })
   );
+
+  // The out-of-stock mark on listing tiles: about 9% expected (31 October 2026).
+  check("about 9% of tiles marked out of stock is no warning", markedUnavailableReason({ marked: 1_600, kept: 18_000, complete: true }) === null);
+  check("almost no tile marked out of stock warns: the grid may lack the mark", markedUnavailableReason({ marked: 20, kept: 18_000, complete: true }) !== null);
+  check("over 30% marked out of stock warns: the mark may mean something else", markedUnavailableReason({ marked: 6_000, kept: 18_000, complete: true }) !== null);
+  check("a partial walk never warns about the mark", markedUnavailableReason({ marked: 0, kept: 400, complete: false }) === null);
 
   // truncatedWalks: the per-category form the union nightly uses. A healthy
   // union - root delivering its full count (with unpriced tiles) and every

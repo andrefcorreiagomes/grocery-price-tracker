@@ -152,15 +152,19 @@ export function verifyStorePages(): number {
       "co-stock"
     );
   const outOfStock = coStock("https://schema.org/OutOfStock");
-  check("Continente: a priced but OutOfStock page is listed, not for sale", outOfStock.price === null && !outOfStock.onPromotion);
+  // The owner's rule, 1 November 2026: keep the price it shows, mark it.
+  check("Continente: an OutOfStock page keeps the price it shows, marked out of stock",
+    outOfStock.price === 1.29 && outOfStock.outOfStock, `${outOfStock.price} ${outOfStock.outOfStock}`);
+  check("and the promotion it shows", outOfStock.onPromotion && outOfStock.regularPrice === 1.49);
   check(
     "and it keeps its size, read with the price the page shows",
     outOfStock.packageSize === 6 && outOfStock.packageUnit === "l",
     `${outOfStock.packageSize} ${outOfStock.packageUnit}`
   );
-  check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").price === null);
-  check("an InStock page keeps its price", coStock("https://schema.org/InStock").price === 1.29);
-  check("a page that states no availability keeps its price", coStock(null).price === 1.29);
+  check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").outOfStock);
+  check("an InStock page keeps its price, not marked", coStock("https://schema.org/InStock").price === 1.29 && !coStock("https://schema.org/InStock").outOfStock);
+  check("a page that states no availability keeps its price, not marked", coStock(null).price === 1.29 && !coStock(null).outOfStock);
+  check("Continente: a page priced 0 is marked out of stock too", zeroAtContinente.outOfStock);
   // Tinned fish by its drained weight (31 October 2026): the label as on
   // Ramirez tuna's page that day, at 1,49 EUR and 17,33 EUR/kg.
   const coTin = (name: string, label: string) =>
@@ -185,6 +189,26 @@ export function verifyStorePages(): number {
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));
   check("Auchan: a tile priced 0 is skipped as unpriced, like one with no price", zeroTile.hits.length === 0 && zeroTile.unpriced === 1);
   check("Auchan: a real price still reads", parseAuchanTilesDetailed(tile("1.29")).hits[0]?.price === 1.29);
+
+  // Out of stock on a listing tile: the hot-dog sausages' tile on the pork-
+  // sausage shelf, 31 October 2026 - still priced 1,29 EUR at 3,69 EUR/kg, a
+  // struck-through price added here to check no promotion is recorded.
+  const sausageTile = (classes: string) =>
+    `<div class="${classes}" data-gtm='{"id":"3931536","name":"SALSICHAS HOTDOG IZIDORO 6 UN","price":"1.29","category":"alimentacao/mercearia/conservas/salsichas-porco"}' ` +
+    `data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/3931536.html"}'>` +
+    `<span class="auc-price__stricked">1,59 &euro;</span><span class="auc-measures--price-per-unit">3.69 &euro;/Kg</span></div>`;
+  const marked = parseAuchanTilesDetailed(sausageTile("product-tile auc-product-tile auc-js-product-tile auc-product-unavailable"));
+  const unmarked = parseAuchanTilesDetailed(sausageTile("product-tile auc-product-tile auc-js-product-tile"));
+  check("Auchan: a tile marked out of stock is kept with its price, marked", marked.hits.length === 1 && marked.hits[0].price === 1.29 && marked.hits[0].outOfStock === true,
+    JSON.stringify(marked.hits[0]));
+  check("Auchan: a tile marked out of stock is counted, and not as unpriced", marked.markedUnavailable === 1 && marked.unpriced === 0);
+  check("Auchan: a tile marked out of stock keeps the size its price shows",
+    marked.hits[0]?.packageSize === unmarked.hits[0]?.packageSize && marked.hits[0]?.packageSize != null,
+    `${marked.hits[0]?.packageSize} vs ${unmarked.hits[0]?.packageSize}`);
+  check("Auchan: a tile marked out of stock keeps the promotion it shows",
+    marked.hits[0]?.onPromotion === true && marked.hits[0]?.regularPrice === 1.59);
+  check("Auchan: an unmarked tile keeps its price, not marked or counted",
+    unmarked.hits[0]?.price === 1.29 && unmarked.hits[0]?.outOfStock === false && unmarked.markedUnavailable === 0);
   return failures;
 }
 

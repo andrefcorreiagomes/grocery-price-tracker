@@ -11,6 +11,7 @@ import { currentSince, MAX_NAMED_GROUPS, STALE_AFTER_DAYS } from "../lib/grupos"
 import {
   cheapestPerStore,
   cheapestStores,
+  forSaleNow,
   comparableStoreCount,
   namedGroup,
   ownBrandPerStore,
@@ -85,6 +86,14 @@ function verifyComparison(): number {
     "0.75/kg, not the 2.00/kg listed first"
   );
   check("a store with no products reads not-stocked", cheapestPerStore(rows.filter((r) => r.store !== "AUCHAN"), "batata").get("AUCHAN")!.kind === "not-stocked");
+  // Out of stock (the owner's rule, 1 November 2026): the price is kept and the
+  // product marked, and the comparisons leave it out (forSaleNow).
+  const soldOut = { ...p("CONTINENTE", "Batata Vermelha", 2.25, 3), unavailableAt: new Date() };
+  check("an out-of-stock product keeps its price in the row", soldOut.price === 2.25);
+  check("but the comparisons see none", forSaleNow(soldOut).price === null && forSaleNow({ ...soldOut, unavailableAt: null }).price === 2.25);
+  const withSoldOut = cheapestPerStore([forSaleNow(soldOut), ...rows.slice(1).map((r) => forSaleNow({ ...r, unavailableAt: null }))], "batata");
+  check("so it is not the cheapest: the next one in stock is",
+    withSoldOut.get("CONTINENTE")!.kind === "price" && Math.abs((withSoldOut.get("CONTINENTE") as { unitPrice: number }).unitPrice - 2) < 1e-9);
   check(
     "a store with products but no size reads no-size",
     cell("PINGO_DOCE").kind === "no-size",
@@ -463,7 +472,7 @@ function verifyStaleProducts(): number {
     problems: [],
     baseline: { runs: 3, since: "2026-10-18T21:27:00.000Z" },
     scraper: { sections: [], requests: 0, megabytes: 0, transferredMegabytes: null, minutesFetching: 0, retries: 0, slowdown: null },
-    quality: { total: 10370, missingPrice: 2974, missingBrand: 0, missingCategory: 0, missingUrl: 0 },
+    quality: { total: 10370, missingPrice: 2974, outOfStock: 2974, missingBrand: 0, missingCategory: 0, missingUrl: 0 },
     catalogue: { seen: 0, newProducts: 0, disappeared: 0, stillMissing: 0, returned: 0, moved: 0, renamed: 0, samples: { newProducts: [], disappeared: [], returned: [], moved: [], renamed: [] } },
     prices: { opened: 0, changed: 0, unchanged: 0, skipped: 0, movers: [], absurd: [] },
     categories: { published: 0, crawled: 25, unknown: [], missing: [], publishedCountChanges: [], sitemapSlugs: 0, sitemapUnknown: [] },
@@ -473,8 +482,9 @@ function verifyStaleProducts(): number {
   }, { explain: false });
   check("the report shows the sitemap and pages section", pdReport.includes("Sitemap and product pages") && pdReport.includes("16,128 address(es) in 2 file(s)"));
   check("the report shows products leaving", pdReport.includes("delisted this run (third night): 202"));
-  // Every store's report since 22 October 2026 (code review H7).
-  check("missing prices are explained as listed but not for sale", pdReport.includes("missing price 2974 (listed but not for sale"));
+  // Every store's report: no price shown, and out of stock (1 November 2026).
+  check("missing prices and out of stock are told apart",
+    pdReport.includes("missing price 2974 (listed with no price shown), marked out of stock 2974 (price kept where shown)"));
   check("no category audit, so no Categories section", !pdReport.includes("## Categories") && !pdReport.includes("sitemap cross-check"));
   return failures - before;
 }

@@ -101,6 +101,12 @@ export interface DailyReport {
   quality: {
     total: number;
     missingPrice: number;
+    /**
+     * Products on sale the store marks out of stock - kept with the price they
+     * show, when they show one (the owner's rule, 1 November 2026). Absent from
+     * reports written before then.
+     */
+    outOfStock?: number;
     missingBrand: number;
     missingCategory: number;
     missingUrl: number;
@@ -250,6 +256,8 @@ export interface GridHealthExtras {
   tilesKept: number;
   /** well-formed tiles carrying no price: out of stock, skipped, not a fault */
   tilesUnpriced: number;
+  /** tiles showing a price but marked out of stock, kept with their price; optional for older reports */
+  tilesMarkedUnavailable?: number;
   /** tiles broken in a way a healthy grid never is - what the yield alarm watches */
   tilesMalformed: number;
   withoutCategory: number;
@@ -501,9 +509,10 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
 
   // --- data quality: products still on sale ----------------------------------
   const live = { store, delistedAt: null };
-  const [total, missingPrice, missingBrand, missingCategory, missingUrl] = await Promise.all([
+  const [total, missingPrice, outOfStock, missingBrand, missingCategory, missingUrl] = await Promise.all([
     prisma.catalogueProduct.count({ where: live }),
     prisma.catalogueProduct.count({ where: { ...live, price: null } }),
+    prisma.catalogueProduct.count({ where: { ...live, unavailableAt: { not: null } } }),
     prisma.catalogueProduct.count({ where: { ...live, OR: [{ brand: null }, { brand: "" }] } }),
     prisma.catalogueProduct.count({ where: { ...live, categoryPath: null } }),
     prisma.catalogueProduct.count({ where: { ...live, url: "" } }),
@@ -565,10 +574,13 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
   }
   for (const d of input.drift) warnings.push(d);
   if (missingPrice > 0 && !input.unpricedIsStock) warnings.push(`${missingPrice} product(s) have no price`);
-  if (input.unpricedIsStock && input.maxUnpricedShare !== undefined && total > 0 && missingPrice / total > input.maxUnpricedShare) {
+  // Out of stock, whether or not the store still shows a price (since 1
+  // November 2026 Continente's keep theirs): far above the usual share means
+  // the reader of the mark has broken, not that a third of the store sold out.
+  if (input.unpricedIsStock && input.maxUnpricedShare !== undefined && total > 0 && outOfStock / total > input.maxUnpricedShare) {
     warnings.push(
-      `${missingPrice} of ${total} products on sale (${Math.round((100 * missingPrice) / total)}%) have no price, ` +
-        `more than the ${Math.round(100 * input.maxUnpricedShare)}% expected - the price reader may have broken`
+      `${outOfStock} of ${total} products on sale (${Math.round((100 * outOfStock) / total)}%) are marked out of stock, ` +
+        `more than the ${Math.round(100 * input.maxUnpricedShare)}% expected - the stock reader may have broken`
     );
   }
   if (missingUrl > 0) warnings.push(`${missingUrl} product(s) have no url`);
@@ -602,7 +614,7 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
       retries: http.retries,
       slowdown: slowdown === null ? null : Number(slowdown.toFixed(2)),
     },
-    quality: { total, missingPrice, missingBrand, missingCategory, missingUrl },
+    quality: { total, missingPrice, outOfStock, missingBrand, missingCategory, missingUrl },
     catalogue: {
       seen: seenIds.size,
       newProducts: newCount,

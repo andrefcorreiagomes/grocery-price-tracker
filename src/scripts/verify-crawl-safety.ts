@@ -431,6 +431,14 @@ async function verifyNotForSale() {
   const back = await openCatalogueWriter("PINGO_DOCE");
   await back.save([hit(1.49)], "Padaria e Pastelaria");
   check("saved again with a price: available again", (await row())?.unavailableAt === null && (await row())?.price === 1.49);
+  // Continente's and Auchan's out-of-stock: a price shown, and the mark.
+  const marked = await openCatalogueWriter("PINGO_DOCE");
+  await marked.save([{ ...hit(1.59), outOfStock: true }], "Padaria e Pastelaria");
+  check("saved out of stock with a price: the price kept, marked unavailable",
+    (await row())?.price === 1.59 && (await row())?.unavailableAt !== null);
+  const restocked = await openCatalogueWriter("PINGO_DOCE");
+  await restocked.save([hit(1.49)], "Padaria e Pastelaria");
+  check("in stock again: the mark cleared", (await row())?.unavailableAt === null && (await row())?.price === 1.49);
 
   await prisma.catalogueProduct.update({
     where: { store_storeProductId: { store: "PINGO_DOCE", storeProductId: `${PREFIX}nfs` } },
@@ -438,7 +446,9 @@ async function verifyNotForSale() {
   });
   await recordUnavailable("PINGO_DOCE", [`${PREFIX}nfs`], new Date());
   const out = await row();
-  check("a page that says out of stock removes the current price", out?.price === null && out?.unavailableAt !== null);
+  // The owner's rule, 1 November 2026: the marker, not an erased price.
+  check("a page that says out of stock marks it and keeps its last price", out?.price === 1.49 && out?.unavailableAt !== null,
+    `${out?.price} ${out?.unavailableAt}`);
   check("and resets the gone-night count, because the page answered", out?.deadCount === 0, `count ${out?.deadCount}`);
   await cleanup();
 
