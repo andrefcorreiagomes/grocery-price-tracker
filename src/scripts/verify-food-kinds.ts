@@ -6,7 +6,7 @@ import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
-import { auchanTileSize, isTinnedFish, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
+import { auchanTileSize, isTinnedFish, isTinnedFood, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
 import { classifyCandidate, qualifierMismatch, type Candidate } from "../lib/matching";
 import { foldPlural, matchesTerm } from "../lib/text";
 import { productTokens } from "../lib/candidates";
@@ -455,8 +455,8 @@ function verifyFoodTypes(): number {
   check("a gram range is still a net weight", near(size("PÊSSEGO FERBAR METADES 810 A 860G")?.total, 0.86));
   check("and an age is not an amount", near(size("BEBIDA LACTEA NESTLÉ BOLACHA MARIA CRESCIMENTO 3+ 1L")?.total, 1));
 
-  // Tinned fish by its drained weight (the owner's decision, 31 October 2026);
-  // every other tin as on 29 October. Names as Auchan writes them.
+  // Tinned fish by its drained weight (the owner's decision, 31 October 2026),
+  // then every tin. Names as Auchan writes them.
   console.log("\n  tinned fish: compared by the drained weight");
   check("a tuna tin's drained weight", near(size("ATUM POSTA AUCHAN EM ÓLEO 120 (78) G")?.total, 0.078));
   check("written without spaces, and a large tin", near(size("ATUM POSTA BOM PETISCO EM AZEITE 385(251)G")?.total, 0.251));
@@ -464,8 +464,25 @@ function verifyFoodTypes(): number {
     near(size("SARDINHA AUCHAN COLLECTION SEM PELE E SEM ESPINHA (85)120G")?.total, 0.085));
   check("mussels and squid too", near(size("MEXILHÕES AUCHAN AO NATURAL 111(69)G")?.total, 0.069) &&
     near(size("POTA PEDAÇOS AUCHAN EM TINTA 115 (72) G")?.total, 0.072));
-  check("a tin that is not fish keeps its full weight", near(size("SALSICHAS NOBRE COCKTAIL FRASCO 360(190)G")?.total, 0.36) &&
-    near(size("BAKED BEANS HEINZ C/TOMATE 415(466)G")?.total, 0.415));
+  // Every tin by its drained weight where known (the owner's rule, the same
+  // evening): 21 pages of other tins opened then.
+  check("every other tin by its drained weight too", near(size("SALSICHAS NOBRE COCKTAIL FRASCO 360(190)G")?.total, 0.19) &&
+    near(size("FEIJÃO PRETO AUCHAN COZIDO 820(520)G")?.total, 0.52) &&
+    near(size("PÊSSEGO EM CALDA AUCHAN METADES 840 (480)G")?.total, 0.48) &&
+    near(size("FEIJÃO MANTEIGA VALFRUTTA COZIDO AO VAPOR 3X150(140)G")?.total, 0.42));
+  check("Auchan's own odd order still takes the smaller", near(size("BAKED BEANS HEINZ C/TOMATE 415(466)G")?.total, 0.415));
+  check("a sauce has nothing to drain: its net weight", near(size("TOMATE FRITO HEINZ 350(210)G")?.total, 0.35));
+  check("a tin in tomato sauce is still a tin", near(size("SARDINHAS EM MOLHO DE TOMATE 120 (84) G")?.total, 0.084));
+  check("other tins are recognised by the tin, 'em calda' or 'ao natural'",
+    isTinnedFood("SALSICHAS AUCHAN LATA 8 UN") && isTinnedFood("SALADAS DE FRUTAS FERBAR EM CALDA 840G") &&
+      isTinnedFood("Ervilhas Cozidas em Lata Continente") && isTinnedFood("PESCADA MINERVA AO NATURAL 120G"));
+  check("but not a sauce, an oil or fresh food",
+    !isTinnedFood("Molho de Tomate com Manjericão 500g") && !isTinnedFood("Azeite Virgem Extra 750ml") &&
+      !isTinnedFood("COGUMELOS FRESCOS LATA 250G"));
+  check("Auchan's figure on the drained weight wins for any tin named by its full weight",
+    reconcileTileSize({ total: 0.48, unit: "kg" }, "SALADAS DE FRUTAS FERBAR EM CALDA 840G")?.packageSize === 0.48);
+  check("but not for a product that is not a tin",
+    reconcileTileSize({ total: 0.18, unit: "kg" }, "LASANHA IGLO BOLONHESA 300G") === undefined);
   check("olives keep the drained weight, as before", near(size("AZEITONAS VERDES AUCHAN 350(150)G")?.total, 0.15));
   check("a pâté in oil, one weight, is that weight", near(size("Patê de Atum em Azeite La Piara 75g")?.total, 0.075));
   check("fresh, frozen and breaded fish are not tins",

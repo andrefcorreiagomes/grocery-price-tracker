@@ -172,8 +172,13 @@ export function verifyStorePages(): number {
     );
   const tuna = coTin("Atum em Azeite Ramirez", "emb. 120 gr (peso escorrido 86 gr)");
   check("Continente: tinned fish is the drained weight on its label", tuna.packageSize === 0.086, String(tuna.packageSize));
-  check("a tin that is not fish keeps the full weight",
-    coTin("Feijão Encarnado Cozido Compal", "emb. 540 gr (peso escorrido 400 gr)").packageSize === 0.54);
+  // Every tin by its drained weight where the label gives it (the owner's
+  // rule, the same evening); labels as on the pages opened then.
+  check("Continente: every other tin is the drained weight on its label too",
+    coTin("Feijão Preto Cozido Continente", "emb. 820 gr (peso escorrido 520 gr)").packageSize === 0.52 &&
+      coTin("Pêssego em Calda Continente", "emb. 840 gr (peso escorrido 480 gr)").packageSize === 0.48);
+  const corn = coTin("Milho Doce em Lata sem Glúten Continente", "emb. 3 x 150 gr (peso escorrido 3 x 140 gr)");
+  check("Continente: a multipack's drained weight counts every tin", Math.abs((corn.packageSize ?? 0) - 0.42) < 1e-9, String(corn.packageSize));
   check("a fish tin with one weight on its label keeps it", coTin("Atum Posta em Azeite Santa Catarina", "emb. 80 gr").packageSize === 0.08);
   const tile = (price: string) =>
     `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;

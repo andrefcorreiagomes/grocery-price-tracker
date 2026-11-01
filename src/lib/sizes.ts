@@ -60,6 +60,18 @@ export function isTinnedFish(name: string): boolean {
   return TINNED_FISH.fish.test(flat) && TINNED_FISH.tin.test(flat) && !TINNED_FISH.not.test(flat);
 }
 
+/**
+ * Is this, by its name, any food in a tin or jar of liquid - fish, or pulses,
+ * vegetables, sausages, fruit in syrup? All are compared by the drained weight
+ * where it is known (the owner's rule, 31 October 2026). Outside fish the
+ * signs are narrower - "molho" or "azeite" name a sauce or an oil as often as
+ * a tin's liquid: the tin itself, "conserva", "em calda", "ao natural".
+ */
+export function isTinnedFood(name: string): boolean {
+  const flat = stripAccents(name).toLowerCase();
+  return isTinnedFish(name) || (/\blatas?\b|\bconservas?\b|\bem calda\b|\bao natural\b/.test(flat) && !TINNED_FISH.not.test(flat));
+}
+
 
 /** What Auchan's own per-unit figure says about a product's size. */
 export interface TileSize {
@@ -150,11 +162,11 @@ export function reconcileTileSize(tile: { total: number; unit: SizeUnit }, name:
 
   const ratio = tile.total / named.total;
   if (Math.abs(ratio - 1) <= 0.1) return { packageSize: named.total, unit: named.unit, sizeSource: "listing" };
-  // Tinned fish named by one weight, the full one ("ATUM RAMIREZ EM TOMATE
-  // 120GR"): the store's figure is on the drained weight, which is what tinned
-  // fish is compared by (31 October 2026). A drained weight is roughly 55-75%
-  // of the full one; 40% is the lowest believed.
-  if (isTinnedFish(name) && ratio < 0.9 && ratio >= 0.4) {
+  // A tin named by one weight, the full one ("ATUM RAMIREZ EM TOMATE 120GR"):
+  // the store's figure is on the drained weight, which is what tins are
+  // compared by (fish 31 October 2026, every tin the same evening). A drained
+  // weight is roughly 55-75% of the full one; 40% is the lowest believed.
+  if (isTinnedFood(name) && ratio < 0.9 && ratio >= 0.4) {
     return { packageSize: tile.total, unit: tile.unit, sizeSource: "listing" };
   }
   // Two to nine only. Ten is not a missed pack count but Auchan's own error:
@@ -248,18 +260,28 @@ export function parseSize(name: string): ParsedSize | null {
   // say "Peso Líquido Escorrido", none gives the full weight), and every
   // store's own price per kilo is on it. The drained weight is the smaller
   // number, whichever side of the bracket it is on: "120 (84) G" and
-  // Auchan's "(85)120G". Every other name reads as before.
-  const drained = /azeiton|tremoc/.test(flat);
-  const fish = isTinnedFish(flat);
+  // Auchan's "(85)120G".
+  //
+  // The same evening the owner made it the rule for every tin: the drained
+  // weight where it is known, else the full one. 21 pages of other tins opened
+  // that day (sausages, beans, chickpeas, sweetcorn, peas, mushrooms, peaches
+  // in syrup): Pingo Doce gives only the drained weight, Continente's labels
+  // and Auchan's names both, and Auchan's price per kilo is on the drained
+  // weight on all 7. So the smaller number, for every name with two - except
+  // a sauce, which has nothing to drain: "TOMATE FRITO HEINZ 350(210)G" says
+  // only "Quantidade Liquida 0.35 KG" on its page, and is priced on 350 g.
+  // Only a name that STARTS with the sauce: "SARDINHAS EM MOLHO DE TOMATE"
+  // is a tin of sardines.
+  const sauce = /^\s*(tomate frito|molho|polpa|passata|ketchup)\b/.test(flat);
   const smaller = (a: string, b: string) => (Number(a.replace(",", ".")) <= Number(b.replace(",", ".")) ? a : b);
   const tin = flat
     .replace(
       /(\d+(?:[.,]\d+)?)\s*\(\s*(\d+(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(?=(?:kg|gr?s?|g)\b)/g,
-      (_, full: string, net: string) => `${fish ? smaller(full, net) : drained ? net : full} `
+      (_, full: string, net: string) => `${sauce ? full : smaller(full, net)} `
     )
     .replace(
       /\(\s*(\d{2,}(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(\d+(?:[.,]\d+)?)\s*(?=(?:kg|gr?s?|g)\b)/g,
-      (whole: string, first: string, second: string) => (fish ? `${smaller(first, second)} ` : whole)
+      (whole: string, first: string, second: string) => (sauce ? whole : `${smaller(first, second)} `)
     );
 
   const m = tin.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);

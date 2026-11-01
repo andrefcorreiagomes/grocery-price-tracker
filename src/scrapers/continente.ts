@@ -2,7 +2,6 @@ import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
 import { detached, finiteOrNull, NOT_SELLABLE, PageReadError, sellablePrice, type ScrapeResult } from "./types";
-import { isTinnedFish } from "../lib/sizes";
 import { sectionKey } from "../lib/store-sections";
 import { productIdFromUrl } from "./crawl/product-id";
 
@@ -75,7 +74,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   const size =
     correctedSize(
       product.name ?? "",
-      parsePackageSize($(".ct-pdp--unit").first().text().trim(), product.name ?? ""),
+      parsePackageSize($(".ct-pdp--unit").first().text().trim()),
       pricedPerUnit(headline, shownPrice)
     ) ?? sizeFromUnitPrice(secondary, shownPrice);
 
@@ -177,14 +176,19 @@ function decodeEntities(text: string): string {
  *
  * The label can carry a second figure - "emb. 120 gr (peso escorrido 86 gr)"
  * - the drained weight. Tinned fish is compared by it (the owner's decision,
- * 31 October 2026; isTinnedFish), and Continente's own price per kilo is on it:
+ * 31 October 2026), and Continente's own price per kilo is on it:
  * 1,49 EUR at 17,33 EUR/kg is 86 g, on all 7 tuna pages with both weights
- * opened that day. Every other tin keeps the full weight.
+ * opened that day. The same evening the owner made the drained weight the
+ * rule for every tin where it is known, so it now wins whenever the label
+ * gives it: all 7 other tins opened then did ("emb. 820 gr (peso escorrido
+ * 520 gr)"), a multipack too ("emb. 3 x 150 gr (peso escorrido 3 x 140 gr)").
+ * Continente's own per-kilo figure is on the drained weight for 6 of them;
+ * not for peaches in syrup, which it prices on the full 840 g.
  */
-function parsePackageSize(text: string, name = ""): { total: number; unit: "kg" | "l" } | null {
+function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   const match = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|g|l|ml|cl)/i);
   if (!match) return null;
-  const drained = isTinnedFish(name) ? text.match(/peso escorrido\s*([\d,]+)\s*(kg|g)/i) : null;
+  const drained = text.match(/peso escorrido\s*(?:\d+\s*[x×]\s*)?([\d,]+)\s*(kg|g)/i);
   const [qtyText, unitText] = drained ? [drained[1], drained[2]] : [match[2], match[3]];
 
   const count = match[1] ? Number(match[1]) : 1;
