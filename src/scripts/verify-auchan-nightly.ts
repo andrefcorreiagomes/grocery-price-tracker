@@ -108,10 +108,10 @@ export async function verifyAuchanNightly(): Promise<number> {
     !isTruncatedWalk({ delivered: 55_200, published: 55_200, failedDepartments: [], complete: true })
   );
 
-  // The out-of-stock mark on listing tiles: about 9% expected (31 October 2026).
-  check("about 9% of tiles marked out of stock is no warning", markedUnavailableReason({ marked: 1_600, kept: 18_000, complete: true }) === null);
+  // The out-of-stock mark on listing tiles: about 20% expected (night of 2 November 2026).
+  check("about 20% of tiles marked out of stock is no warning", markedUnavailableReason({ marked: 15_699, kept: 78_322, complete: true }) === null);
   check("almost no tile marked out of stock warns: the grid may lack the mark", markedUnavailableReason({ marked: 20, kept: 18_000, complete: true }) !== null);
-  check("over 30% marked out of stock warns: the mark may mean something else", markedUnavailableReason({ marked: 6_000, kept: 18_000, complete: true }) !== null);
+  check("over 40% marked out of stock warns: the mark may mean something else", markedUnavailableReason({ marked: 7_500, kept: 18_000, complete: true }) !== null);
   check("a partial walk never warns about the mark", markedUnavailableReason({ marked: 0, kept: 400, complete: false }) === null);
 
   // truncatedWalks: the per-category form the union nightly uses. A healthy

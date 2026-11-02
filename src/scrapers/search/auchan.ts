@@ -42,7 +42,7 @@ export interface TileParse {
   unpriced: number;
   /**
    * Tiles that show a price but are marked out of stock (`auc-product-unavailable`):
-   * kept with that price and marked out of stock. About 9% expected (31 October 2026 sample);
+   * kept with that price and marked out of stock. About 20% expected (night of 2 November 2026);
    * near zero would mean the grid pages stopped carrying the mark.
    */
   markedUnavailable: number;

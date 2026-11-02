@@ -217,12 +217,16 @@ export function tileHealthReasons(input: TileHealth): string[] {
 /**
  * The share of kept tiles marked out of stock, outside which the mark is not
  * doing what we think. About 9% were out of stock on 31 October 2026 (100
- * product pages, 95% range roughly 4-16%). Under 1%: the grid pages the walk
- * reads may not carry the mark at all (assumption 4.29), and out-of-stock
- * products are being compared again. Over 30%: the class means something else
- * too (assumption 4.28), and products for sale are left out of the comparisons.
+ * product pages, 95% range roughly 4-16%), but the first night reading the mark
+ * (2 November 2026) marked 20.0% of tiles, 18.0% of products, on every shelf;
+ * 27 of 30 of those products' pages, opened the same day, said they could not
+ * be bought (assumption 4.28). So about 20% is expected. Under 1%: the grid
+ * pages the walk reads may not carry the mark at all (assumption 4.29), and
+ * out-of-stock products are being compared again. Over 40%: the class means
+ * something else too, and products for sale are left out of the comparisons.
  */
-export const MARKED_UNAVAILABLE_RANGE = { min: 0.01, max: 0.3 };
+export const MARKED_UNAVAILABLE_RANGE = { min: 0.01, max: 0.4 };
+const EXPECTED = "about 20% expected";
 
 /** A warning when the share of tiles marked out of stock is outside the range; null otherwise. */
 export function markedUnavailableReason(input: { marked: number; kept: number; complete: boolean }): string | null {
@@ -230,10 +234,10 @@ export function markedUnavailableReason(input: { marked: number; kept: number; c
   const share = input.marked / input.kept;
   const pct = (100 * share).toFixed(1);
   if (share < MARKED_UNAVAILABLE_RANGE.min) {
-    return `only ${input.marked.toLocaleString()} of ${input.kept.toLocaleString()} tiles (${pct}%) were marked out of stock, against about 9% expected - the grid may not carry the mark, so out-of-stock products are compared as for sale`;
+    return `only ${input.marked.toLocaleString()} of ${input.kept.toLocaleString()} tiles (${pct}%) were marked out of stock, against ${EXPECTED} - the grid may not carry the mark, so out-of-stock products are compared as for sale`;
   }
   if (share > MARKED_UNAVAILABLE_RANGE.max) {
-    return `${input.marked.toLocaleString()} of ${input.kept.toLocaleString()} tiles (${pct}%) were marked out of stock, against about 9% expected - the mark may mean something else too, and products for sale were left out of the comparisons`;
+    return `${input.marked.toLocaleString()} of ${input.kept.toLocaleString()} tiles (${pct}%) were marked out of stock, against ${EXPECTED} - the mark may mean something else too, and products for sale were left out of the comparisons`;
   }
   return null;
 }

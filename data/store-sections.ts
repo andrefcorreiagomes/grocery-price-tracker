@@ -121,6 +121,10 @@ export const STORE_SECTIONS: Record<Store, StoreSectionDecisions> = {
       "Singles Day": "mixed",
       Campanhas: "mixed",
       Presentes: "mixed",
+      // Continente's Christmas shelf, in its category sitemap from the night of
+      // 2 November 2026. Decided like Auchan's "natal": its Christmas food is
+      // kept, the gifts and decorations beside it are not.
+      Natal: "mixed",
     },
     skip: [
       // 102 products, 10 with a food type (matcha, curcuma, psyllium)

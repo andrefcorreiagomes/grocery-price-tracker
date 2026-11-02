@@ -395,7 +395,7 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
           `  tiles parsed:         ${g.tilesKept.toLocaleString()} of ${g.tilesSeen.toLocaleString()} seen (${yieldPct}% yield)`,
           `  listed without a price: ${g.tilesUnpriced.toLocaleString()} (out of stock, skipped - not a fault)`,
           ...(g.tilesMarkedUnavailable !== undefined
-            ? [`  marked out of stock:  ${g.tilesMarkedUnavailable.toLocaleString()} (${((100 * g.tilesMarkedUnavailable) / Math.max(1, g.tilesKept)).toFixed(1)}% of those kept; price kept, marked out of stock; about 9% expected)`]
+            ? [`  marked out of stock:  ${g.tilesMarkedUnavailable.toLocaleString()} (${((100 * g.tilesMarkedUnavailable) / Math.max(1, g.tilesKept)).toFixed(1)}% of those kept; price kept, marked out of stock; about 20% expected)`]
             : []),
           `  MALFORMED tiles:      ${g.tilesMalformed.toLocaleString()}` +
             (g.tilesMalformed === 0
