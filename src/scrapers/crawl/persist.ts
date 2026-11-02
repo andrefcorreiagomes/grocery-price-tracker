@@ -2,9 +2,18 @@ import { prisma } from "../../lib/db";
 import { matchableEan } from "../../lib/barcodes";
 import type { Store } from "@/lib/stores";
 import { syncStores } from "../../lib/stores-db";
-import { recordPrices, type PriceHistorySummary } from "./price-history";
+import { recordPrices, type PriceHistorySummary, type PriceObservation } from "./price-history";
 import type { SearchHit } from "../search/types";
 import type { CategoryResult } from "./types";
+
+/**
+ * Saved as not for sale: the reader said so, or there is no price to sell at.
+ * Unknown is compared as for sale, as before availability was read (see
+ * Availability in ../types).
+ */
+function notForSale(p: SearchHit): boolean {
+  return p.price === null || p.availability === "not_for_sale";
+}
 
 /**
  * The same product name, give or take capitals, accents, punctuation and
@@ -196,6 +205,8 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
     changed: 0,
     unchanged: 0,
     skipped: 0,
+    availabilityChanged: 0,
+    unknown: 0,
   };
   const swaps: IdentitySwap[] = [];
   let barcodesLost = 0;
@@ -261,7 +272,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
       }
       byLabel.set(label, summary);
 
-      const observations: { productId: string; price: number | null }[] = [];
+      const observations: PriceObservation[] = [];
       for (let i = 0; i < products.length; i += CHUNK) {
         // The transaction returns the upserted rows, so ids for products created
         // just now are available without a second read.
@@ -280,7 +291,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 firstSeenAt: seenAt,
                 lastSeenAt: seenAt,
                 lastCheckedAt: seenAt,
-                unavailableAt: p.price === null || p.outOfStock ? seenAt : null,
+                unavailableAt: notForSale(p) ? seenAt : null,
                 ...enrichment(p),
               },
               update: {
@@ -301,7 +312,7 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
                 deadCount: 0,
                 delistedAt: null,
                 delistReason: null,
-                unavailableAt: p.price === null || p.outOfStock ? seenAt : null,
+                unavailableAt: notForSale(p) ? seenAt : null,
                 ...enrichment(p),
               },
               select: { id: true, price: true },
@@ -309,9 +320,16 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
           )
         );
 
-        for (const row of saved) {
-          observations.push({ productId: row.id, price: row.price });
-        }
+        // The transaction returns its rows in the order given.
+        saved.forEach((row, j) => {
+          const p = products[i + j];
+          observations.push({
+            productId: row.id,
+            price: row.price,
+            availability: notForSale(p) ? "not_for_sale" : (p.availability ?? "unknown"),
+            availabilitySign: p.availabilitySign ?? (p.price === null ? "no price given" : "the source gives no availability"),
+          });
+        });
       }
 
       const prices = await recordPrices(observations, seenAt);
@@ -319,6 +337,9 @@ export async function openCatalogueWriter(store: Store): Promise<CatalogueWriter
       priceTotals.changed += prices.changed;
       priceTotals.unchanged += prices.unchanged;
       priceTotals.skipped += prices.skipped;
+      // Optional in the type only because reports from before 2 November 2026 lack them.
+      priceTotals.availabilityChanged = (priceTotals.availabilityChanged ?? 0) + (prices.availabilityChanged ?? 0);
+      priceTotals.unknown = (priceTotals.unknown ?? 0) + (prices.unknown ?? 0);
   }
 
   return {

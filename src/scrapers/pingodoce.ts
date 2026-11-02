@@ -93,7 +93,11 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
     brand: normalizePingoDoceBrand(product.brand?.name),
     price,
     // "0,00 EUR" with the "Indisponível" badge: no price to keep (see above).
-    outOfStock: price === null,
+    // A real price is taken as for sale: whether Pingo Doce ever shows one
+    // beside the unavailable box is not yet known (assumption 3.22).
+    ...(price === null
+      ? { availability: "not_for_sale" as const, availabilitySign: unavailableNull ? 'price shown as "null", unavailable box' : "price shown as 0,00" }
+      : { availability: "for_sale" as const, availabilitySign: "price shown" }),
     // detached: see `detached` in types.ts - a capture from `html` keeps the
     // whole page alive, which is what killed the first full Continente pass.
     ean: eanMatch ? detached(eanMatch[1]) : null,

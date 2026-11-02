@@ -31,7 +31,7 @@ import { STORE_LIST, type Store } from "../lib/stores";
 
 interface ReportFigures {
   seen: number;
-  prices: { opened: number; changed: number; unchanged: number };
+  prices: { opened: number; changed: number; unchanged: number; availabilityChanged?: number };
   file: string;
 }
 
@@ -136,11 +136,12 @@ async function checkStore(store: Store) {
   // 2. prices saved
   const stamped = await prisma.cataloguePrice.count({ where: { lastSeenAt: { in: stamps }, product: { store } } });
   if (reports.length) {
-    const expected = Math.max(...reports.map((r) => r.prices.opened + r.prices.changed + r.prices.unchanged));
+    // Since 2 November 2026 a product whose availability changed opens a period too.
+    const expected = Math.max(...reports.map((r) => r.prices.opened + r.prices.changed + r.prices.unchanged + (r.prices.availabilityChanged ?? 0)));
     const r = reports[0].prices;
     say(single ? stamped === expected : stamped >= expected,
       `prices stamped tonight: ${stamped.toLocaleString()}; the report says ${expected.toLocaleString()}` +
-        (single ? ` (opened ${r.opened}, changed ${r.changed}, unchanged ${r.unchanged.toLocaleString()})` : ""));
+        (single ? ` (opened ${r.opened}, changed ${r.changed}, in or out of stock ${r.availabilityChanged ?? 0}, unchanged ${r.unchanged.toLocaleString()})` : ""));
   }
   const pricedTonight = await prisma.catalogueProduct.findMany({
     where: { store, lastSeenAt: { in: stamps }, price: { not: null } },
@@ -150,7 +151,7 @@ async function checkStore(store: Store) {
     (p) =>
       p.prices.length !== 1 ||
       !stampSet.has(p.prices[0].lastSeenAt.getTime()) ||
-      Math.round(p.prices[0].price * 100) !== Math.round((p.price as number) * 100)
+      Math.round((p.prices[0].price ?? -1) * 100) !== Math.round((p.price as number) * 100)
   );
   say(wrong.length === 0, `products seen with a price whose price history agrees: ${(pricedTonight.length - wrong.length).toLocaleString()} of ${pricedTonight.length.toLocaleString()}` +
     (wrong.length ? `; disagreeing, e.g. ${wrong.slice(0, 5).map((w) => w.storeProductId).join(", ")}` : ""));

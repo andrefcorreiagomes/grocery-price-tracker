@@ -752,7 +752,9 @@ export function renderReport(report: DailyReport, options: RenderOptions = {}): 
       [
         `  ${report.prices.changed} changed, ${report.prices.unchanged} held, ` +
           `${report.prices.opened} newly tracked` +
-          (report.prices.skipped ? `, ${report.prices.skipped} listed without a price` : ""),
+          (report.prices.availabilityChanged ? `, ${report.prices.availabilityChanged} went out of stock or came back at the same price` : "") +
+          (report.prices.skipped ? `, ${report.prices.skipped} listed without a price` : "") +
+          (report.prices.unknown ? `, ${report.prices.unknown} with no sign of whether they are for sale` : ""),
         ...(report.prices.absurd.length
           ? ["", "  IMPLAUSIBLE - check the parser before trusting these:", ...notes(report.prices.absurd, "    ")]
           : []),

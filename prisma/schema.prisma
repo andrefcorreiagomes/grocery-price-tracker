@@ -623,7 +623,15 @@ model CataloguePrice {
   id          String           @id @default(cuid())
   product     CatalogueProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId   String
-  price       Float
+  /// The price the store showed; null when it showed none (Pingo Doce's "0,00 EUR").
+  price       Float?
+  /// "for_sale", "not_for_sale" or "unknown" (Availability in src/scrapers/types.ts);
+  /// "assumed_for_sale" for every period recorded before 2 November 2026, when
+  /// nobody looked. A period ends when the price OR this changes, so the days a
+  /// product was out of stock can be read straight from the history.
+  availability     String
+  /// The sign the store's reader went by ("page data: OutOfStock"); null before 2 November 2026.
+  availabilitySign String?
   firstSeenAt DateTime
   lastSeenAt  DateTime
   /// Exactly one period per product is open. A denormalisation - the open one is

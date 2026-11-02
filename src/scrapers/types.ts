@@ -19,12 +19,15 @@ export interface ScrapeResult {
    */
   price: number | null;
   /**
-   * The store says it cannot be sold now: out of stock, or no price at all.
-   * The price it shows is kept in `price` all the same - the owner's rule, 1
-   * November 2026: "if it has a price, save its price, but mark it out of
-   * stock" - and the comparisons leave the product out while this is true.
+   * Whether the store will sell it now, in the words every store is translated
+   * into (see Availability). The price it shows is kept in `price` all the same
+   * - the owner's rule, 1 November 2026: "if it has a price, save its price,
+   * but mark it out of stock" - and the comparisons leave the product out while
+   * it is "not_for_sale".
    */
-  outOfStock: boolean;
+  availability: Availability;
+  /** What the reader went by, in a few words; see Availability. */
+  availabilitySign: string;
   ean: string | null;
   /**
    * The store's own category path for this product, when the page carries it.
@@ -111,6 +114,55 @@ export function sellablePrice(value: number | null | undefined): number | null {
  * flip only this, so the price alone does not say it is for sale.
  */
 export const NOT_SELLABLE = /OutOfStock|SoldOut|Discontinued|BackOrder|PreOrder/i;
+
+/**
+ * Whether a store will sell a product now - the one vocabulary every store's
+ * reader translates into (the owner's design, 1 November 2026). Each store
+ * says it its own way: Continente and Auchan keep the price and flip the
+ * page's data to OutOfStock, Auchan greys its listing tile, Pingo Doce shows
+ * "0,00 EUR"; a store added later may do something else again. Only its
+ * reader knows; everything after it - saving, the price history, the
+ * comparisons, the nightly report - sees these three words alone.
+ *
+ * - "for_sale": the store gave a sign that it sells it now.
+ * - "not_for_sale": out of stock, discontinued, no sellable price shown.
+ * - "unknown": the reader found no sign either way - a page whose data
+ *   states no availability, or a layout it does not recognise. Compared as
+ *   for sale, as before the vocabulary existed, but counted every night, so a
+ *   reader that stops recognising its store's sign shows up.
+ *
+ * Beside it the reader gives the sign it went by ("page data: OutOfStock",
+ * "price shown as 0,00"), kept in the price history: a new kind of sign is a
+ * new sentence, never a change to the database.
+ */
+export type Availability = "for_sale" | "not_for_sale" | "unknown";
+
+/**
+ * The availability of every price period recorded before availability was
+ * (19 August to 1 November 2026). Most were for sale - the comparisons treated
+ * them so - but nobody looked: on 1 November, the first night it was counted,
+ * 10.6% of Continente's products were out of stock. The owner's choice of
+ * label, 1 November 2026: it says both things.
+ */
+export const ASSUMED_FOR_SALE = "assumed_for_sale";
+
+/**
+ * The reading for a product page that follows schema.org, as Continente's and
+ * Auchan's do: no sellable price shown, then the data's own availability.
+ */
+export function schemaAvailability(
+  price: number | null,
+  stated: unknown
+): { availability: Availability; availabilitySign: string } {
+  if (price === null) return { availability: "not_for_sale", availabilitySign: "no sellable price shown" };
+  const value = typeof stated === "string" ? stated.trim() : "";
+  // "https://schema.org/OutOfStock" -> "OutOfStock"
+  const word = value.split("/").pop() ?? "";
+  if (value === "") return { availability: "unknown", availabilitySign: "page data states no availability" };
+  if (NOT_SELLABLE.test(value)) return { availability: "not_for_sale", availabilitySign: `page data: ${word}` };
+  if (/^(InStock|LimitedAvailability|OnlineOnly)$/i.test(word)) return { availability: "for_sale", availabilitySign: `page data: ${word}` };
+  return { availability: "unknown", availabilitySign: `page data: ${word.slice(0, 60)}` };
+}
 
 /**
  * These two guards exist because the types above are compile-time only.

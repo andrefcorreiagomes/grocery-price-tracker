@@ -1,3 +1,5 @@
+import type { Availability } from "../types";
+
 export interface SearchHit {
   id: string;
   name: string;
@@ -7,12 +9,14 @@ export interface SearchHit {
    */
   price: number | null;
   /**
-   * The store marks it out of stock (a product page, or an Auchan listing tile
-   * with the out-of-stock mark). Its shown price stays in `price`; the product
-   * is saved with the "not for sale since" marker and left out of the
-   * comparisons (the owner's rule, 1 November 2026). Missing means false.
+   * Whether the store sells it now, and the sign the reader went by (see
+   * Availability in ../types). "not_for_sale" keeps its shown price in
+   * `price`; the product is saved with the "not for sale since" marker and
+   * left out of the comparisons (the owner's rule, 1 November 2026). Missing
+   * means the source could not say: saved as "unknown".
    */
-  outOfStock?: boolean;
+  availability?: Availability;
+  availabilitySign?: string;
   brand: string;
   category: string;
   url: string;

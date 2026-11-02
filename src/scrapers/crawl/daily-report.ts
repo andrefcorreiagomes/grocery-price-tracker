@@ -5,6 +5,26 @@ import type { CategoryAudit } from "./continente-categories";
 import type { PriceHistorySummary } from "./price-history";
 import { SAMPLE, type CategoryResult } from "./types";
 
+/** The share of products read whose availability may be "unknown" before the night warns. */
+export const MAX_UNKNOWN_AVAILABILITY = 0.05;
+
+/**
+ * A warning when too many products read gave no sign of whether they are for
+ * sale (Availability "unknown"); null otherwise. None of 315 pages saved from
+ * the three stores in October 2026 read so; many means the store changed how
+ * it says it, and the products are compared as for sale without anyone having
+ * looked.
+ */
+export function unknownAvailabilityReason(prices: PriceHistorySummary): string | null {
+  const read = prices.opened + prices.changed + prices.unchanged + (prices.availabilityChanged ?? 0);
+  const unknown = prices.unknown ?? 0;
+  if (read === 0 || unknown / read <= MAX_UNKNOWN_AVAILABILITY) return null;
+  return (
+    `${unknown} of ${read} products read (${Math.round((100 * unknown) / read)}%) gave no sign of whether they are for sale, ` +
+    `more than the ${100 * MAX_UNKNOWN_AVAILABILITY}% allowed - the store may have changed how it shows it`
+  );
+}
+
 /**
  * The report a crawl writes about itself.
  *
@@ -583,6 +603,8 @@ export async function buildDailyReport(input: ReportInput): Promise<DailyReport>
         `more than the ${Math.round(100 * input.maxUnpricedShare)}% expected - the stock reader may have broken`
     );
   }
+  const unknownReason = unknownAvailabilityReason(input.prices);
+  if (unknownReason) warnings.push(unknownReason);
   if (missingUrl > 0) warnings.push(`${missingUrl} product(s) have no url`);
   if (slowdown !== null && slowdown > SLOWDOWN) {
     warnings.push(`requests are ${slowdown.toFixed(1)}x slower than last run - possible throttling`);

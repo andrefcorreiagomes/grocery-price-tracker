@@ -111,6 +111,7 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
     // which would open its page to find out why.
     const outOfStock = $(el).hasClass("auc-product-unavailable");
     if (outOfStock) markedUnavailable++;
+    // An unmarked tile is taken as for sale: the grid shows the mark (4.29).
     const shownPrice = Number(gtm.price);
     const promotion = auchanTilePromotion($(el).find(".auc-price__stricked, .strike-through").first().text(), shownPrice);
     // Auchan's own per-kilo or per-item figure, printed on every tile measured.
@@ -123,7 +124,9 @@ export function parseAuchanTilesDetailed(html: string): TileParse {
       id: gtm.id,
       name: gtm.name,
       price: shownPrice,
-      outOfStock,
+      ...(outOfStock
+        ? { availability: "not_for_sale" as const, availabilitySign: "listing tile marked unavailable" }
+        : { availability: "for_sale" as const, availabilitySign: "listing tile not marked unavailable" }),
       brand: gtm.brand ?? "",
       category,
       url: urls.absoluteProductUrl,

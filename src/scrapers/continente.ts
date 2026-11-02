@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { extractLdJsonBlocks, fetchPage } from "./http";
 import { correctedSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "./page-size";
-import { detached, finiteOrNull, NOT_SELLABLE, PageReadError, sellablePrice, type ScrapeResult } from "./types";
+import { detached, finiteOrNull, PageReadError, schemaAvailability, sellablePrice, type ScrapeResult } from "./types";
 import { sectionKey } from "../lib/store-sections";
 import { productIdFromUrl } from "./crawl/product-id";
 
@@ -61,7 +61,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
   // 2026, the data and the button agreeing on all of them. The price is kept
   // and the product marked (the owner's rule, 1 November 2026); for one night,
   // 1 November, it was thrown away instead.
-  const outOfStock = price === null || NOT_SELLABLE.test(String(product.offers.availability ?? ""));
+  const stock = schemaAvailability(price, product.offers.availability);
 
   // Scoped to the product's own price box: the page has exactly one, while
   // carousels of other products elsewhere carry their own per-kilo prices.
@@ -83,7 +83,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     // it's sold under their own fresh-food program, not literally unbranded
     brand: product.brand?.name || "Continente",
     price,
-    outOfStock,
+    ...stock,
     // detached: a capture from `html` would otherwise keep the whole 2 MB page
     // alive for as long as this row exists. See `detached` in types.ts.
     ean: eanMatch ? detached(eanMatch[1]) : null,

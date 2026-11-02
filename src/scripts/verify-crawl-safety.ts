@@ -16,7 +16,8 @@ import {
   StoreRefusingError,
   stoppedStores,
 } from "../scrapers/http";
-import { PageReadError } from "../scrapers/types";
+import { ASSUMED_FOR_SALE, PageReadError, type Availability } from "../scrapers/types";
+import { recordPrices } from "../scrapers/crawl/price-history";
 import { STAYED_ON_PRODUCT_PAGE } from "../scrapers/continente";
 import { fetchProducts } from "../scrapers/crawl/continente-products";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
@@ -414,6 +415,58 @@ async function verifyBarcodesKept() {
   await cleanup();
 }
 
+/**
+ * The days out of stock, read from the price history (the owner's design, 1
+ * November 2026): a period is one price AND one availability.
+ */
+async function verifyAvailabilityHistory() {
+  console.log("\n  the price history: a new period when the price OR the availability changes");
+  await cleanup();
+  const product = await prisma.catalogueProduct.create({
+    data: { store: STORE, storeProductId: `${PREFIX}hist`, name: "Leite", url: "https://example.invalid/h" },
+  });
+  const night = (d: number) => new Date(Date.UTC(2026, 10, d, 23));
+  const see = (d: number, price: number | null, availability: Availability, availabilitySign: string) =>
+    recordPrices([{ productId: product.id, price, availability, availabilitySign }], night(d));
+  const periods = () =>
+    prisma.cataloguePrice.findMany({ where: { productId: product.id }, orderBy: { firstSeenAt: "asc" } });
+
+  const opened = await see(2, 1.49, "for_sale", "page data: InStock");
+  await see(3, 1.49, "for_sale", "page data: InStock");
+  check("the same price, for sale: one period, extended", (await periods()).length === 1 && opened.opened === 1);
+  const out = await see(4, 1.49, "not_for_sale", "page data: OutOfStock");
+  await see(5, 1.49, "not_for_sale", "page data: OutOfStock");
+  check("out of stock at the same price: a period of its own, not a price change",
+    out.availabilityChanged === 1 && out.changed === 0 && (await periods()).length === 2);
+  const back = await see(6, 1.49, "for_sale", "page data: InStock");
+  check("back in stock: another", back.availabilityChanged === 1 && (await periods()).length === 3);
+  const zero = await see(7, null, "not_for_sale", "price shown as 0,00");
+  await see(8, null, "not_for_sale", "price shown as 0,00");
+  check("no price shown: recorded with an empty price, not a gap", zero.skipped === 1 && (await periods()).length === 4);
+  await see(9, 1.29, "for_sale", "price shown");
+
+  const all = await periods();
+  const day = (d: Date) => d.getUTCDate();
+  const outDays = all.filter((p) => p.availability === "not_for_sale").map((p) => `${day(p.firstSeenAt)}-${day(p.lastSeenAt)}`);
+  check("the days out of stock read straight from the history: 4-5 and 7-8", outDays.join(" ") === "4-5 7-8", outDays.join(" "));
+  check("each period keeps the price shown and the sign that opened it",
+    all[1].price === 1.49 && all[1].availabilitySign === "page data: OutOfStock" && all[3].price === null && all[3].availabilitySign === "price shown as 0,00");
+  check("exactly one period open, the last", all.filter((p) => p.isOpen).length === 1 && all[all.length - 1].isOpen && all[all.length - 1].price === 1.29);
+
+  // A period from before availability was read meets its first measured night.
+  await prisma.cataloguePrice.deleteMany({ where: { productId: product.id } });
+  await prisma.cataloguePrice.create({
+    data: { productId: product.id, price: 2, availability: ASSUMED_FOR_SALE, firstSeenAt: night(1), lastSeenAt: night(1) },
+  });
+  const first = await see(2, 2, "for_sale", "page data: InStock");
+  const after = await periods();
+  check("an assumed period is closed, not relabelled, on its first measured night",
+    first.availabilityChanged === 1 && after.length === 2 && after[0].availability === ASSUMED_FOR_SALE && !after[0].isOpen && after[1].availability === "for_sale");
+  const unknown = await see(3, 2, "unknown", "page data states no availability");
+  check("an answer the reader could not give is counted", unknown.unknown === 1);
+  await cleanup();
+}
+
 async function verifyNotForSale() {
   console.log("\n  H7: listed but not for sale - kept, no current price, never gone");
   await cleanup();
@@ -433,7 +486,7 @@ async function verifyNotForSale() {
   check("saved again with a price: available again", (await row())?.unavailableAt === null && (await row())?.price === 1.49);
   // Continente's and Auchan's out-of-stock: a price shown, and the mark.
   const marked = await openCatalogueWriter("PINGO_DOCE");
-  await marked.save([{ ...hit(1.59), outOfStock: true }], "Padaria e Pastelaria");
+  await marked.save([{ ...hit(1.59), availability: "not_for_sale", availabilitySign: "page data: OutOfStock" }], "Padaria e Pastelaria");
   check("saved out of stock with a price: the price kept, marked unavailable",
     (await row())?.price === 1.59 && (await row())?.unavailableAt !== null);
   const restocked = await openCatalogueWriter("PINGO_DOCE");
@@ -450,6 +503,13 @@ async function verifyNotForSale() {
   check("a page that says out of stock marks it and keeps its last price", out?.price === 1.49 && out?.unavailableAt !== null,
     `${out?.price} ${out?.unavailableAt}`);
   check("and resets the gone-night count, because the page answered", out?.deadCount === 0, `count ${out?.deadCount}`);
+  const openPeriod = await prisma.cataloguePrice.findFirst({
+    where: { product: { storeProductId: `${PREFIX}nfs` }, isOpen: true },
+    select: { price: true, availability: true, availabilitySign: true },
+  });
+  check("and the price history records it out of stock, at its last price",
+    openPeriod?.price === 1.49 && openPeriod?.availability === "not_for_sale" && openPeriod?.availabilitySign === "missing from the listing; its page says not for sale",
+    JSON.stringify(openPeriod));
   await cleanup();
 
   const p = (store: string, price: number | null, packageSize: number | null) => ({
@@ -666,6 +726,7 @@ export async function verifyCrawlSafety(): Promise<number> {
     verifyRecheckSchedule();
     await verifyBarcodesKept();
     await verifyNotForSale();
+    await verifyAvailabilityHistory();
     await verifyDelistReason();
     await verifySitemapDates();
   } finally {

@@ -1,5 +1,5 @@
 import { databaseFile, prisma } from "../lib/db";
-import { mergeResultsByLabel, type DailyReport } from "../scrapers/crawl/daily-report";
+import { mergeResultsByLabel, unknownAvailabilityReason, type DailyReport } from "../scrapers/crawl/daily-report";
 import { renderReport } from "../scrapers/crawl/render-report";
 import { buildRotationReport, type RotationExtras } from "../scrapers/crawl/rotation-report";
 import { STORE_LIST, storeCountWord } from "../lib/stores";
@@ -102,6 +102,12 @@ async function verifyDelistedLeftOut() {
 export async function verifyReports(): Promise<number> {
   failures = 0;
   verifyRendering();
+  console.log("\n  products whose reader gave no sign of whether they are for sale (2 November 2026)");
+  const night = (unknown: number) => ({ opened: 0, changed: 0, unchanged: 100, skipped: 0, unknown });
+  check("a few is no warning", unknownAvailabilityReason(night(5)) === null);
+  check("many warns: the store may have changed how it shows it", unknownAvailabilityReason(night(6)) !== null);
+  check("a report from before availability was read never warns",
+    unknownAvailabilityReason({ opened: 0, changed: 0, unchanged: 100, skipped: 0 }) === null);
   console.log("\n  the number of stores, in words, for the site (code review M11)");
   check("three stores read \"três\", four would read \"quatro\"", storeCountWord() === "três" && storeCountWord(4) === "quatro" && STORE_LIST.length === 3);
   console.log("\n  dates on the site are Lisbon days (code review M14)");

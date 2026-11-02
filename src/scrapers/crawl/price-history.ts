@@ -1,8 +1,10 @@
 import { prisma } from "../../lib/db";
+import { ASSUMED_FOR_SALE, type Availability } from "../types";
 
 /**
- * Maintains `CataloguePrice`: one row per price a product has held, rather than
- * one per day it was observed.
+ * Maintains `CataloguePrice`: one row per price a product has held - and, since
+ * 2 November 2026, per spell in or out of stock - rather than one per day it
+ * was observed.
  *
  * Every crawl already reads every product's price off its listing tile, so this
  * records something we were previously throwing away. The work is set-based -
@@ -16,17 +18,31 @@ const CHUNK = 500;
 export interface PriceObservation {
   productId: string;
   price: number | null;
+  /** What the store's reader said (see Availability); "unknown" when it could not say. */
+  availability: Availability;
+  availabilitySign: string;
 }
 
 export interface PriceHistorySummary {
-  /** products whose price held, so their open period was extended */
+  /** products whose price and availability held, so their open period was extended */
   unchanged: number;
   /** products whose price moved: a period closed and a new one opened */
   changed: number;
+  /**
+   * products whose price held but whose availability changed - out of stock,
+   * or back. The first night after 1 November 2026 every product lands here
+   * once, leaving "assumed_for_sale" for a measured answer.
+   */
+  availabilityChanged?: number;
   /** products seen for the first time, or seen again after having no open period */
   opened: number;
-  /** products the store listed without a price */
+  /**
+   * products the store listed without a price. Recorded since 2 November 2026
+   * - a period with an empty price - so their days out of stock are not a gap.
+   */
   skipped: number;
+  /** products whose reader could not tell whether they are for sale */
+  unknown?: number;
 }
 
 /**
@@ -45,56 +61,69 @@ async function inChunks<T>(items: T[], work: (batch: T[]) => Promise<unknown>) {
   }
 }
 
+/** Same price: both empty, or the same cents. */
+function samePrice(a: number | null, b: number | null): boolean {
+  return a === null || b === null ? a === b : cents(a) === cents(b);
+}
+
 /**
- * Record what each product cost at `seenAt`.
+ * Record what each product cost at `seenAt`, and whether it was for sale.
  *
- * Three outcomes per product: the open period is extended, or closed and
- * replaced, or a first one is opened. Note what does NOT happen - a product
- * that was missing from recent crawls and reappears at its old price simply has
- * its period extended, leaving the gap between the two observations visible in
- * the timestamps rather than recording a false continuity.
+ * A period is one price AND one availability: it is extended while both hold,
+ * and closed and replaced when either changes - so a product out of stock at
+ * its usual price gets a period of its own, and the days it was out of stock
+ * can be read from the history (the owner's design, 1 November 2026). The
+ * sign is the one that opened the period.
+ *
+ * Note what does NOT happen - a product that was missing from recent crawls
+ * and reappears as before simply has its period extended, leaving the gap
+ * between the two observations visible in the timestamps rather than
+ * recording a false continuity.
  */
 export async function recordPrices(
   observations: PriceObservation[],
   seenAt: Date
 ): Promise<PriceHistorySummary> {
-  const priced = observations.filter(
-    (o): o is { productId: string; price: number } => o.price !== null
-  );
   const summary: PriceHistorySummary = {
     unchanged: 0,
     changed: 0,
+    availabilityChanged: 0,
     opened: 0,
-    skipped: observations.length - priced.length,
+    skipped: observations.filter((o) => o.price === null).length,
+    unknown: observations.filter((o) => o.availability === "unknown").length,
   };
-  if (priced.length === 0) return summary;
+  if (observations.length === 0) return summary;
 
   // One read of the open periods for everything in this run.
-  const open = new Map<string, { id: string; price: number }>();
-  await inChunks(priced, async (batch) => {
+  const open = new Map<string, { id: string; price: number | null; availability: string }>();
+  await inChunks(observations, async (batch) => {
     const rows = await prisma.cataloguePrice.findMany({
       where: { productId: { in: batch.map((o) => o.productId) }, isOpen: true },
-      select: { id: true, productId: true, price: true },
+      select: { id: true, productId: true, price: true, availability: true },
     });
-    for (const row of rows) open.set(row.productId, { id: row.id, price: row.price });
+    for (const row of rows) open.set(row.productId, row);
   });
 
-  const extend: string[] = []; // period ids whose price still holds
-  const close: string[] = []; // period ids the price has moved on from
-  const create: { productId: string; price: number }[] = [];
+  const extend: string[] = []; // period ids whose price and availability still hold
+  const close: string[] = []; // period ids the product has moved on from
+  const create: PriceObservation[] = [];
 
-  for (const observation of priced) {
+  for (const observation of observations) {
     const current = open.get(observation.productId);
     if (!current) {
       create.push(observation);
       summary.opened++;
-    } else if (cents(current.price) === cents(observation.price)) {
-      extend.push(current.id);
-      summary.unchanged++;
-    } else {
+    } else if (!samePrice(current.price, observation.price)) {
       close.push(current.id);
       create.push(observation);
       summary.changed++;
+    } else if (current.availability !== observation.availability) {
+      close.push(current.id);
+      create.push(observation);
+      summary.availabilityChanged = (summary.availabilityChanged ?? 0) + 1;
+    } else {
+      extend.push(current.id);
+      summary.unchanged++;
     }
   }
 
@@ -115,6 +144,8 @@ export async function recordPrices(
       data: batch.map((o) => ({
         productId: o.productId,
         price: o.price,
+        availability: o.availability,
+        availabilitySign: o.availabilitySign,
         firstSeenAt: seenAt,
         lastSeenAt: seenAt,
       })),
@@ -158,6 +189,8 @@ export async function backfillPriceHistory(): Promise<{ opened: number; skipped:
       data: batch.map((p) => ({
         productId: p.id,
         price: p.price as number,
+        // Copied from the product, not read from a store: nobody looked.
+        availability: ASSUMED_FOR_SALE,
         firstSeenAt: p.lastSeenAt,
         lastSeenAt: p.lastSeenAt,
       })),

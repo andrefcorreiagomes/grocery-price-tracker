@@ -3,6 +3,7 @@ import type { Verdict } from "@/generated/prisma/client";
 import type { Store } from "@/lib/stores";
 import { nonFoodCatastropheReason } from "./reidentification";
 import { matchableEan } from "../../lib/barcodes";
+import { recordPrices } from "./price-history";
 
 /**
  * The record of product ids we opened and decided not to keep.
@@ -417,7 +418,8 @@ export async function stopTrackingMovedOut(
  * page answered. The last price stays: the marker alone keeps the product out
  * of the comparisons (the owner's rule, 1 November 2026: "if it has a price,
  * save its price, but mark it out of stock"). From 22 October to 1 November
- * 2026 the price was erased here instead.
+ * 2026 the price was erased here instead. Since 2 November 2026 the spell out
+ * of stock is recorded in the price history as well.
  */
 export async function recordUnavailable(
   store: Store,
@@ -429,6 +431,21 @@ export async function recordUnavailable(
       where: { store, storeProductId: { in: slice } },
       data: { unavailableAt: checkedAt, lastCheckedAt: checkedAt, deadCount: 0 },
     });
+    // And in the price history, so the days out of stock show there too. With
+    // the last price held: the page's own is not read here (assumption 2.33).
+    const rows = await prisma.catalogueProduct.findMany({
+      where: { store, storeProductId: { in: slice } },
+      select: { id: true, price: true },
+    });
+    await recordPrices(
+      rows.map((r) => ({
+        productId: r.id,
+        price: r.price,
+        availability: "not_for_sale" as const,
+        availabilitySign: "missing from the listing; its page says not for sale",
+      })),
+      checkedAt
+    );
   });
 }
 

@@ -358,7 +358,7 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
       select: {
         storeProductId: true, store: true, name: true, brand: true, packageSize: true, unit: true, labels: true,
         price: true, shownUnitPrice: true, shownUnitPriceUnit: true,
-        prices: { select: { price: true, firstSeenAt: true, lastSeenAt: true }, orderBy: { firstSeenAt: "asc" } },
+        prices: { select: { price: true, availability: true, firstSeenAt: true, lastSeenAt: true }, orderBy: { firstSeenAt: "asc" } },
       },
     })
   )
@@ -371,13 +371,16 @@ export async function getComparisonHistory(kindId: string, slug: string): Promis
   // follows, [from, to] for the last one.
   const stretches = rows.flatMap((r) =>
     r.prices.flatMap((p, i) => {
-      // A placeholder (0 or one cent, six from August 2026) is no price.
-      if (sellablePrice(p.price) === null || !comparable({ ...r, price: p.price }, kindId, unit)) return [];
+      // A placeholder (0 or one cent, six from August 2026) is no price, and a
+      // spell out of stock is no offer: its days are a stretch of their own
+      // (since 2 November 2026), left out like a product the store dropped.
+      const price = sellablePrice(p.price);
+      if (price === null || p.availability === "not_for_sale" || !comparable({ ...r, price }, kindId, unit)) return [];
       const next = r.prices[i + 1];
       return [{
         store: r.store,
         productName: r.name,
-        unitPrice: unitPrice(p.price, r.packageSize as number),
+        unitPrice: unitPrice(price, r.packageSize as number),
         from: lisbonDay(p.firstSeenAt),
         to: next ? lisbonDay(next.firstSeenAt) : lisbonDay(p.lastSeenAt),
         last: !next,

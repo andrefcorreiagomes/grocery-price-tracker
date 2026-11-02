@@ -1,6 +1,6 @@
 import { parseSize } from "../lib/sizes";
 import { extractLdJsonBlocks, fetchHtml, HttpError } from "./http";
-import { NOT_SELLABLE, PageReadError, sellablePrice, validDateOrNull, type ScrapeResult } from "./types";
+import { NOT_SELLABLE, PageReadError, schemaAvailability, sellablePrice, validDateOrNull, type ScrapeResult } from "./types";
 
 interface SchemaProduct {
   "@type"?: string;
@@ -118,16 +118,17 @@ export function parseAuchanPage(html: string, url: string): ScrapeResult {
   }
 
   const name = product.name ?? "";
+  // No price on the page: listed, not for sale online (auchanStatusFromHtml).
+  // Until 29 October 2026 such a page was unreadable and the product never saved.
+  const price = hasPrice(product) ? sellablePrice(Number(product.offers?.price)) : null;
 
   return {
     name,
     brand: product.brand?.name ?? null,
-    // No price on the page: listed, not for sale online (auchanStatusFromHtml).
-    // Until 29 October 2026 such a page was unreadable and the product never saved.
-    price: hasPrice(product) ? sellablePrice(Number(product.offers?.price)) : null,
+    price,
     // Out of stock keeps the price the page shows, marked (the owner's rule,
     // 1 November 2026); no price at all is not for sale online either.
-    outOfStock: auchanStatusFromHtml(html) === "unavailable",
+    ...schemaAvailability(price, product.offers?.availability),
     ean: product.gtin ?? null,
     categoryPath: null,
     // Auchan writes the size into the product name itself - "BACON EXTRA CUBOS

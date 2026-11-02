@@ -60,7 +60,8 @@ export interface PingoDoceCrawlResult {
   /**
    * Pages that loaded a real product with no price. Kept as rows - the name,
    * size and category are all true and worth storing - but they carry
-   * `price: null`, which `recordPrices` already skips and which the
+   * `price: null` - recorded in the price history with an empty price since 2
+   * November 2026, so the nights out of stock are not a gap - and which the
    * cheapest-per-store query must exclude.
    */
   unpriced: UnpricedProduct[];
@@ -157,7 +158,8 @@ export async function fetchPingoDoceProducts(
       id: target.storeProductId,
       name: product.name,
       price: product.price,
-      outOfStock: product.outOfStock,
+      availability: product.availability,
+      availabilitySign: product.availabilitySign,
       brand: product.brand || "Pingo Doce",
       // From the URL, not the page: the breadcrumb gives the leaf alone.
       category: target.categoryPath,

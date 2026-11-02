@@ -85,7 +85,7 @@ async function makePeriod(
   isOpen: boolean
 ): Promise<string> {
   const row = await prisma.cataloguePrice.create({
-    data: { productId, price, firstSeenAt, lastSeenAt, isOpen },
+    data: { productId, price, availability: "assumed_for_sale", firstSeenAt, lastSeenAt, isOpen },
     select: { id: true },
   });
   return row.id;

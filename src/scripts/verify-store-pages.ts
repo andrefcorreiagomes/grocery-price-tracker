@@ -98,6 +98,7 @@ export function verifyStorePages(): number {
     pd.price === 3.99 && pd.packageSize === 0.4 && pd.packageUnit === "kg" && pd.shownUnitPrice?.value === 9.98, `${pd.price} ${pd.packageSize} ${pd.packageUnit} ${pd.shownUnitPrice?.value}`);
   check("Pingo Doce: its own counter (\"Nossa Padaria\") is its own brand", pd.brand === "Pingo Doce", pd.brand ?? "");
   check("Pingo Doce: no shelf from the page (it comes from the address) and no barcode", pd.categoryPath === null && pd.ean === null);
+  check("Pingo Doce: a page with a price is for sale", pd.availability === "for_sale" && pd.availabilitySign === "price shown");
 
   console.log("\n  the crossed-out-price rule (Auchan tiles and Pingo Doce pages)");
   check("an earlier price above today's is a promotion", struckPricePromotion("Price reduced from 4,59 €/Kg to", 3.59).regularPrice === 4.59);
@@ -121,8 +122,10 @@ export function verifyStorePages(): number {
   check("a page with no promotion box is not one", !parsePingoDocePage(PLAIN, "plain").onPromotion);
   const unavailable = parsePingoDocePage(UNAVAILABLE, "unavailable");
   check("a product not for sale is never on promotion", unavailable.price === null && !unavailable.onPromotion);
+  check("\"0,00\" is not for sale, and says so", unavailable.availability === "not_for_sale" && unavailable.availabilitySign === "price shown as 0,00");
   const unavailableNull = parsePingoDocePage(UNAVAILABLE_NULL, "unavailable-null");
-  check("\"null\" with the unavailable box is not for sale, and is read", unavailableNull.price === null && unavailableNull.name === "Gelado de Café Caramel Latte");
+  check("\"null\" with the unavailable box is not for sale, and is read", unavailableNull.price === null && unavailableNull.name === "Gelado de Café Caramel Latte" &&
+    unavailableNull.availability === "not_for_sale");
   let nullAlone = "read";
   try {
     parsePingoDocePage(NULL_ALONE, "null-alone");
@@ -154,17 +157,21 @@ export function verifyStorePages(): number {
   const outOfStock = coStock("https://schema.org/OutOfStock");
   // The owner's rule, 1 November 2026: keep the price it shows, mark it.
   check("Continente: an OutOfStock page keeps the price it shows, marked out of stock",
-    outOfStock.price === 1.29 && outOfStock.outOfStock, `${outOfStock.price} ${outOfStock.outOfStock}`);
+    outOfStock.price === 1.29 && outOfStock.availability === "not_for_sale", `${outOfStock.price} ${outOfStock.availability}`);
+  check("and says what it went by", outOfStock.availabilitySign === "page data: OutOfStock", outOfStock.availabilitySign);
   check("and the promotion it shows", outOfStock.onPromotion && outOfStock.regularPrice === 1.49);
   check(
     "and it keeps its size, read with the price the page shows",
     outOfStock.packageSize === 6 && outOfStock.packageUnit === "l",
     `${outOfStock.packageSize} ${outOfStock.packageUnit}`
   );
-  check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").outOfStock);
-  check("an InStock page keeps its price, not marked", coStock("https://schema.org/InStock").price === 1.29 && !coStock("https://schema.org/InStock").outOfStock);
-  check("a page that states no availability keeps its price, not marked", coStock(null).price === 1.29 && !coStock(null).outOfStock);
-  check("Continente: a page priced 0 is marked out of stock too", zeroAtContinente.outOfStock);
+  check("the old http:// spelling is out of stock too", coStock("http://schema.org/OutOfStock").availability === "not_for_sale");
+  check("an InStock page keeps its price, for sale", coStock("https://schema.org/InStock").price === 1.29 && coStock("https://schema.org/InStock").availability === "for_sale");
+  check("a page that states no availability keeps its price, and says it cannot tell",
+    coStock(null).price === 1.29 && coStock(null).availability === "unknown", coStock(null).availability);
+  check("an availability word never seen before is unknown, not for sale",
+    coStock("https://schema.org/SomethingNew").availability === "unknown" && coStock("https://schema.org/SomethingNew").availabilitySign === "page data: SomethingNew");
+  check("Continente: a page priced 0 is marked out of stock too", zeroAtContinente.availability === "not_for_sale" && zeroAtContinente.availabilitySign === "no sellable price shown");
   // Tinned fish by its drained weight (31 October 2026): the label as on
   // Ramirez tuna's page that day, at 1,49 EUR and 17,33 EUR/kg.
   const coTin = (name: string, label: string) =>
@@ -199,7 +206,7 @@ export function verifyStorePages(): number {
     `<span class="auc-price__stricked">1,59 &euro;</span><span class="auc-measures--price-per-unit">3.69 &euro;/Kg</span></div>`;
   const marked = parseAuchanTilesDetailed(sausageTile("product-tile auc-product-tile auc-js-product-tile auc-product-unavailable"));
   const unmarked = parseAuchanTilesDetailed(sausageTile("product-tile auc-product-tile auc-js-product-tile"));
-  check("Auchan: a tile marked out of stock is kept with its price, marked", marked.hits.length === 1 && marked.hits[0].price === 1.29 && marked.hits[0].outOfStock === true,
+  check("Auchan: a tile marked out of stock is kept with its price, marked", marked.hits.length === 1 && marked.hits[0].price === 1.29 && marked.hits[0].availability === "not_for_sale",
     JSON.stringify(marked.hits[0]));
   check("Auchan: a tile marked out of stock is counted, and not as unpriced", marked.markedUnavailable === 1 && marked.unpriced === 0);
   check("Auchan: a tile marked out of stock keeps the size its price shows",
@@ -207,8 +214,8 @@ export function verifyStorePages(): number {
     `${marked.hits[0]?.packageSize} vs ${unmarked.hits[0]?.packageSize}`);
   check("Auchan: a tile marked out of stock keeps the promotion it shows",
     marked.hits[0]?.onPromotion === true && marked.hits[0]?.regularPrice === 1.59);
-  check("Auchan: an unmarked tile keeps its price, not marked or counted",
-    unmarked.hits[0]?.price === 1.29 && unmarked.hits[0]?.outOfStock === false && unmarked.markedUnavailable === 0);
+  check("Auchan: an unmarked tile keeps its price, for sale, not counted",
+    unmarked.hits[0]?.price === 1.29 && unmarked.hits[0]?.availability === "for_sale" && unmarked.markedUnavailable === 0);
   return failures;
 }
 
