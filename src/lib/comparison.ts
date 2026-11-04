@@ -33,6 +33,8 @@ export interface ComparableProduct {
   packageSize: number | null;
   /** "kg", "l" or "un" as stored; anything else is treated as unknown */
   unit: string | null;
+  /** the product's page on the store's site, for the "ver no site" link; absent when not loaded */
+  url?: string;
   /** the store's promotion marker at the last crawl; absent when not read (lib/promotion.ts) */
   onPromotion?: boolean | null;
   regularPrice?: number | null;

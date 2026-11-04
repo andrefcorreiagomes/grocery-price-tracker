@@ -108,6 +108,30 @@
   overflow-wrap: anywhere;
 }
 
+/* Under the name: the pack price and the link to the store's page (ProductFoot). */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.7rem;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+.storeLink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--foreground) 35%, transparent);
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.storeLink:hover,
+.storeLink:focus-visible {
+  color: var(--foreground);
+}
+
 /* The store marks the price as a promotion (PromoMark). */
 .promo {
   --promo-accent: #b45309;

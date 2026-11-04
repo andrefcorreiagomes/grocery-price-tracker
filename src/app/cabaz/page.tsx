@@ -10,7 +10,7 @@ import PricesCollected from "@/components/PricesCollected";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "O meu cabaz — Comparador de Preços",
+  title: "O meu cabaz — Poupa Fácil",
   description:
     "Escolha os seus produtos e veja quanto custa o mesmo cabaz no Continente, no Pingo Doce e no Auchan.",
 };

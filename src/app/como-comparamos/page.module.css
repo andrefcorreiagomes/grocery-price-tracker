@@ -1,0 +1,48 @@
+.main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+  line-height: 1.6;
+}
+
+.main section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.main h1 {
+  text-wrap: balance;
+}
+
+.main h2 {
+  font-size: 1.1rem;
+  text-wrap: balance;
+}
+
+.main p {
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+}
+
+.back {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.terms {
+  display: grid;
+  gap: 0.3rem 0;
+}
+
+.terms dt {
+  font-weight: 600;
+}
+
+.terms dd {
+  margin-bottom: 0.6rem;
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+}

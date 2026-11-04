@@ -67,7 +67,7 @@ async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
   const rows = await prisma.catalogueProduct.findMany({
     where: { foodType: foodTypeId, delistedAt: null, ...(await currentOnly()) },
     select: {
-      storeProductId: true, store: true, name: true, brand: true,
+      storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
@@ -188,7 +188,7 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
   const rows = await prisma.catalogueProduct.findMany({
     where: { foodType: { not: null }, delistedAt: null, ...(await currentOnly()) },
     select: {
-      storeProductId: true, store: true, name: true, brand: true,
+      storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
@@ -473,7 +473,7 @@ export async function getNamedGroups(
   const rows = await prisma.catalogueProduct.findMany({
     where: { foodType: foodTypeId, delistedAt: null, ...current },
     select: {
-      id: true, storeProductId: true, store: true, name: true, brand: true,
+      id: true, storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
       shownUnitPrice: true, shownUnitPriceUnit: true,
     },
@@ -512,7 +512,7 @@ export async function getNamedGroups(
     const others = await prisma.catalogueProduct.findMany({
       where: { id: { in: otherIds.slice(i, i + 500) }, delistedAt: null, ...current },
       select: {
-        id: true, storeProductId: true, store: true, name: true, brand: true,
+        id: true, storeProductId: true, store: true, name: true, brand: true, url: true,
         price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
         shownUnitPrice: true, shownUnitPriceUnit: true,
       },

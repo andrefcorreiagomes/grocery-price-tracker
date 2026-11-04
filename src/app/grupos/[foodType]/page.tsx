@@ -10,11 +10,13 @@ import {
 } from "@/lib/grupos";
 import type { ComparisonGroup } from "@/lib/comparison-groups";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
-import type { Cell } from "@/lib/comparison";
+import type { Cell, ComparableProduct } from "@/lib/comparison";
 import { euros } from "@/lib/money";
+import { packLine, storeLink } from "@/lib/pack";
 import { promotionOf, shortDay, type Promotion } from "@/lib/promotion";
 import styles from "./page.module.css";
 import PricesCollected from "@/components/PricesCollected";
+import ReportError from "@/components/ReportError";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,7 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
           {other === "kg" ? "Vendido ao peso (kg)" : other === "l" ? "Vendido ao volume (L)" : "Sem peso indicado"}
         </span>
         <span className={styles.product}>{cell.example.name}</span>
+        <ProductFoot product={cell.example} unit={unit} />
       </div>
     );
   }
@@ -65,8 +68,30 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
       {/* The product is NAMED on purpose: a number alone cannot tell you that
           the cheapest "queijo" is a children's dessert. */}
       <span className={styles.product}>{cell.product.name}</span>
+      <ProductFoot product={cell.product} unit={unit} />
       {promo && <PromoMark promo={promo} unit={unit} />}
     </div>
+  );
+}
+
+/**
+ * Under the name: what the pack costs and holds, and a link to the product at
+ * the store so anyone can check (src/lib/pack.ts). A separate small link, not
+ * the name itself: on a phone the name is too easy to tap by mistake.
+ */
+function ProductFoot({ product, unit }: { product: ComparableProduct; unit: string }) {
+  const line = packLine(product, unit);
+  const href = storeLink(product.url);
+  if (!line && !href) return null;
+  return (
+    <span className={styles.foot}>
+      {line && <span>{line}</span>}
+      {href && (
+        <a className={styles.storeLink} href={href} target="_blank" rel="noopener noreferrer nofollow">
+          ver no site ↗
+        </a>
+      )}
+    </span>
   );
 }
 
@@ -161,6 +186,7 @@ function GroupBlock({ group, showUnit, kindId }: { group: ComparisonGroup; showU
           winners={group.ownBrandWinners}
         />
       )}
+      <ReportError foodType={kindId} comparison={group.key} />
     </section>
   );
 }

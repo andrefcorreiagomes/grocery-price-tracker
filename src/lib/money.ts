@@ -6,6 +6,9 @@
  * `toFixed` alone rounds the binary float, and the two disagree on half cents:
  * 0.995 €/kg (1.99 € for 2 kg of onions) printed as 0.99 beside a real 0.99
  * that was marked cheaper - a tie on screen, a winner in green (21 Oct 2026).
+ *
+ * The decimal POINT is the owner's decision (4 November 2026): the Portuguese
+ * comma ("0,79 €") was proposed and declined. Keep "0.79".
  */
 export function euros(value: number): string {
   return (Math.round(value * 100) / 100).toFixed(2);

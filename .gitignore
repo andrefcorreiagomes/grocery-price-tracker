@@ -62,3 +62,6 @@ reports/
 /docs/assumptions.md
 # renamed database copies (e.g. dev.db.before-2026-10-25)
 *.db.*
+
+# visitors' error reports from the site (src/lib/error-reports.ts): never uploaded
+/user-reports/

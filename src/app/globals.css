@@ -47,3 +47,18 @@ a {
     color-scheme: dark;
   }
 }
+
+/* The foot of every page (layout.tsx): pushed to the bottom of short pages. */
+.site-footer {
+  margin-top: auto;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.site-footer a {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

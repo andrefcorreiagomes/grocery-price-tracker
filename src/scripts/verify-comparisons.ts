@@ -19,6 +19,8 @@ import {
   type ComparableProduct,
 } from "../lib/comparison";
 import { euros } from "../lib/money";
+import { packLine, sizeLabel, storeLink } from "../lib/pack";
+import { COMMENT_MAX, DAILY_LIMIT, ReportLimiter, validateReport, VISITOR_LIMIT, visitorKey } from "../lib/error-reports";
 import { promotionLine, promotionWarning } from "../scrapers/crawl/promo-watch";
 import { auchanTilePromotion, parseAuchanTilesDetailed } from "../scrapers/search/auchan";
 
@@ -243,6 +245,58 @@ function verifyComparison(): number {
   const shown = [...halfCent.values()].map((c) => (c.kind === "price" ? euros(c.unitPrice) : "-"));
   check("a half cent is shown as the cents it is compared in", shown.join() === "1.00,0.99,1.24" &&
     cheapestStores(halfCent).join() === "PINGO_DOCE", `shown ${shown.join(" ")}`);
+
+  // The pack line and the store link under each product (src/lib/pack.ts).
+  const sizes = [sizeLabel(0.5, "kg"), sizeLabel(0.0995, "kg"), sizeLabel(1.5, "kg"), sizeLabel(0.33, "l"), sizeLabel(6, "l"), sizeLabel(12, "un"), sizeLabel(0.3 * 1.0000000001, "kg")];
+  check("sizes read as a shopper reads them", sizes.join() === "500 g,99.5 g,1.5 kg,330 ml,6 L,12 un,300 g", sizes.join());
+  check("an unknown size or unit gives no size", sizeLabel(null, "kg") === null && sizeLabel(0.5, null) === null && sizeLabel(0, "kg") === null);
+  const pk = (price: number | null, packageSize: number | null, unit: string | null, per: string) => packLine({ price, packageSize, unit }, per);
+  check("a pack shows its price and size", pk(7.99, 5, "kg", "kg") === "7.99 € · 5 kg" && pk(2.99, 12, "un", "un") === "2.99 € · 12 un", String(pk(7.99, 5, "kg", "kg")));
+  check("1 kg or 1 L compared in that unit shows no line (loose or a 1 kg bag look alike)",
+    pk(1.69, 1, "kg", "kg") === null && pk(0.89, 1, "l", "l") === null && pk(0.99, 0.5, "kg", "l") === "0.99 € · 500 g");
+  check("no known size says only the price; no price says nothing", pk(2.99, null, null, "un") === "preço: 2.99 €" && pk(null, 0.5, "kg", "kg") === null);
+  check("store links: the three stores' own sites over https only",
+    storeLink("https://www.continente.pt/produto/x-123.html") !== null &&
+      storeLink("https://www.pingodoce.pt/home/produtos/x-1.html") !== null &&
+      storeLink("https://www.auchan.pt/pt/x/1.html") !== null &&
+      storeLink("javascript:alert(1)") === null &&
+      storeLink("http://www.continente.pt/produto/x.html") === null &&
+      storeLink("https://www.continente.pt.evil.example/x") === null &&
+      storeLink("https://evil.example/?https://www.auchan.pt/") === null &&
+      storeLink(undefined) === null);
+
+  // "Reportar um erro": everything a visitor sends is untrusted (src/lib/error-reports.ts).
+  const reportForm = (fields: Record<string, string>) => {
+    const f = new FormData();
+    for (const [k, v] of Object.entries({ foodType: "arroz", comparison: "risotto||kg", store: "AUCHAN", reason: "preco", comment: "", ...fields })) f.set(k, v);
+    return validateReport(f, new Date(Date.UTC(2026, 10, 4, 12)));
+  };
+  const accepted = (fields: Record<string, string>) => "report" in reportForm(fields);
+  check("a normal report is accepted, with the whole comparison or one store", accepted({}) && accepted({ store: "" }) && accepted({ comment: "O arroz é de 500 g, não 1 kg." }));
+  check("only the listed stores and reasons are accepted",
+    !accepted({ store: "LIDL" }) && !accepted({ store: "auchan" }) && !accepted({ reason: "spam" }) && !accepted({ reason: "" }) && !accepted({ reason: "__proto__" }) && !accepted({ reason: "toString" }));
+  check("a comparison or food type that is not plain words is refused",
+    !accepted({ foodType: "../dev.db" }) && !accepted({ foodType: "" }) && !accepted({ comparison: "x\n{\"fake\":1}" }) && !accepted({ comparison: "<script>" }) && !accepted({ comparison: "a".repeat(161) }));
+  check(`a comment over ${COMMENT_MAX} characters is refused, one of exactly ${COMMENT_MAX} is not`,
+    !accepted({ comment: "a".repeat(COMMENT_MAX + 1) }) && accepted({ comment: "é".repeat(COMMENT_MAX) }));
+  const cleaned = reportForm({ comment: "  linha 1\r\n\r\n\r\n\r\nlinha​ 2\u0000\u001b[31m‮  " });
+  check("a comment keeps its words and line breaks, loses control and invisible characters",
+    "report" in cleaned && cleaned.report.comment === "linha 1\n\nlinha 2[31m", "report" in cleaned ? JSON.stringify(cleaned.report.comment) : "refused");
+  const attack = reportForm({ comment: "x'); DROP TABLE CatalogueProduct; --\n{\"at\":\"fake\"}" });
+  check("text that looks like a database command or a second report stays one line of plain data",
+    "report" in attack && !JSON.stringify(attack.report).includes("\n") && JSON.parse(JSON.stringify(attack.report)).comment.includes("DROP TABLE"));
+  const limiter = new ReportLimiter();
+  const t0 = new Date(Date.UTC(2026, 10, 4, 12));
+  const later = (min: number) => new Date(t0.getTime() + min * 60_000);
+  const firstFive = [0, 1, 2, 3, 4].map((i) => limiter.allow("visitor-a", later(i)));
+  check(`a visitor may send ${VISITOR_LIMIT} reports an hour, not one more; another visitor is not affected; an hour later again`,
+    firstFive.every(Boolean) && !limiter.allow("visitor-a", later(5)) && limiter.allow("visitor-b", later(5)) && limiter.allow("visitor-a", later(61)));
+  const flood = new ReportLimiter();
+  let sent = 0;
+  for (let i = 0; i < DAILY_LIMIT + 50; i++) if (flood.allow(`v${i}`, later(i % 50))) sent++;
+  check(`at most ${DAILY_LIMIT} reports a day in all, however many visitors`, sent === DAILY_LIMIT, String(sent));
+  check("a visitor's address is never kept, only an anonymous hash that changes each day",
+    visitorKey("203.0.113.7", t0) !== visitorKey("203.0.113.7", later(24 * 60)) && !visitorKey("203.0.113.7", t0).includes("203"));
 
   // The promotion early warning (promo-watch.ts). A misread marker reads as
   // "not on promotion", so only the share can show it broke.

@@ -1,0 +1,99 @@
+.report {
+  margin-top: 0.8rem;
+  font-size: 0.82rem;
+}
+
+.report summary {
+  cursor: pointer;
+  width: fit-content;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.report summary:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 0.7rem;
+  padding: 0.9rem;
+  max-width: 28rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 4px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border: 0;
+}
+
+.field legend {
+  margin-bottom: 0.3rem;
+}
+
+.field select,
+.field textarea {
+  font: inherit;
+  padding: 0.4rem;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid color-mix(in srgb, var(--foreground) 30%, transparent);
+  border-radius: 4px;
+}
+
+.choice {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.form button {
+  align-self: flex-start;
+  font: inherit;
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  border: 0;
+  color: var(--background);
+  background: var(--foreground);
+  cursor: pointer;
+}
+
+.form button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error {
+    color: #fca5a5;
+  }
+}
+
+.sent {
+  margin-top: 0.6rem;
+}
+
+/* Off screen for people, still in the form for programs. */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

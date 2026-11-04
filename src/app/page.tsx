@@ -24,7 +24,7 @@ export default async function Home() {
 
   return (
     <main className={styles.main}>
-      <h1>Comparador de Preços</h1>
+      <h1>Poupa Fácil</h1>
       <p className={styles.subtitle}>
         Preços recolhidos diariamente no Continente, no Pingo Doce e no Auchan.
         Escolha uma categoria para comparar.
