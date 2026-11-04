@@ -3,7 +3,7 @@ import { discoverPingoDoceProducts } from "../scrapers/crawl/pingodoce-sitemap";
 import { fetchPingoDoceProducts } from "../scrapers/crawl/pingodoce-products";
 import type { PingoDoceProductUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { countPromotionEndings, pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
+import { countPromotionTurnover, pageFieldsBefore, recordPageChanges, recordSitemapDates } from "../scrapers/crawl/sitemap-dates";
 import {
   DEAD_NIGHTS_BEFORE_DELISTING,
   MAX_SHARE_MISSING,
@@ -11,7 +11,7 @@ import {
   recordDead,
   stopTrackingMovedOut,
 } from "../scrapers/crawl/product-checks";
-import { isPriceChurnStorm } from "../scrapers/crawl/reidentification";
+import { isPriceChurnStorm, priceAlarmBase } from "../scrapers/crawl/reidentification";
 import { readPingoDoceDepartments } from "../scrapers/crawl/pingodoce";
 import { formatHttpStats, httpStats, requireCrawlerContact, wireBytesOf } from "../scrapers/http";
 import { compareWithBaseline, compareWithPrevious, previousRunFor, recordRun, rollingBaseline } from "../scrapers/crawl/history";
@@ -404,15 +404,20 @@ async function main() {
 
   // Too many prices moving at once means the wrong number is being read
   // (brakes.ts). Pingo Doce had no such brake until 22 October 2026.
-  const priced = summary.prices.changed + summary.prices.unchanged;
-  // A promotion reaching its end is the store's doing, not a misread number,
-  // and does not count towards the alarm (27 October 2026: 1,864 of 2,222).
-  const promotionEnds = await countPromotionEndings("PINGO_DOCE", fieldsBefore, seenAt);
-  const otherChanges = summary.prices.changed - promotionEnds;
-  console.log(`price changes that were only a promotion ending: ${promotionEnds.toLocaleString()}`);
+  const priced = priceAlarmBase(summary.prices);
+  // A promotion reaching its end, or starting, is the store's doing, not a
+  // misread number, and does not count towards the alarm (27 October 2026:
+  // 1,864 of 2,222 were endings; starts since 4 November 2026).
+  const turnover = await countPromotionTurnover("PINGO_DOCE", fieldsBefore, seenAt);
+  const otherChanges = summary.prices.changed - turnover.ended - turnover.started;
+  console.log(
+    `price changes that were only a promotion ending: ${turnover.ended.toLocaleString()}, ` +
+      `or starting: ${turnover.started.toLocaleString()}`
+  );
   const priceStorm = isPriceChurnStorm({ changed: otherChanges, priced, complete: fullRun, store: "PINGO_DOCE" })
     ? `${otherChanges.toLocaleString()} of ${priced.toLocaleString()} prices moved this run, not counting ` +
-      `${promotionEnds.toLocaleString()} promotions that simply ended - more than 30%. The price reader is probably ` +
+      `${turnover.ended.toLocaleString()} promotions that simply ended and ${turnover.started.toLocaleString()} ` +
+      `that simply started - more than 30%. The price reader is probably ` +
       `reading the wrong number. NOTE: prices are written as the crawl runs, so these rows already exist and share ` +
       `this run's seenAt.`
     : null;

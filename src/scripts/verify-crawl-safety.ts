@@ -38,7 +38,7 @@ import { kindAssignments, kindChanges, rowsToClassify, writeKindChanges } from "
 import { buildGroups, shownOnSite } from "../lib/grouping";
 import { auchanBarcodeFromHtml } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
-import { changedFields, isPromotionEnding, pageFieldsBefore, recordPageChanges, recordSitemapDates, type PageFields } from "../scrapers/crawl/sitemap-dates";
+import { changedFields, isPromotionEnding, isPromotionStarting, pageFieldsBefore, recordPageChanges, recordSitemapDates, type PageFields } from "../scrapers/crawl/sitemap-dates";
 import { cheapestPerStore } from "../lib/comparison";
 
 /**
@@ -643,6 +643,16 @@ async function verifySitemapDates() {
     !isPromotionEnding(base, { ...base, price: 2.49 }) &&
       !isPromotionEnding(onOffer, { ...onOffer, price: 1.39 }) &&
       !isPromotionEnding(onOffer, { ...base, price: 2.29, promotion: false, regularPrice: null }));
+  // A promotion starting is not a misread price either (3 November 2026).
+  check("a promotion starting, the old price now crossed out, is recognised",
+    isPromotionStarting(base, { ...base, price: 1.49, promotion: true, regularPrice: 1.99 }));
+  check("but not a cut with no promotion, one already on promotion, or one crossing out another price",
+    !isPromotionStarting(base, { ...base, price: 1.49 }) &&
+      !isPromotionStarting(onOffer, { ...onOffer, price: 1.39 }) &&
+      !isPromotionStarting(base, { ...base, price: 1.49, promotion: true, regularPrice: 2.29 }));
+  check("an ending is not taken for a start, nor a start for an ending",
+    !isPromotionStarting(onOffer, { ...base, price: 1.99, promotion: false, regularPrice: null }) &&
+      !isPromotionEnding(base, { ...base, price: 1.49, promotion: true, regularPrice: 1.99 }));
   const diff = changedFields(base, { ...base, price: 2.19, name: "Atum em Azeite" });
   check("a new price and a new name are each kept, with before and after",
     diff.map((d) => `${d.field}:${d.before}>${d.after}`).join() === "price:1.99>2.19,name:Atum>Atum em Azeite", diff.map((d) => d.field).join());

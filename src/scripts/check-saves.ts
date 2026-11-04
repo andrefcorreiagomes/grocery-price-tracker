@@ -15,7 +15,9 @@ import { STORE_LIST, type Store } from "../lib/stores";
  *   1. products saved   rows stamped with the run's instant = the report's
  *                       "products seen"
  *   2. prices saved     price periods stamped with the run's instant = the
- *                       report's prices opened + changed + unchanged; every
+ *                       report's prices opened + changed + unchanged (+ in
+ *                       or out of stock, + Auchan's products missing from
+ *                       the listing whose own page said not for sale); every
  *                       product seen with a price has exactly one open period,
  *                       stamped tonight, holding that same price (in cents)
  *   3. accounted for    every product still held as on sale was either seen
@@ -32,7 +34,19 @@ import { STORE_LIST, type Store } from "../lib/stores";
 interface ReportFigures {
   seen: number;
   prices: { opened: number; changed: number; unchanged: number; availabilityChanged?: number };
+  /**
+   * Products missing from the listing whose own page said "not for sale"
+   * (Auchan's gridHealth.unavailable). Not "seen", but since 2 November 2026
+   * each gets a price period stamped tonight (recordUnavailable): 110 on the
+   * night of 3 November, which this check first took for a fault.
+   */
+  outOfStockOnPage: number;
   file: string;
+}
+
+/** The price periods a report says its run stamped. */
+function expectedPriceStamps(r: Pick<ReportFigures, "prices" | "outOfStockOnPage">): number {
+  return r.prices.opened + r.prices.changed + r.prices.unchanged + (r.prices.availabilityChanged ?? 0) + r.outOfStockOnPage;
 }
 
 /** The report written by the run that started at `seenAt` (reports/<store>-*.json). */
@@ -42,7 +56,7 @@ function reportFor(store: Store, seenAt: Date): ReportFigures | null {
     try {
       const r = JSON.parse(readFileSync(path.join("reports", file), "utf8"));
       if (Math.abs(new Date(r.runAt).getTime() - seenAt.getTime()) < 1_000) {
-        return { seen: r.catalogue.seen, prices: r.prices, file };
+        return { seen: r.catalogue.seen, prices: r.prices, outOfStockOnPage: r.gridHealth?.unavailable ?? 0, file };
       }
     } catch {
       // an unreadable report is skipped; "no report" is said below
@@ -137,11 +151,15 @@ async function checkStore(store: Store) {
   const stamped = await prisma.cataloguePrice.count({ where: { lastSeenAt: { in: stamps }, product: { store } } });
   if (reports.length) {
     // Since 2 November 2026 a product whose availability changed opens a period too.
-    const expected = Math.max(...reports.map((r) => r.prices.opened + r.prices.changed + r.prices.unchanged + (r.prices.availabilityChanged ?? 0)));
+    const expected = Math.max(...reports.map(expectedPriceStamps));
     const r = reports[0].prices;
+    const onPage = reports[0].outOfStockOnPage;
     say(single ? stamped === expected : stamped >= expected,
       `prices stamped tonight: ${stamped.toLocaleString()}; the report says ${expected.toLocaleString()}` +
-        (single ? ` (opened ${r.opened}, changed ${r.changed}, in or out of stock ${r.availabilityChanged ?? 0}, unchanged ${r.unchanged.toLocaleString()})` : ""));
+        (single
+          ? ` (opened ${r.opened}, changed ${r.changed}, in or out of stock ${r.availabilityChanged ?? 0}, unchanged ${r.unchanged.toLocaleString()}` +
+            (onPage ? `, out of stock on its own page ${onPage}` : "") + ")"
+          : ""));
   }
   const pricedTonight = await prisma.catalogueProduct.findMany({
     where: { store, lastSeenAt: { in: stamps }, price: { not: null } },

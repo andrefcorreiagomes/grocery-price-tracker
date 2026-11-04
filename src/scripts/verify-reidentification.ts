@@ -10,6 +10,7 @@ import {
   isBarcodeSwapStorm,
   isChurnCatastrophe,
   isPriceChurnStorm,
+  priceAlarmBase,
   reconcileByBarcode,
   retiredId,
 } from "../scrapers/crawl/reidentification";
@@ -455,6 +456,13 @@ export async function verifyReidentification(): Promise<number> {
   check("a normal night of price moves does not trip the price brake", !priceStorm(300, 10_000));
   check(`above ${PRICE_CHURN_LIMIT} trips it`, priceStorm(Math.ceil(10_000 * PRICE_CHURN_LIMIT) + 1, 10_000));
   check("every price moving trips it", priceStorm(10_000, 10_000));
+  // Continente, night of 3 November 2026: every product left its "assumed"
+  // period, so nearly all were "in or out of stock" and none "unchanged".
+  const nov3 = { changed: 3_259, unchanged: 0, availabilityChanged: 15_814 };
+  check("the base counts products whose only change was being in or out of stock",
+    priceAlarmBase(nov3) === 19_073 && priceAlarmBase({ changed: 5, unchanged: 10 }) === 15);
+  check("so the 3 November night, 1,495 moves not explained by promotions, does not trip it",
+    !priceStorm(1_495, priceAlarmBase(nov3)) && priceStorm(1_495, nov3.changed + nov3.unchanged));
 
   // --- The brake actually brakes ------------------------------------------
   console.log("\nThe swap brake refuses to archive");

@@ -96,15 +96,45 @@ export function isPromotionEnding(before: PageFields, now: PageFields): boolean 
   );
 }
 
-/** How many of tonight's price changes were only promotions ending (isPromotionEnding). */
-export async function countPromotionEndings(store: Store, before: Map<string, PageFields>, seenAt: Date): Promise<number> {
+/**
+ * A price change that is only a promotion starting: not on promotion before,
+ * on promotion now, and the crossed-out price now shown is exactly the old
+ * price. On 3 November 2026, 1,037 of Continente's 1,204 price cuts were this,
+ * on the same night 1,764 promotions ended. Pure.
+ */
+export function isPromotionStarting(before: PageFields, now: PageFields): boolean {
+  const cents = (v: number | null) => (v === null ? null : Math.round(v * 100));
+  return (
+    before.promotion !== true &&
+    now.promotion === true &&
+    before.price !== null &&
+    now.regularPrice !== null &&
+    cents(now.regularPrice) === cents(before.price) &&
+    cents(before.price) !== cents(now.price)
+  );
+}
+
+/**
+ * How many of tonight's price changes were only promotions ending
+ * (isPromotionEnding) or starting (isPromotionStarting): the store's doing,
+ * not a misread number.
+ */
+export async function countPromotionTurnover(
+  store: Store,
+  before: Map<string, PageFields>,
+  seenAt: Date
+): Promise<{ ended: number; started: number }> {
   const rows = await prisma.catalogueProduct.findMany({ where: { store, lastSeenAt: seenAt }, select: SELECT });
-  let endings = 0;
+  let ended = 0;
+  let started = 0;
   for (const r of rows) {
     const b = before.get(r.storeProductId);
-    if (b && isPromotionEnding(b, fieldsOf(r))) endings++;
+    if (!b) continue;
+    const now = fieldsOf(r);
+    if (isPromotionEnding(b, now)) ended++;
+    else if (isPromotionStarting(b, now)) started++;
   }
-  return endings;
+  return { ended, started };
 }
 
 /** Every product's fields before the run writes over them. */

@@ -123,6 +123,18 @@ export const LOSS_LIMIT = 0.1;
  */
 export const PRICE_CHURN_LIMIT = BRAKES.CONTINENTE.priceChurn;
 
+/**
+ * The base the price alarm divides by: every product read tonight that already
+ * had a period. Since 2 November 2026 a product whose price held but whose
+ * availability changed is counted apart (`availabilityChanged`), and belongs
+ * in the base too. On the night of 3 November, when every product left its
+ * "assumed" period, leaving them out made Continente's 1,495 moving prices out
+ * of 19,087 read as 46% (of 3,259), and the run FAILed. Pure.
+ */
+export function priceAlarmBase(prices: { changed: number; unchanged: number; availabilityChanged?: number }): number {
+  return prices.changed + prices.unchanged + (prices.availabilityChanged ?? 0);
+}
+
 function storm(count: number, of: number, limit: number, complete: boolean): boolean {
   if (!complete) return false;
   if (of < MIN_ATTEMPTED) return false;

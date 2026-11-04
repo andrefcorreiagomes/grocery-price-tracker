@@ -20,7 +20,7 @@ import {
   UNAVAILABLE_RECHECK_DAYS,
 } from "../scrapers/crawl/product-checks";
 import { catalogueSizes, compareSizes, previousSizes } from "../scrapers/crawl/catalogue-size";
-import { churnCatastropheReason, isPriceChurnStorm } from "../scrapers/crawl/reidentification";
+import { churnCatastropheReason, isPriceChurnStorm, priceAlarmBase } from "../scrapers/crawl/reidentification";
 import {
   compareSegments,
   isEmptyCategoryStorm,
@@ -497,7 +497,7 @@ async function main() {
   // --- the verdict ladder, most serious first (each escalate prepends) ------
   const priceStorm = isPriceChurnStorm({
     changed: saved.prices.changed,
-    priced: saved.prices.changed + saved.prices.unchanged,
+    priced: priceAlarmBase(saved.prices),
     complete,
     store: STORE,
   });
@@ -505,7 +505,7 @@ async function main() {
     report = escalate(
       report,
       "FAIL",
-      `${saved.prices.changed.toLocaleString()} of ${(saved.prices.changed + saved.prices.unchanged).toLocaleString()} ` +
+      `${saved.prices.changed.toLocaleString()} of ${priceAlarmBase(saved.prices).toLocaleString()} ` +
         `prices moved this run - grocery prices are sticky, so the price reader is probably reading the wrong number. ` +
         `NOTE: prices are written as the walk runs, so these rows already exist and share this run's seenAt.`
     );
