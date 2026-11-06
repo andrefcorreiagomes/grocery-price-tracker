@@ -1287,4 +1287,11 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 7, store: "AUCHAN", id: "3685068", name: "CALENDARIO ADVENTO BIO CUPPER 24 SAQUETAS", kind: "infusao", why: "A tea advent calendar, infusão as verified; moved to the organic 'chá e infusões' shelf, which names two kinds, on 30 October 2026." },
   { batch: 7, store: "AUCHAN", id: "3815095", name: "CALENDÁRIO ADVENTO ENGLISH TEA VERMELHO 25 SAQUETAS", kind: "infusao", why: "As 3685068, the same move." },
   { batch: 7, store: "CONTINENTE", id: "8404056", name: "Pasta de Atum Snock", kind: null, why: "A tuna spread, not a meal, as verified; back on sale on 30 October 2026 on the 'Grab&Go' ready-meals shelf." },
+  // 6 November 2026: Auchan moved 139 products between shelves that night, and
+  // 15 changed kind. The verified-kinds check caught the first two; the fruit
+  // strips were found reading the rest.
+  { batch: 8, store: "AUCHAN", id: "3361299", name: "CHILI NOBRE BOVINO 420G", kind: "refeicao", why: "A ready meal, as verified; moved to the speciality tins shelf on 6 November 2026." },
+  { batch: 8, store: "AUCHAN", id: "3723973", name: "CASSOULET AUCHAN BIO 340G", kind: "refeicao", why: "As 3361299, the same move." },
+  { batch: 8, store: "AUCHAN", id: "2471239", name: "TIRAS NATURE ADDICTS FRUTA MORANGO 35G", kind: null, why: "A sweet fruit strip, not strawberries; moved to the gums shelf on 6 November 2026, where the shelf no longer keeps it out of the fruit." },
+  { batch: 8, store: "AUCHAN", id: "2472468", name: "TIRAS NATURE ADDICTS FRUTA FRAMBOESA 35G", kind: null, why: "As the strawberry strip: a sweet, not raspberries." },
 ];
