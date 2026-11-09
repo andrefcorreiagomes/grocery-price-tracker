@@ -1310,6 +1310,17 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 9, store: "CONTINENTE", id: "7798984", name: "Cuscuz Tradicional sem Glúten Sinhá", kind: "farinha", why: "Brazilian maize flour for cuscuz, on Continente's flour shelf, not couscous." },
   { batch: 9, store: "CONTINENTE", id: "7212172", name: "Mix Pimentas com Sal Grosso Moinho Continente", kind: null, why: "A pepper-and-salt mix, compared with pure pepper at half its price per kilo." },
   { batch: 9, store: "AUCHAN", id: "2007566", name: "MOLHO DOM DUARTE VINHA D'ALHO 200G", kind: null, why: "A vinha d'alho marinade, not a garlic sauce." },
+  // The trial's follow-ups, approved by the owner on 9 November 2026.
+  { batch: 9, store: "AUCHAN", id: "3858781", name: "QUEIJO OVELHA AHUYENTALOBOS E PRESUNTO IBÉRICO KG", kind: null, why: "Sheep's cheese sold together with Iberian ham, at 9.99 EUR/kg; it became Auchan's cheapest sheep's cheese." },
+  { batch: 9, store: "PINGO_DOCE", id: "1007481", name: "Chá Verde com Hortelã e Lima", kind: "refrigerante", why: "A bottled iced tea, 1 l (Pingo Doce's iced-tea shelf), among dry teas; ice teas are soft drinks, as batch 4's Lipton." },
+  { batch: 9, store: "PINGO_DOCE", id: "858978", name: "Chá Verde com Hortelã e Lima", kind: "refrigerante", why: "As 1007481." },
+  { batch: 9, store: "CONTINENTE", id: "8771872", name: "Chá Verde Hortelã e Lima Lipton", kind: "refrigerante", why: "A bottled iced tea, 1 l (Continente's iced-tea shelf)." },
+  { batch: 9, store: "CONTINENTE", id: "8771945", name: "Chá Verde Citrus Lipton", kind: "refrigerante", why: "As 8771872." },
+  { batch: 9, store: "CONTINENTE", id: "8772006", name: "Chá Verde Morango Lipton", kind: "refrigerante", why: "As 8771872, 2 l." },
+  { batch: 9, store: "AUCHAN", id: "4042531", name: "CHÁ MATTE LEÃO LIMAO (SDR) 15L", kind: "refrigerante", why: "A bottled mate tea, 1.5 l (Brazilian drinks shelf)." },
+  { batch: 9, store: "AUCHAN", id: "4042527", name: "CHÁ MATTE LEÃO ORIGINAL (SDR) 1.5 L", kind: "refrigerante", why: "As 4042531." },
+  { batch: 9, store: "PINGO_DOCE", id: "985736", name: "Chá Fermentado Biológico de Framboesa", kind: null, why: "A bottled kombucha (0.3 l), as batch 9's Captain Kombucha." },
+  { batch: 9, store: "PINGO_DOCE", id: "985737", name: "Chá Fermentado Biológico de Gengibre", kind: null, why: "As 985736." },
   { batch: 9, store: "AUCHAN", id: "3913031", name: "MOLHO PASSATA TOMATE GULOSO 210G", kind: "polpa-tomate", why: "Passata (tomato pulp, on Auchan's pulp shelf), the cheapest tomato sauce." },
   { batch: 9, store: "AUCHAN", id: "3904417", name: "MOLHO AUCHAN BASE DE TOMATE COM LEGUMES 420 G", kind: null, why: "A Mexican-cooking sauce base, compared with a tomato and basil sauce." },
   { batch: 9, store: "AUCHAN", id: "2143003", name: "CAFÉ DELTA MISTURA CEREAIS E CAFÉ SOLÚVEL 200G", kind: "bebida-cereais", why: "A cereal and coffee mix, compared with pure instant coffee." },
@@ -1371,4 +1382,6 @@ export const REVIEWED_TREE: ReviewedTreePlace[] = [
   { batch: 9, store: "PINGO_DOCE", id: "708391", name: "Tomate Seco", addLabels: ["lata"], why: "As Auchan's 1080314: Ponti's 280 g jar in oil." },
   { batch: 9, store: "AUCHAN", id: "3035265", name: "BANANA RODELAS AUCHAN 200 G", addLabels: ["seco"], why: "Dried banana slices (Auchan's dried-fruit shelf); it became the cheapest own-brand fresh banana once the Madeira banana left that row." },
   { batch: 9, store: "CONTINENTE", id: "8112018", name: "Banana às Rodelas Continente", addLabels: ["seco"], why: "Dried banana slices (Continente's dried-fruit shelf), as Auchan's 3035265." },
+  // The trial's follow-ups, approved by the owner on 9 November 2026.
+  { batch: 9, store: "AUCHAN", id: "800891", name: "NOZ DO ALENTEJO AUCHAN COLLECTION CULTIVAMOS O BOM 500 G", addLabels: ["casca"], why: "Whole walnuts in a net bag (the page's photo, opened 9 Nov 2026), at 6.98 EUR/kg among shelled walnuts; as Continente's 'Noz com Casca Alentejo Os Originais' 500 g." },
 ];

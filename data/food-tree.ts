@@ -250,7 +250,10 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     // the cheapest sheep's cheese against a cured one. 29 October 2026.
     // Cow and sheep's milk together is neither: Pingo Doce's "Queijo de Vaca e
     // Ovelha" was in the sheep's cheese row. The AI trial, 9 November 2026.
-    s("mistura", "Mistura de leites", /(vaca|ovelha|cabra) e (vaca|ovelha|cabra)\b/),
+    // With or without the "e": "QUEIJO FONTE MOURISCA MISTURA VACA OVELHA KG"
+    // became the cheapest sheep's cheese once the cheese-and-ham pack left
+    // that row (9 November 2026).
+    s("mistura", "Mistura de leites", /(vaca|ovelha|cabra),? (?:e )?(vaca|ovelha|cabra)\b/),
     s("cabra", "Cabra", /^(?!.*\bfresc).*cabra/), // x1.43
     s("ovelha", "Ovelha", /^(?!.*\bfresc).*(ovelha|serra da estrela|azeitao|evora|nisa|serpa)/), // x1.35
     s("fresco", "Fresco", /fresco/), // x0.70
@@ -447,6 +450,10 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   ],
   maionese: [
     s("light", "Light", /light|\bleve\b|magra|reduzid/),
+    // Flavoured ones apart (the trial's follow-ups, 9 November 2026): once the
+    // light ones left, the own-brand row compared Continente's spicy one with
+    // Pingo Doce's low-salt one with thyme. Words from the 103 names on sale.
+    s("sabores", "Com sabores", /alho|cebola|trufa|picante|chilli|malagueta|sriracha|wasabi|coentro|manjeric|tomilho|ervas|alga|batata|lima|limao|mostarda|caril|chipotle|abacate/),
     s("maionese", "Maionese", /./),
   ],
   pargo: [
@@ -494,7 +501,7 @@ export const CATCH_ALL_SUB_KINDS: Record<string, string[]> = { farinha: ["outras
  * decision, 29 October 2026): the labels that are only a form, and the kinds
  * whose sub-kinds are only forms.
  */
-export const FORM_LABELS = new Set(["fatiado", "filete", "peca", "com-osso", "cubos", "posta", "casca", "cozido", "empadao", "empanada", "temperado"]);
+export const FORM_LABELS = new Set(["fatiado", "filete", "peca", "com-osso", "cubos", "posta", "casca", "cozido", "empadao", "empanada", "temperado", "ripado"]);
 export const FORM_SUB_KIND_KINDS = new Set(["canela", "piri-piri-seco", "pimenta"]);
 
 export interface Label {
@@ -577,6 +584,11 @@ export const LABELS: Label[] = [
   // in any form (FORM_LABELS below).
   { id: "fatiado", label: "Fatiado", match: /fatia|fatiad|laminad/, kinds: ["presunto", "queijo", "chourico", "paio", "salame"] },
   { id: "filete", label: "Filetes", match: /filete/, kinds: ["sardinha", "carapau", "cavala", "dourada", "robalo", "truta", "corvina", "red-fish", "linguado"] },
+  // Shredded cabbage, ready for the pot: Continente's "Couve Ripada para Caldo
+  // Verde" (400 g, 4.38 EUR/kg) was compared with whole Portuguese cabbage at
+  // 1.99 (the owner's approval of the trial's follow-ups, 9 November 2026).
+  // "Caldo verde" alone is the shredded cabbage sold for that soup.
+  { id: "ripado", label: "Ripada ou cortada", match: /ripad|caldo verde|cortad|\btiras\b/, kinds: ["couve"] },
   // Scabbardfish steaks against the whole fish (the AI trial, 9 November 2026).
   { id: "posta", label: "Postas", match: /\bpostas?\b/, kinds: ["peixe-espada"] },
   // A whole or half ham leg, or a piece of one, is a third form beside slices

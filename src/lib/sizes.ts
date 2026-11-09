@@ -285,6 +285,18 @@ export function parseSize(name: string): ParsedSize | null {
     .replace(
       /\(\s*(\d{2,}(?:[.,]\d+)?)\s*(?:kg|gr?s?|g)?\s*\)\s*(\d+(?:[.,]\d+)?)\s*(?=(?:kg|gr?s?|g)\b)/g,
       (whole: string, first: string, second: string) => (sauce ? whole : `${smaller(first, second)} `)
+    )
+    // The unit written after both, "LULA GENERAL RECHEADAS 115G (72G)": read
+    // as 115 g, the full weight, against other stores' 72 g drained (the AI
+    // trial, 9 November 2026). 11 Auchan names that day: 9 tins, and 2
+    // multipacks whose bracket is the TOTAL ("4X 36.5G (146G)") - larger, so
+    // only a smaller bracket is a drained weight; the others are left as they are.
+    .replace(
+      /(\d+(?:[.,]\d+)?)\s*(kg|grs?|gr|g)\s*\(\s*(\d+(?:[.,]\d+)?)\s*(kg|grs?|gr|g)\s*\)/g,
+      (whole: string, full: string, u1: string, net: string, u2: string) =>
+        sauce || u1.startsWith("k") !== u2.startsWith("k") || Number(net.replace(",", ".")) >= Number(full.replace(",", "."))
+          ? whole
+          : `${net} ${u2}`
     );
 
   const m = tin.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)\s*(kg|gr?s?|g|lt?|ml|cl)\b/);

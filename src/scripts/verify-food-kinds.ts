@@ -1186,6 +1186,20 @@ function verifyFoodTree(): number {
       coconut !== undefined && confirmedSize(coconut, { name: coconut.name, price: 3.29, packageSize: null, unit: null, shownUnitPrice: 3.29, shownUnitPriceUnit: "un" })?.packageSize === 1 &&
       milk !== undefined && milk.trueSize === undefined);
 
+  // The trial's follow-ups, found by measuring its fixes (9 November 2026).
+  check("trial follow-ups: flavoured mayonnaise apart from plain; light first",
+    sub("maionese", "Maionese Picante Continente") === "sabores" && sub("maionese", "Maionese Baixo Teor de Sal com Tomilho Top Down") === "sabores" &&
+      sub("maionese", "MAIONESE BATATAS FRITAS PALADIN 230ML") === "sabores" && sub("maionese", "MAIONESE AUCHAN VIDRO 450ML") === "maionese" &&
+      sub("maionese", "Maionese Magra Hellmann's") === "light");
+  check("trial follow-ups: shredded cabbage is a form apart; whole cabbage is not",
+    labelsOf("couve", "Couve Ripada para Caldo Verde Continente").includes("ripado") && labelsOf("couve", "Caldo Verde Pack Poupança Continente").includes("ripado") &&
+      !labelsOf("couve", "Couve Portuguesa / Penca Continente").includes("ripado"));
+  check("trial follow-ups: two milks without the 'e' are mixed-milk cheese",
+    sub("queijo", "QUEIJO FONTE MOURISCA MISTURA VACA OVELHA KG") === "mistura" && sub("queijo", "QUEIJO LICINIA AMANTEIGADO VACA OVELHA 400G") === "mistura");
+  check("trial follow-ups: the drained weight written after the full one with its unit; a multipack's total in brackets is not",
+    parseSize("LULA GENERAL RECHEADAS CALDEIRADA 115G (72G)")?.total === 0.072 && parseSize("FILETES RAMIREZ DE ATUM EM AZEITE BIO 120G(88G)")?.total === 0.088 &&
+      parseSize("SNACK CHOCOLATE SNICKERS CREAMY 4X 36.5G (146G)")?.total === 0.146 && parseSize("TOMATE FRITO HEINZ 350G (210G)")?.total === 0.35);
+
   check("frozen and organic are labels, and can come together", labelsOf("ervilha", "Ervilhas Biológicas Congeladas").join() === "congelado,bio");
   check("tuna in olive oil is tinned", labelsOf("atum", "Atum em Azeite Bom Petisco").includes("lata"));
   check("olive oil is not tinned, though it says azeite", !labelsOf("azeite", "Azeite Virgem Extra Gallo").includes("lata"));
