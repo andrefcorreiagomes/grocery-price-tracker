@@ -106,6 +106,67 @@ export interface DayStats {
   overLimit: number;
   /** the whole answer file refused for its size, in bytes; its rows stay unread */
   fileRefusedBytes?: number;
+  /** the size of that day's reading list and of the AI's answers (the owner, 9 November 2026) */
+  listBytes?: number;
+  answersBytes?: number;
+}
+
+/**
+ * Characters per token, to estimate what the AI read and wrote. An assumption
+ * (8.25): about right for Portuguese names inside JSON. The estimate also
+ * undercounts the real usage, since the AI re-reads part of its work as it goes.
+ */
+export const CHARS_PER_TOKEN = 3.5;
+export const estimatedTokens = (bytes: number | undefined) => (bytes === undefined ? null : Math.round(bytes / CHARS_PER_TOKEN));
+
+/** The columns the Claude on MSI fills in by hand, kept when the table is written again. */
+export type MeasuredByHand = { minutes: string; meter: string };
+
+const USAGE_HEADER = [
+  "# The AI review's daily usage",
+  "",
+  "Written by the server's program each morning from the day's figures (do not",
+  "edit the other columns by hand). Tokens are ESTIMATES: characters / 3.5, and",
+  "they undercount, since the AI re-reads part of its work. The last two columns",
+  "are filled by the Claude on MSI or the home PC, from the run's log (minutes) and",
+  "the plan meter before and after the run (weekly %), when a session was open.",
+  "",
+  "| Day | Rows sent | Answered | Refused | List KB | Answers KB | Tokens read (est.) | Tokens written (est.) | Minutes | Weekly meter change |",
+  "|---|---|---|---|---|---|---|---|---|---|",
+];
+
+/** What the Claude on MSI wrote in the last two columns, by day. */
+export function readMeasuredByHand(table: string): Map<string, MeasuredByHand> {
+  const kept = new Map<string, MeasuredByHand>();
+  for (const line of table.split("\n")) {
+    const cells = line.split("|").map((c) => c.trim());
+    // | day | ... 8 more ... | minutes | meter |  ->  ["", day, ..., minutes, meter, ""]
+    if (cells.length === 12 && /^\d{4}-\d{2}-\d{2}$/.test(cells[1])) kept.set(cells[1], { minutes: cells[9], meter: cells[10] });
+  }
+  return kept;
+}
+
+/** The whole table, one line per day taken in, oldest first. */
+export function usageTable(days: DayStats[], kept: Map<string, MeasuredByHand>): string {
+  const kb = (b: number | undefined) => (b === undefined ? "" : (b / 1000).toFixed(0));
+  const n = (v: number | null) => (v === null ? "" : v.toLocaleString("en-GB"));
+  const lines = [...days]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d) => {
+      const k = kept.get(d.date);
+      return `| ${d.date} | ${d.sent} | ${d.answered} | ${d.rejected} | ${kb(d.listBytes)} | ${kb(d.answersBytes)} | ${n(estimatedTokens(d.listBytes))} | ${n(estimatedTokens(d.answersBytes))} | ${k?.minutes ?? ""} | ${k?.meter ?? ""} |`;
+    });
+  return `${[...USAGE_HEADER, ...lines].join("\n")}\n`;
+}
+
+/** A day whose estimated tokens are more than twice the median of the days before it (at least 3 of them). */
+export function unusualUsage(days: DayStats[], date: string): boolean {
+  const total = (d: DayStats) => (estimatedTokens(d.listBytes) ?? 0) + (estimatedTokens(d.answersBytes) ?? 0);
+  const today = days.find((d) => d.date === date);
+  const before = days.filter((d) => d.date < date && d.listBytes !== undefined).map(total).sort((a, b) => a - b);
+  if (!today || before.length < 3) return false;
+  const mid = before.length % 2 ? before[(before.length - 1) / 2] : (before[before.length / 2 - 1] + before[before.length / 2]) / 2;
+  return total(today) > 2 * mid;
 }
 
 export interface Memory {

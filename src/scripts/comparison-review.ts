@@ -6,14 +6,18 @@ import { checkRow, type Finding } from "../lib/comparison-flags";
 import type { Cell, ComparableProduct } from "../lib/comparison";
 import {
   emptyMemory,
+  estimatedTokens,
   factsFor,
   gapOf,
   identityOf,
   MAX_ANSWERS_BYTES,
   maxAnswerLines,
   parseProposalNumbers,
+  readMeasuredByHand,
   selectRows,
   takeInAnswers,
+  unusualUsage,
+  usageTable,
   type Answer,
   type Memory,
   type ReviewRow,
@@ -238,6 +242,9 @@ async function main() {
     const sent = readJson<SentRow[]>(path.join(dir, `${date}-sent.json`)) ?? [];
     const answers = readAnswers(answersFile);
     const stats = takeInAnswers(memory, date, sent, answers ?? []);
+    const listFile = path.join(reviewDir, `${date}.jsonl`);
+    if (existsSync(listFile)) stats.listBytes = statSync(listFile).size;
+    stats.answersBytes = statSync(answersFile).size;
     if (answers === null) {
       const bytes = statSync(answersFile).size;
       stats.fileRefusedBytes = bytes;
@@ -252,11 +259,16 @@ async function main() {
         alarm(`the AI's answers of ${date} have ${answers.length} lines for ${sent.length} rows sent. Someone may be writing in the AI's repository.`);
     }
     memory.days.push(stats);
+    if (unusualUsage(memory.days, date))
+      alarm(`the AI's work on ${date} was more than twice the usual size (estimated ${estimatedTokens(stats.listBytes)} tokens read, ${estimatedTokens(stats.answersBytes)} written; see comparison-review/usage.md).`);
     yesterday = stats;
     console.log(`answers of ${date}: ${JSON.stringify(stats)}`);
     memory.pendingDays = memory.pendingDays.filter((d) => d !== date);
   }
   applyOwnerAnswers(dir, reviewDir, memory);
+  // The daily usage table (the owner, 9 November 2026), keeping what was filled in by hand.
+  const usageFile = path.join(dir, "usage.md");
+  writeAtomically(usageFile, usageTable(memory.days, readMeasuredByHand(existsSync(usageFile) ? readFileSync(usageFile, "utf8") : "")));
 
   // 2. today
   const { rows, history } = await todaysRows();

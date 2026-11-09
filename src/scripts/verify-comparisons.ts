@@ -24,6 +24,7 @@ import {
   answerProblem,
   changesBetween,
   emptyMemory,
+  estimatedTokens,
   factsFor,
   FIRST_READING_PACE,
   identityOf,
@@ -34,9 +35,12 @@ import {
   overLimit,
   parseProposalNumbers,
   QUESTIONS,
+  readMeasuredByHand,
   REREADS_PER_DAY,
   selectRows,
   takeInAnswers,
+  unusualUsage,
+  usageTable,
   type Answer,
   type Memory,
   type ReviewRow,
@@ -472,6 +476,21 @@ function verifyComparison(): number {
   const manyFields = answerOf("r1", Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`extra${i}`, "y".repeat(1_500)])) as Partial<Answer>);
   check("an answer over 20,000 characters in all is refused, even with each text short; an honest answer passes",
     overLimit(manyFields) && !overLimit(answerOf("r1", { evidence: "y".repeat(MAX_FIELD_CHARS) })) && MAX_ANSWER_CHARS === 20_000);
+  // The daily usage table (the owner, 9 November 2026).
+  const dayOf = (date: string, listBytes: number, answersBytes: number) =>
+    ({ ...takeInAnswers(emptyMemory(), date, [], []), sent: 300, answered: 290, rejected: 10, listBytes, answersBytes });
+  const usageDays = [dayOf("2026-11-17", 350_000, 280_000), dayOf("2026-11-16", 350_000, 350_000), dayOf("2026-11-18", 300_000, 300_000)];
+  const firstTable = usageTable(usageDays, new Map());
+  const handFilled = firstTable.replace("| 2026-11-16 | 300 | 290 | 10 | 350 | 350 | 100,000 | 100,000 |  |  |", "| 2026-11-16 | 300 | 290 | 10 | 350 | 350 | 100,000 | 100,000 | 42 | +3% |");
+  const secondTable = usageTable([...usageDays, dayOf("2026-11-19", 400_000, 350_000)], readMeasuredByHand(handFilled));
+  check("the usage table: one line per day, oldest first, tokens estimated at 3.5 characters each",
+    estimatedTokens(350_000) === 100_000 && firstTable.indexOf("2026-11-16") < firstTable.indexOf("2026-11-17") && firstTable.includes("| 2026-11-18 | 300 | 290 | 10 | 300 | 300 | 85,714 | 85,714 |"),
+    firstTable.split("\n").slice(-4).join(" / "));
+  check("the minutes and the meter filled in by hand survive the table being written again",
+    handFilled !== firstTable && secondTable.includes("| 42 | +3% |") && secondTable.includes("2026-11-19"));
+  const big = [...usageDays, dayOf("2026-11-19", 900_000, 900_000)];
+  check("a day of more than twice the usual estimated tokens raises the alarm; an ordinary one, or one with fewer than 3 days before it, does not",
+    unusualUsage(big, "2026-11-19") && !unusualUsage([...usageDays, dayOf("2026-11-19", 400_000, 350_000)], "2026-11-19") && !unusualUsage(big.slice(0, 2), "2026-11-17"));
   check("the whole answer file is refused over 10 MB; more than twice the rows sent, plus 20, raises the alarm",
     MAX_ANSWERS_BYTES === 10_000_000 && maxAnswerLines(300) === 620);
 
