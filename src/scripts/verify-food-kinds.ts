@@ -6,16 +6,18 @@ import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
-import { auchanTileSize, isTinnedFish, isTinnedFood, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
+import { auchanTileSize, isTinnedFish, isTinnedFood, parseSize, reconcileTileSize, shareDrainedWeight, SOLD_PER_KG } from "../lib/sizes";
 import { classifyCandidate, qualifierMismatch, type Candidate } from "../lib/matching";
 import { foldPlural, matchesTerm } from "../lib/text";
 import { productTokens } from "../lib/candidates";
 import { enrichment } from "../scrapers/crawl/persist";
 import { nameFromUrl } from "../scrapers/crawl/pingodoce-sitemap";
 import { correctedSize, implausiblePodSize, parseShownUnitPrice, pricedPerUnit, sizeFromUnitPrice } from "../scrapers/page-size";
-import { cheapestPerStore, comparable, unitsFor, type ComparableProduct } from "../lib/comparison";
+import { cheapestPerStore, comparable, ownBrandPerStore, unitsFor, type Cell, type ComparableProduct } from "../lib/comparison";
+import { showsOwnBrandRow } from "../lib/comparison-groups";
+import { reviewedTreePlace } from "../lib/kind-decisions";
 import { promotionOf } from "../lib/promotion";
-import { confirmedSize, isStoreError, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
+import { confirmedSize, isNeverSameProduct, isStoreError, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
 
 /**
  * Checks of the kinds of food: the classifier, the stores' food sections, the
@@ -1098,7 +1100,91 @@ function verifyFoodTree(): number {
   check("semi-skimmed milk is not read as whole milk", subKindOf("leite", "Leite UHT Meio Gordo Mimosa") === "meio-gordo");
   check("basmati and risotto rice", subKindOf("arroz", "Arroz Basmati Cigala") === "basmati" && subKindOf("arroz", "Arroz Arbório para Risotto") === "risotto");
   check("a name matching no sub-kind has none", subKindOf("frango", "Frango para Churrasco Embalado") === null);
-  check("a kind with no sub-kinds gives none", subKindOf("banana", "Banana da Madeira") === null);
+  check("a kind with no sub-kinds gives none", subKindOf("kiwi", "Kiwi Gold") === null);
+
+  // The AI trial of 9 November 2026: each rule on the name that showed the fault.
+  const sub = (kind: string, name: string) => subKindOf(kind, name);
+  check("trial: Madeira bananas and cut coconut apart; every other banana and coconut still compared",
+    sub("banana", "BANANA DA MADEIRA KG") === "madeira" && sub("banana", "Banana Continente") === "banana" &&
+      sub("coco", "Coco Cortado") === "cortado" && sub("coco", "Coco Fresco Continente") === "coco");
+  check("trial: Padrón peppers, light mayonnaise, broken rice and catarino beans apart",
+    sub("pimento", "Pimento Padrão Biológico Continente Bio") === "padrao" && sub("pimento", "PIMENTO VERDE BIO EMBALADO 400G") === "pimento" &&
+      sub("maionese", "Maionese Leve Top Down Continente") === "light" && sub("maionese", "Maionese Top Down") === "maionese" &&
+      sub("arroz", "ARROZ JASMIN DRAGON FORTUNE PARTIDO 5KG") === "partido" && sub("arroz", "Arroz Thai Jasmim Dragon Fortune") === "aromatico" &&
+      sub("feijao", "FEIJÃO AUCHAN CATARINO 1 KG") === "catarino" && sub("feijao", "Feijão Vermelho Continente") === "encarnado");
+  check("trial: meat cuts - boneless thighs, chicken offal by part, tenderloin, lagartos, tail",
+    sub("frango", "Coxa de Frango Desossada Temperada Bifranga Lusiaves") === "perna-desossada" && sub("frango", "PERNA DE FRANGO TEMPERADA KG") === "perna" &&
+      sub("frango", "FIGADOS DE FRANGO AUCHAN KG") === "figado" && sub("frango", "Moelas de Frango Embaladas") === "moela" && sub("frango", "Pescoços de Frango Continente") === "pescoco" &&
+      sub("porco", "Lombinho de Porco com Marinada Provençal Continente") === "lombinho" && sub("porco", "LOMBO PORCO TEMPERADO KG") === "lombo" &&
+      sub("porco", "Lagartos de Porco Preto Na Grelha") === "lagartos" && sub("porco", "PRESA PORCO PRETO AUCHAN CULTIVAMOS O BOM 250GR") === "secretos" &&
+      sub("porco", "Rabo de Porco Continente") === "rabo" && sub("porco", "CHISPE DE PORCO AUCHAN KG") === "extremidades");
+  check("trial: beef - a tomahawk is a rib steak, stewing cubes apart from bone-in beef for boiling",
+    sub("vaca", "Tomahawk de Bovino Maturado Congelado Blue Smoke") === "costeleta" && sub("vaca", "PICANHA AA DE BOVINO U.E. CONGELADA KG") === "pecas" &&
+      sub("vaca", "Jardineira de Novilho Continente") === "estufar" && sub("vaca", "NOVILHO NACIONAL PARA COZER KG") === "cozer");
+  check("trial: burgers - 100% beef and salmon apart",
+    sub("hamburguer", "HAMBÚRGUER AUCHAN 100% BOVINO 10UN 1KG") === "bovino-100" && sub("hamburguer", "Hamburguer de Bovino 60% Continente") === "bovino" &&
+      sub("hamburguer", "HAMBÚRGUER DE SALMÃO AUCHAN ULTRACONGELADO 2UN 220G") === "salmao" && sub("hamburguer", "Hambúrguer de Pescada Panado Ultracongelado Gelpeixe") === "peixe");
+  check("trial: fish - pargo mulato, white scabbardfish, monkfish cuts, stuffed squid",
+    sub("pargo", "Pargo Mulato Fresco") === "mulato" && sub("pargo", "PARGO LEGITIMO MEDIO KG") === "pargo" &&
+      sub("peixe-espada", "PEIXE ESPADA BRANCO POSTA CONGELADA 700G") === "branco" && sub("peixe-espada", "Posta de Peixe Espada Preto Congelado") === "preto" &&
+      sub("tamboril", "TAMBORIL LOMBOS/CAUDAS SEM PELE CONGELADO 800G") === "lombo" && sub("tamboril", "Cubos de Tamboril Congelado") === "cubos" &&
+      sub("tamboril", "Posta de Tamboril Grande Congelada Embalada") === "posta" &&
+      sub("lula", "Lulas Recheadas Pitéu") === "recheada" && sub("lula", "LULA GENERAL CALDEIRADA 115G") === "lula");
+  check("trial: mixed-milk cheese, salmon lasagne, turkey ham, frozen fries apart",
+    sub("queijo", "Queijo de Vaca e Ovelha Pastor de Seia") === "mistura" && sub("queijo", "Queijo de Ovelha Oviqueijo") === "ovelha" &&
+      sub("lasanha", "Lasanha de Salmão e Espinafres") === "peixe" && sub("lasanha", "Lasanha Bolonhesa Continente") === "carne" &&
+      sub("fiambre", "FIAMBRE PERU MAXI RICURA 900G") === "aves" && sub("fiambre", "Fiambre da Pá Fatiado Pack Familiar Continente") === "porco" &&
+      sub("batata", "Batata Steakhouse Continente") === "preparada");
+  check("trial: labels - cooked beetroot is not a jar, a whole ham on the bone and diced ham are forms apart, scabbardfish steaks",
+    !labelsOf("beterraba", "Beterraba Cozida Biológica Beterraba Bio").includes("lata") && labelsOf("beterraba", "BETERRABA GREEN BIO 330(220)G").includes("lata") &&
+      labelsOf("presunto", "Presunto Inteiro com Osso Casa do Monte").join() === "com-osso" &&
+      labelsOf("presunto", "PRESUNTO RESERVA POLEGAR QUARTOS 7 MESES DE CURA 800 G").join() === "peca" &&
+      labelsOf("presunto", "PRESUNTO EM CUBOS AUCHAN 2X60G").includes("cubos") && labelsOf("chourico", "Chouriço em Cubos Continente").includes("cubos") &&
+      labelsOf("peixe-espada", "PEIXE ESPADA PRETO POSTA KG").includes("posta"));
+  const walnut = reviewedTreePlace({ store: "AUCHAN", storeProductId: "292541" }, { subKind: null, labels: [] });
+  const corn = reviewedTreePlace({ store: "CONTINENTE", storeProductId: "7820035" }, { subKind: null, labels: ["lata"] });
+  const yeast = reviewedTreePlace({ store: "AUCHAN", storeProductId: "25730" }, { subKind: "padeiro", labels: [] });
+  const other = reviewedTreePlace({ store: "AUCHAN", storeProductId: "nobody" }, { subKind: "x", labels: ["bio"] });
+  check("trial: a product's cut and labels set by hand win over the tree's, and only for that product",
+    walnut.labels.join() === "casca" && corn.labels.length === 0 && yeast.subKind === "po" && other.subKind === "x" && other.labels.join() === "bio");
+
+  // The rest of the trial's fixes: sizes, own brand, the barcode pair, the tins.
+  check("trial: a maximum in a name is not a pack size; a real size still reads",
+    parseSize("POLVO CONGELADO AUCHAN (-1.5 KG)") === null && parseSize("POLVO GRANDE CONGELADO (+6 KG)") === null &&
+      parseSize("BACALHAU AUCHAN POSTAS 450G")?.total === 0.45);
+  const ownCell = (store: string, id: string, brand: string, price: number) =>
+    ({ store, storeProductId: id, name: id, brand, price, packageSize: 1, unit: "kg" }) as ComparableProduct;
+  const grana = ownBrandPerStore(
+    [ownCell("AUCHAN", "3916097", "", 30.99), ownCell("AUCHAN", "own-grana", "AUCHAN", 16), ownCell("CONTINENTE", "c1", "Continente", 15.95)],
+    "queijo", "kg"
+  );
+  const granaAuchan = grana.get("AUCHAN");
+  check("trial: Giovanni Ferrari's grana, with an empty brand, is not Auchan's own; Auchan's own one is",
+    granaAuchan?.kind === "price" && granaAuchan.product.storeProductId === "own-grana");
+  const priced = { kind: "price", unitPrice: 1, product: ownCell("AUCHAN", "a", "", 1) } as Cell;
+  const bySize = { kind: "no-size", example: ownCell("AUCHAN", "b", "", 1) } as Cell;
+  check("trial: the own-brand row shows only with two stores or more priced in it",
+    !showsOwnBrandRow({ ownBrand: new Map([["AUCHAN", bySize], ["CONTINENTE", bySize], ["PINGO_DOCE", bySize]]) }) &&
+      !showsOwnBrandRow({ ownBrand: new Map([["AUCHAN", priced], ["CONTINENTE", bySize]]) }) &&
+      showsOwnBrandRow({ ownBrand: new Map([["AUCHAN", priced], ["CONTINENTE", priced]]) }));
+  check("trial: pork ham and turkey breast sharing one barcode are never the same product, either way round",
+    isNeverSameProduct({ store: "AUCHAN", storeProductId: "2662598" }, { store: "CONTINENTE", storeProductId: "8083233" }) &&
+      isNeverSameProduct({ store: "CONTINENTE", storeProductId: "8083233" }, { store: "AUCHAN", storeProductId: "2662598" }) &&
+      !isNeverSameProduct({ store: "AUCHAN", storeProductId: "2662598" }, { store: "CONTINENTE", storeProductId: "other" }));
+  const tinRow = (store: string, size: number, ean = "5608394426175", name = "FEIJAO EM LATA") => ({ store, eanNormalized: ean, packageSize: size, unit: "kg", name, labels: "lata" });
+  const shared = shareDrainedWeight([tinRow("AUCHAN", 0.4), tinRow("CONTINENTE", 0.24), tinRow("PINGO_DOCE", 0.3, "other")]);
+  const tooFar = shareDrainedWeight([tinRow("AUCHAN", 1), tinRow("CONTINENTE", 0.24)]);
+  const notTin = shareDrainedWeight([{ ...tinRow("AUCHAN", 0.4), labels: null, name: "QUEIJO" }, { ...tinRow("CONTINENTE", 0.24), labels: null, name: "Queijo" }]);
+  check("trial: one tin's barcode at two stores, full and drained weight: both compared at the drained one; not beyond 3 times apart, nor for a product that is not a tin",
+    shared[0].packageSize === 0.24 && shared[1].packageSize === 0.24 && shared[2].packageSize === 0.3 &&
+      tooFar[0].packageSize === 1 && notTin[0].packageSize === 0.4);
+  const cheese = STORE_ERRORS.find((e) => e.storeProductId === "3554673");
+  const coconut = STORE_ERRORS.find((e) => e.storeProductId === "234185");
+  const milk = STORE_ERRORS.find((e) => e.storeProductId === "8168224");
+  check("trial: the quarter of sheep's cheese at its true 225 g, the coconut by the kilo, the milk sits out",
+    cheese !== undefined && confirmedSize(cheese, { name: cheese.name, price: 6.75, packageSize: 1, unit: "kg", shownUnitPrice: 6.75, shownUnitPriceUnit: "kg" })?.packageSize === 0.225 &&
+      coconut !== undefined && confirmedSize(coconut, { name: coconut.name, price: 3.29, packageSize: null, unit: null, shownUnitPrice: 3.29, shownUnitPriceUnit: "un" })?.packageSize === 1 &&
+      milk !== undefined && milk.trueSize === undefined);
 
   check("frozen and organic are labels, and can come together", labelsOf("ervilha", "Ervilhas Biológicas Congeladas").join() === "congelado,bio");
   check("tuna in olive oil is tinned", labelsOf("atum", "Atum em Azeite Bom Petisco").includes("lata"));

@@ -8,7 +8,7 @@ import {
   type FoodTypePage as FoodPage,
   type NamedGroups,
 } from "@/lib/grupos";
-import type { ComparisonGroup } from "@/lib/comparison-groups";
+import { showsOwnBrandRow, type ComparisonGroup } from "@/lib/comparison-groups";
 import { STORE_ORDER, STORE_LABELS } from "@/lib/stores";
 import type { Cell, ComparableProduct } from "@/lib/comparison";
 import { euros } from "@/lib/money";
@@ -175,9 +175,9 @@ function GroupBlock({ group, showUnit, kindId }: { group: ComparisonGroup; showU
         unit={group.unit}
         winners={group.winners}
       />
-      {/* Only when a chain has an own-brand product here: a row of three "Não
-          vende" would say the chains do not sell this, which is false. */}
-      {[...group.ownBrand.values()].some((c) => c.kind !== "not-stocked") && (
+      {/* Only when two chains or more can be priced in it, as every comparison:
+          a row of "Não vende" or "Vendido ao peso" alone compares nothing. */}
+      {showsOwnBrandRow(group) && (
         <Comparison
           title="Marca própria"
           note="A marca da própria cadeia. Pode dar um vencedor diferente do de cima."

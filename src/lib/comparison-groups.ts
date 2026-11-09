@@ -196,6 +196,16 @@ export function anyFormLines(kind: string, shown: ComparisonGroup[]): AnyForm[] 
 }
 
 /**
+ * Whether a group's own-brand row is shown: when at least MIN_CHAINS chains can
+ * be priced in it, the rule every comparison follows. Until 9 November 2026 it
+ * showed whenever any chain had an own-brand product there, and a kefir row per
+ * litre showed three "sold by weight" and no price at all (the AI trial).
+ */
+export function showsOwnBrandRow(g: Pick<ComparisonGroup, "ownBrand">): boolean {
+  return [...g.ownBrand.values()].filter((c) => c.kind === "price").length >= MIN_CHAINS;
+}
+
+/**
  * The groups a page shows: comparable at MIN_CHAINS chains or more, and never
  * "Outros". That group gathers whatever fits no named sub-kind, so its cheapest
  * products are often unlike things - on 29 October 2026 a light milk against a

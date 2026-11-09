@@ -1,4 +1,21 @@
-import { REVIEWED_GROUPS, REVIEWED_PRODUCTS, type ReviewedGroup } from "../../data/kind-reviews";
+import { REVIEWED_GROUPS, REVIEWED_PRODUCTS, REVIEWED_TREE, type ReviewedGroup } from "../../data/kind-reviews";
+
+const treePlaces = new Map(REVIEWED_TREE.map((p) => [`${p.store}\t${p.id}`, p]));
+
+/**
+ * A product's sub-kind and labels after review: the tree's answer, then what
+ * review decided for this one product (REVIEWED_TREE), if anything.
+ */
+export function reviewedTreePlace(
+  p: { store: string; storeProductId: string },
+  fromTree: { subKind: string | null; labels: string[] }
+): { subKind: string | null; labels: string[] } {
+  const r = treePlaces.get(`${p.store}\t${p.storeProductId}`);
+  if (!r) return fromTree;
+  const labels = fromTree.labels.filter((l) => !r.removeLabels?.includes(l));
+  for (const l of r.addLabels ?? []) if (!labels.includes(l)) labels.push(l);
+  return { subKind: r.subKind !== undefined ? r.subKind : fromTree.subKind, labels };
+}
 import { explainFoodType, type FoodTypeExplanation } from "./food-types";
 
 /**

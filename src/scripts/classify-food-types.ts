@@ -1,7 +1,7 @@
 import { prisma } from "../lib/db";
 import { STORE_ORDER } from "../lib/stores";
 import { isFoodSection } from "../lib/food-types";
-import { decideKind } from "../lib/kind-decisions";
+import { decideKind, reviewedTreePlace } from "../lib/kind-decisions";
 import { FOOD_TYPES } from "../../data/food-types";
 import { SUB_KINDS } from "../../data/food-tree";
 import { labelsOf, subKindOf } from "../lib/food-tree";
@@ -111,8 +111,8 @@ export function kindAssignments(
     if (!isFoodSection(r.store, r.categoryPath)) continue;
     const type = decideKind(r).id;
     if (!type) continue;
-    const labels = labelsOf(type, r.name, r.categoryPath);
-    out.push({ id: r.id, foodType: type, subKind: subKindOf(type, r.name), labels: labels.length ? labels.join(",") : null });
+    const place = reviewedTreePlace(r, { subKind: subKindOf(type, r.name), labels: labelsOf(type, r.name, r.categoryPath) });
+    out.push({ id: r.id, foodType: type, subKind: place.subKind, labels: place.labels.length ? place.labels.join(",") : null });
   }
   return out;
 }

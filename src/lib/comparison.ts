@@ -1,5 +1,6 @@
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { isOwnBrand } from "./candidates";
+import { isListedNotOwnBrand } from "../../data/own-brand";
 import { unitPrice } from "./pricing";
 import { isStoreError } from "../../data/store-errors";
 import { STORE_ORDER } from "./stores";
@@ -211,7 +212,8 @@ export function ownBrandPerStore(
   foodTypeId: string,
   measuredIn?: MeasureUnit
 ): Map<string, Cell> {
-  const own = rows.filter((p) => isOwnBrand(p.brand, p.store));
+  // Less the few with an empty brand that name their maker (data/own-brand.ts).
+  const own = rows.filter((p) => isOwnBrand(p.brand, p.store) && !isListedNotOwnBrand(p.store, p.storeProductId));
   return cheapestOf(own, own, foodTypeId, measuredIn);
 }
 

@@ -6,6 +6,7 @@ import { STORE_LIST } from "../lib/stores";
 import { isOwnBrand } from "../lib/candidates";
 import { buildGroups, HIDDEN_FLAGS, reconcileGroups, type GroupFlag, type GroupLink, type GroupMemberInput, type ProductGroupResult } from "../lib/grouping";
 import type { MatchVerdict } from "@/generated/prisma/client";
+import { isNeverSameProduct } from "../../data/store-errors";
 
 /**
  * Decide every candidate pair, then assemble the confirmed ones into groups.
@@ -35,6 +36,7 @@ function arg(name: string): string | undefined {
 interface ProductRow {
   id: string;
   store: string;
+  storeProductId: string;
   name: string;
   brand: string | null;
   price: number | null;
@@ -89,7 +91,7 @@ async function main() {
 
   const products = await prisma.catalogueProduct.findMany({
     select: {
-      id: true, store: true, name: true, brand: true, price: true,
+      id: true, store: true, storeProductId: true, name: true, brand: true, price: true,
       ean: true, packageSize: true, unit: true, delistedAt: true, supersededById: true,
       onPromotion: true, regularPrice: true,
     },
@@ -208,9 +210,11 @@ async function main() {
       continue;
     }
 
-    const result = classifyCandidate(toCandidate(a), toCandidate(b), {
-      nameSimilarity: c.nameSimilarity,
-    });
+    // Two products a person found to be different despite one barcode (a store
+    // published the wrong one; data/store-errors.ts): never the same product.
+    const result = isNeverSameProduct(a, b)
+      ? { rung: "reject" as Rung, vetoed: true, nameSimilarity: c.nameSimilarity, sizeRatio: null, priceGap: null, reason: "listed as different products (data/store-errors.ts)" }
+      : classifyCandidate(toCandidate(a), toCandidate(b), { nameSimilarity: c.nameSimilarity });
     const verdict = verdictFor(result.rung, result.vetoed);
 
     byRung.set(result.rung, (byRung.get(result.rung) ?? 0) + 1);

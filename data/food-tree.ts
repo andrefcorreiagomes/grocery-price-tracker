@@ -115,9 +115,15 @@ const BEEF: SubKind[] = [
   s("bifes", "Bifes", /\bbifes?\b|bifinho|escalope/),
   // Shoulder and chuck ("Pá e Acém de Vitelão") are stewing cuts; they were in
   // the loin comparison at half its price. 29 October 2026.
-  s("pecas", "Lombo, vazia e alcatra", /^(?!.*(\bpa\b|acem)).*(lombo|vazia|alcatra|maminha|picanha|pojadouro|rosbife|entrecote|ribeye|tomahawk|fraldinha)/),
-  s("costeleta", "Costeleta e chuleta", /costelet|chuleta|t-?bone/),
-  s("estufar", "Para estufar e cozer", /estufar|cozer|guisar|cozido|jardineira|\bcubos?\b|acem|\bpa\b/),
+  // A tomahawk is a rib steak on the bone, not loin: Continente's frozen one was
+  // in the loin row against Auchan's picanha. The AI trial, 9 November 2026.
+  s("pecas", "Lombo, vazia e alcatra", /^(?!.*(\bpa\b|acem)).*(lombo|vazia|alcatra|maminha|picanha|pojadouro|rosbife|entrecote|ribeye|fraldinha)/),
+  s("costeleta", "Costeleta e chuleta", /costelet|chuleta|t-?bone|tomahawk/),
+  // Boneless stewing cubes ("Jardineira", 12.99-13.49/kg) apart from bone-in
+  // beef for boiling (5.95/kg): the AI trial, 9 November 2026. "Picadinho" is
+  // diced beef for stewing, not mince.
+  s("estufar", "Para estufar", /estufar|guisar|jardineira|\bcubos?\b|acem|\bpa\b|picadinho/),
+  s("cozer", "Para cozer", /cozer|cozido/),
   s("picada", "Picada", /picad/),
 ];
 
@@ -129,12 +135,23 @@ const BEEF: SubKind[] = [
 export const SUB_KINDS: Record<string, SubKind[]> = {
   frango: [
     s("peito", "Peito e bifes", /peito|bifes? de frango|bifinho|lombinho|escalope/), // x1.26
+    // Boneless thighs (7.99/kg) against bone-in legs (4.99): the AI trial, 9
+    // November 2026.
+    s("perna-desossada", "Perna e coxa desossadas", /desossad/),
     s("perna", "Perna e coxa", /perna|coxa|pernil/), // x0.73
     s("asa", "Asa", /\basas?\b|asinha/), // x0.51
-    s("inteiro", "Inteiro", /inteir|frango do campo|campestre/), // x0.68
+    // "Sem miúdos" names a whole (or half) bird without its giblets: "FRANGO
+    // METADE SEM MIÚDOS" was read as giblets (found 9 November 2026).
+    s("inteiro", "Inteiro", /inteir|frango do campo|campestre|sem miud|\bmetade\b/), // x0.68
     // Feet too: Auchan's "PATAS DE FRANGO LIMPAS" were its cheapest "other
-    // chicken". 21 October 2026.
-    s("miudos", "Miúdos", /miud|moela|figado|pescoc|coracoe|\bpatas?\b/), // x0.62
+    // chicken". 21 October 2026. Each part apart: livers, necks and gizzards
+    // were one row (the AI trial, 9 November 2026).
+    s("figado", "Fígados", /figado/),
+    s("moela", "Moelas", /moela/),
+    s("pescoco", "Pescoços", /pescoc/),
+    s("coracao", "Corações", /coracoe|coracao/),
+    s("patas", "Patas", /\bpatas?\b/),
+    s("miudos", "Miúdos variados", /miud/), // x0.62
   ],
   peru: [
     s("peito", "Peito e bifes", /peito|bife|escalope/), // x1.40
@@ -145,13 +162,18 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   // the loin comparison's cheapest. 30 October 2026.
   porco: [
     s("costeleta", "Costeleta", /costelet/), // x0.71
-    s("lombo", "Lombo", /lombo|lombinho/), // x1.14
+    // The tenderloin apart from the loin; lagartos and the tail are cuts of
+    // their own. The AI trial, 9 November 2026.
+    s("lombinho", "Lombinho", /lombinho/),
+    s("lombo", "Lombo", /lombo/), // x1.14
     s("entrecosto", "Entrecosto e entremeada", /entrecosto|costela|entremeada|barriga/), // x0.93
     s("febras", "Febras e bifanas", /febra|bifana|bife/), // x0.86
-    s("secretos", "Secretos, plumas e presas", /secret|pluma|presa|abanico|lagarto/), // x2.43
+    s("lagartos", "Lagartos", /lagarto/),
+    s("secretos", "Secretos, plumas e presas", /secret|pluma|presa|abanico/), // x2.43
     s("cachaco", "Cachaço e pá", /cachac|\bpa\b|paleta/), // x1.14
     s("rojoes", "Rojões e para estufar", /rojo|\bcubos?\b|estufar|guisar/), // x0.71
-    s("extremidades", "Pés, orelha e chispe", /\bpes?\b|orelha|chispe|unha|cabeca|rabo|toucinho|courato/), // x0.59
+    s("rabo", "Rabo", /\brabo\b/),
+    s("extremidades", "Pés, orelha e chispe", /\bpes?\b|orelha|chispe|unha|cabeca|toucinho|courato/), // x0.59
   ],
   // Minced veal is sold at Pingo Doce only (18 October 2026).
   vitela: BEEF.filter((k) => k.id !== "picada"),
@@ -226,6 +248,9 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("gouda", "Gouda", /gouda/), // x1.28
     // Fresh goat's and sheep's cheese go to "Fresco": a fresh sheep's cheese was
     // the cheapest sheep's cheese against a cured one. 29 October 2026.
+    // Cow and sheep's milk together is neither: Pingo Doce's "Queijo de Vaca e
+    // Ovelha" was in the sheep's cheese row. The AI trial, 9 November 2026.
+    s("mistura", "Mistura de leites", /(vaca|ovelha|cabra) e (vaca|ovelha|cabra)\b/),
     s("cabra", "Cabra", /^(?!.*\bfresc).*cabra/), // x1.43
     s("ovelha", "Ovelha", /^(?!.*\bfresc).*(ovelha|serra da estrela|azeitao|evora|nisa|serpa)/), // x1.35
     s("fresco", "Fresco", /fresco/), // x0.70
@@ -237,6 +262,9 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("aromas", "Aromas e fruta", /morango|baunilha|frutos|banana|ananas|pessego|aroma|framboesa|manga|limao|coco|cereja|mirtilo/), // x1.26
   ],
   arroz: [
+    // Broken rice ("PARTIDO", 1.20/kg) against whole jasmine rice (1.60): the AI
+    // trial, 9 November 2026.
+    s("partido", "Partido (trinca)", /partid|trinca/),
     s("risotto", "Risotto e arbóreo", /risott|arborio|carnaroli/), // x1.52
     s("basmati", "Basmati", /basmati/), // x1.20
     // Thai jasmine and other fragrant rice were "other rice", beside plain
@@ -316,7 +344,8 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   ],
   batata: [
     // Wedges and frozen roasting quarters were "para cozer". 29 October 2026.
-    s("preparada", "Preparada (palitos, cubos, para forno)", /palito|airfryer|forno|\bcubos?\b|rodelas|salteada|gratin|vapor|wedge|gomos|quartos|mccain|mediterr/), // x2.24
+    // "Steakhouse" and "Crinckle" are frozen fries (the AI trial, 9 November 2026).
+    s("preparada", "Preparada (palitos, cubos, para forno)", /palito|airfryer|forno|\bcubos?\b|rodelas|salteada|gratin|vapor|wedge|gomos|quartos|mccain|mediterr|steak ?house|crinc?kle/), // x2.24
     s("cozer", "Para cozer", /./), // x0.74
   ],
   // By animal, and plant-based apart (the user's decision, 29 October 2026):
@@ -332,10 +361,15 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   hamburguer: [
     s("vegetal", "Vegetal", PLANT),
     s("mista", "Misto", /mist|bovino ?\/ ?suino/),
+    // 100% beef apart from burgers that say less ("60%"): the AI trial, 9
+    // November 2026. A name that gives no share stays with "Bovino".
+    s("bovino-100", "Bovino 100%", /^(?=.*\b100 ?%)(?=.*(bovin|vaca|novilh|vitel|angus))/),
     s("bovino", "Bovino", /bovin|vaca|novilh|vitel|angus|carnalentejana|mertolengo|minhota|wagyu|acores/),
     s("porco", "Porco", /porco|suin/),
     s("aves", "Frango e peru", /frango|peru|aves|galinha/),
-    s("peixe", "Peixe", /atum|salmao|peixe|pescada|bacalhau/),
+    // Salmon apart from white fish: salmon burgers were against breaded hake.
+    s("salmao", "Salmão", /salmao/),
+    s("peixe", "Peixe", /atum|peixe|pescada|bacalhau/),
   ],
   almondega: [
     s("vegetal", "Vegetal", PLANT),
@@ -388,10 +422,59 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
   feijao: [
     // Butter beans are their own bean, not red ones. 21 October 2026.
     s("manteiga", "Manteiga", /manteiga/),
-    s("encarnado", "Encarnado", /encarnado|vermelho|catarino/),
+    // Catarino is a bean of its own, not a red kidney bean (the AI trial, 9
+    // November 2026).
+    s("catarino", "Catarino", /catarino/),
+    s("encarnado", "Encarnado", /encarnado|vermelho/),
     s("branco", "Branco", /branco/),
     s("frade", "Frade", /frade/),
     s("preto", "Preto", /preto/),
+  ],
+  // The AI trial of 9 November 2026: kinds that had no sub-kinds, split where a
+  // shopper would not swap one for the other. Each ends with a rule taking every
+  // other product, so nothing that was compared before becomes "Outros".
+  banana: [
+    s("madeira", "Banana da Madeira", /madeira/), // Auchan's at 3.19/kg against ordinary at 1.19
+    s("banana", "Banana", /./),
+  ],
+  coco: [
+    s("cortado", "Cortado", /cortad|pedaco|\bcubos?\b|metade/), // 100 g of pieces at 11.90/kg against whole at 2.99
+    s("coco", "Coco", /./),
+  ],
+  pimento: [
+    s("padrao", "Pimento padrón", /padrao|padron/),
+    s("pimento", "Pimento", /./),
+  ],
+  maionese: [
+    s("light", "Light", /light|\bleve\b|magra|reduzid/),
+    s("maionese", "Maionese", /./),
+  ],
+  pargo: [
+    s("mulato", "Pargo mulato", /mulato/), // 6.99/kg, another fish, against "Pargo Legítimo" at 19.99
+    s("pargo", "Pargo", /./),
+  ],
+  "peixe-espada": [
+    s("branco", "Branco", /branco/),
+    s("preto", "Preto", /./),
+  ],
+  tamboril: [
+    s("lombo", "Lombos e caudas", /lombo|cauda/),
+    s("cubos", "Cubos", /\bcubos?\b/),
+    s("posta", "Postas", /posta/),
+    s("tamboril", "Tamboril", /./),
+  ],
+  lasanha: [
+    s("peixe", "De peixe", /salmao|bacalhau|atum|peixe|marisco|camarao/),
+    s("vegetal", "Vegetariana", /vegetal|vegetarian|vegan|legumes|espinafre|ricot|beringela|cogumelo/),
+    s("carne", "De carne", /./),
+  ],
+  fiambre: [
+    s("aves", "De peru ou frango", /peru|frango|aves|galinha/),
+    s("porco", "De porco", /./),
+  ],
+  lula: [
+    s("recheada", "Recheadas", /rechead/),
+    s("lula", "Lula", /./),
   ],
 };
 
@@ -411,7 +494,7 @@ export const CATCH_ALL_SUB_KINDS: Record<string, string[]> = { farinha: ["outras
  * decision, 29 October 2026): the labels that are only a form, and the kinds
  * whose sub-kinds are only forms.
  */
-export const FORM_LABELS = new Set(["fatiado", "filete", "peca", "casca", "cozido", "empadao", "empanada", "temperado"]);
+export const FORM_LABELS = new Set(["fatiado", "filete", "peca", "com-osso", "cubos", "posta", "casca", "cozido", "empadao", "empanada", "temperado"]);
 export const FORM_SUB_KIND_KINDS = new Set(["canela", "piri-piri-seco", "pimenta"]);
 
 export interface Label {
@@ -459,6 +542,10 @@ export const LABELS: Label[] = [
     // Camarão Cozido Embalado", "POLVO COZIDO METADE") is not tinned, and was
     // compared with tins. 29 October 2026.
     id: "lata", label: "Em lata ou frasco", match: /\bcozid[oa]s?\b/, categories: ["legumes", "leguminosas"],
+    // Cooked beetroot is sold vacuum-packed, not in a jar: Continente's and Pingo
+    // Doce's were in the jarred row against Auchan's real jar (the AI trial, 9
+    // November 2026). A jar of it still says so ("330(220)G", "frasco").
+    notKinds: ["beterraba"],
   },
   {
     // Tinned fish names say more ways than other tins: "Filetes Cavala Óleo
@@ -490,9 +577,16 @@ export const LABELS: Label[] = [
   // in any form (FORM_LABELS below).
   { id: "fatiado", label: "Fatiado", match: /fatia|fatiad|laminad/, kinds: ["presunto", "queijo", "chourico", "paio", "salame"] },
   { id: "filete", label: "Filetes", match: /filete/, kinds: ["sardinha", "carapau", "cavala", "dourada", "robalo", "truta", "corvina", "red-fish", "linguado"] },
+  // Scabbardfish steaks against the whole fish (the AI trial, 9 November 2026).
+  { id: "posta", label: "Postas", match: /\bpostas?\b/, kinds: ["peixe-espada"] },
   // A whole or half ham leg, or a piece of one, is a third form beside slices
   // and packets: an 8.5 kg leg with the bone was the cheapest Iberian ham.
-  { id: "peca", label: "Em peça", match: /inteir|com osso|\bpeca\b|quartos|tabua|meio presunto|desossad/, kinds: ["presunto"] },
+  // A whole leg on the bone apart from boneless pieces and quarters: Continente's
+  // whole "com Osso" at 9.99/kg against Auchan's quarters at 18.74 (the AI
+  // trial, 9 November 2026). Diced ham and chouriço apart too.
+  { id: "com-osso", label: "Inteiro ou meio, com osso", match: /inteir|com osso|meio presunto/, kinds: ["presunto"] },
+  { id: "peca", label: "Em peça", match: /\bpeca\b|quartos|tabua|desossad/, unless: /inteir|com osso|meio presunto/, kinds: ["presunto"] },
+  { id: "cubos", label: "Em cubos", match: /\bcubos?\b|\bdados\b/, kinds: ["presunto", "chourico"] },
   // Plant-based sausages, mortadella and the like apart from meat ones, in the
   // kinds with no animal split. 29 October 2026.
   { id: "vegetal", label: "Vegetal", match: PLANT, categories: ["charcutaria"] },
@@ -508,7 +602,9 @@ export const LABELS: Label[] = [
   // Cooked shellfish against raw: "Lavagante Cozido" against a live Canadian
   // lobster. Not "sapateira": nearly every crab is sold cooked, and Auchan's
   // and Pingo Doce's names often do not say so (13 names, 30 October 2026).
-  { id: "cozido", label: "Cozido", match: /\bcozid[oa]s?\b/, kinds: ["camarao", "lavagante", "lagosta", "mexilhao", "polvo", "pota"] },
+  // Cooked beetroot (vacuum-packed) apart from raw too, now that it is no longer
+  // filed as a jar (9 November 2026).
+  { id: "cozido", label: "Cozido", match: /\bcozid[oa]s?\b/, kinds: ["camarao", "lavagante", "lagosta", "mexilhao", "polvo", "pota", "beterraba"] },
   // A family pie, a pasty and a small pie: Riberalves' 300 g cod "empadão"
   // against Auchan's mini tuna "empanadas", 4.5 times apart.
   { id: "empadao", label: "Empadão", match: /\bempadao\b/, kinds: ["empada"] },

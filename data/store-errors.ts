@@ -227,7 +227,41 @@ export const STORE_ERRORS: StoreError[] = [
   // 31 October 2026: out of stock, its page showed one carton's price for the
   // pack of six. Taken off the same day, the owner's decision: the page reader
   // now gives an out-of-stock product no price, so it sits out by itself and
-  // is compared again once back in stock.
+  // is compared again once back in stock. Back in stock on 9 November 2026 with
+  // the same fault, so listed again. No true size: either the price or the size
+  // is wrong and the page does not say which, and our estimate is never shown
+  // (the owner's decision, 9 November 2026, assumption 8.28).
+  {
+    store: "CONTINENTE",
+    storeProductId: "8168224",
+    name: "Leite Meio Gordo Bio Prado Verde",
+    problem: "In stock at one carton's price for the pack of six: 1,29 € for 6 litres, 0,22 €/l. Our highest price for it is 7,74 €.",
+    evidence: '"emb. 6 x 1 lt" beside a price of 1,29 € (page read 9 November 2026); Auchan sells the 1 l carton of the same milk at 1,00 €',
+    checkedOn: "2026-11-09",
+    listedSize: { packageSize: 6, unit: "l" },
+  },
+  // Two Auchan products sold by the kilo or by the piece where its listing tile
+  // cannot tell which, sized from their own pages (the AI trial, 9 November 2026).
+  {
+    store: "AUCHAN",
+    storeProductId: "3554673",
+    name: "QUEIJO OVELHA HERDADE DA MAIA CURADO 1/4 UN",
+    problem: "A quarter of a cheese, sold by the piece at 6,75 €, but its price is labelled \"€/Kg\", so it read as 1 kg at 6,75 €/kg; at its true 225 g it is 30 €/kg.",
+    evidence: 'Its page: "6.75 €/Kg" beside "6,75 €", sold by the unit (data-purchased-by-unit="true"), "Peso líquido escorrido 225 g"',
+    checkedOn: "2026-11-09",
+    listedSize: { packageSize: 1, unit: "kg" },
+    trueSize: { packageSize: 0.225, unit: "kg", holdsWhile: "listing-unchanged", listedFigure: { unit: "kg", equalsPrice: true } },
+  },
+  {
+    store: "AUCHAN",
+    storeProductId: "234185",
+    name: "COCO FRESCO KG",
+    problem: "Sold by the kilo, but its tile shows the same 3,29 € per item and per price, so no size was read and it sat out of the comparison.",
+    evidence: 'Its page: "Quant. Mínima = 1Kg (1 un) 3.29 €/un 3,29 €/Kg"',
+    checkedOn: "2026-11-09",
+    listedSize: { packageSize: null, unit: null },
+    trueSize: { packageSize: 1, unit: "kg", holdsWhile: "listing-unchanged", listedFigure: { unit: "un", equalsPrice: true } },
+  },
   {
     store: "PINGO_DOCE",
     storeProductId: "988950",
@@ -353,4 +387,35 @@ export function withConfirmedSize<T extends ListingNow & { store: string; storeP
   const entry = BY_KEY.get(`${row.store}:${row.storeProductId}`);
   const size = entry ? confirmedSize(entry, row) : null;
   return size ? { ...row, ...size, sizeConfirmed: true } : row;
+}
+
+/**
+ * Two products that share a barcode but are not the same product: one store
+ * published the wrong barcode. The matching step (src/scripts/match-products.ts)
+ * never confirms such a pair, so the site never shows them as one product.
+ * Each pair is a person's judgement from the stores' own pages.
+ */
+export interface NeverSameProduct {
+  a: { store: StoreError["store"]; storeProductId: string; name: string };
+  b: { store: StoreError["store"]; storeProductId: string; name: string };
+  evidence: string;
+  checkedOn: string;
+}
+
+export const NEVER_SAME_PRODUCT: NeverSameProduct[] = [
+  {
+    a: { store: "AUCHAN", storeProductId: "2662598", name: "FIAMBRE PERNA EXTRA ELPOZO DUROC 120G" },
+    b: { store: "CONTINENTE", storeProductId: "8083233", name: "Fiambre de Peito de Peru Fatiado ElPozo" },
+    evidence: 'Both carry barcode 8410843131335. Auchan\'s page: "Perna de porco com pele (92%)", pork leg ham; Continente\'s: turkey breast. Found by the AI trial.',
+    checkedOn: "2026-11-09",
+  },
+];
+
+const NEVER_PAIRS = new Set(
+  NEVER_SAME_PRODUCT.flatMap(({ a, b }) => [`${a.store}|${a.storeProductId}|${b.store}|${b.storeProductId}`, `${b.store}|${b.storeProductId}|${a.store}|${a.storeProductId}`])
+);
+
+/** Whether two products are listed above as different despite one barcode. */
+export function isNeverSameProduct(a: { store: string; storeProductId: string }, b: { store: string; storeProductId: string }): boolean {
+  return NEVER_PAIRS.has(`${a.store}|${a.storeProductId}|${b.store}|${b.storeProductId}`);
 }

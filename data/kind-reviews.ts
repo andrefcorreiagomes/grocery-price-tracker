@@ -1294,4 +1294,81 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 8, store: "AUCHAN", id: "3723973", name: "CASSOULET AUCHAN BIO 340G", kind: "refeicao", why: "As 3361299, the same move." },
   { batch: 8, store: "AUCHAN", id: "2471239", name: "TIRAS NATURE ADDICTS FRUTA MORANGO 35G", kind: null, why: "A sweet fruit strip, not strawberries; moved to the gums shelf on 6 November 2026, where the shelf no longer keeps it out of the fruit." },
   { batch: 8, store: "AUCHAN", id: "2472468", name: "TIRAS NATURE ADDICTS FRUTA FRAMBOESA 35G", kind: null, why: "As the strawberry strip: a sweet, not raspberries." },
+  // 9 November 2026: the AI trial of that day read every row of the site; these
+  // are the products it found under the wrong kind, each checked against our
+  // data (and the store's page where marked) and approved by the owner.
+  { batch: 9, store: "CONTINENTE", id: "4076639", name: "Preparado para Sopa Portuguesa Continente", kind: null, why: "A soup-vegetable mix, compared with Portuguese cabbage." },
+  { batch: 9, store: "AUCHAN", id: "3730249", name: "ERVILHAS AUCHAN COM CENOURAS 850(530)G", kind: null, why: "Peas with carrots, compared with plain tinned peas." },
+  { batch: 9, store: "AUCHAN", id: "1113853", name: "MILHO CIMARROM POP CORN 400G", kind: "pipoca", why: "Popcorn maize, on Auchan's snacks shelf, compared with canjica maize." },
+  { batch: 9, store: "CONTINENTE", id: "8198937", name: "Tomate Frito Continente", kind: "molho-tomate", why: "A tomato sauce (215 g), among fresh tomatoes." },
+  { batch: 9, store: "CONTINENTE", id: "8911034", name: "Tomate Frito Continente", kind: "molho-tomate", why: "As 8198937, another size." },
+  { batch: 9, store: "AUCHAN", id: "3496613", name: "QUEIJO PROTEIN+ AUCHAN FRESCO BATIDO NATURAL 500G", kind: null, why: "A whipped protein cheese (quark), on Auchan's protein-yoghurt shelf, compared with fresh cheese." },
+  { batch: 9, store: "AUCHAN", id: "3425542", name: "TORTILHAS MISTER FREED BARBECUE 135G", kind: null, why: "Tortilla chips, a snack, not tortillas; Continente's same product has no kind." },
+  { batch: 9, store: "AUCHAN", id: "2112001", name: "TOSTA RICA CUETERA 570G", kind: "bolacha", why: "A children's biscuit, on both stores' biscuit shelves; Continente's same product is a biscuit already." },
+  { batch: 9, store: "CONTINENTE", id: "8885525", name: "Granola Bites Cacau sem Glúten sem Adição de Açúcar Continente Equilíbrio", kind: null, why: "A 50 g snack, compared with 375 g of muesli." },
+  { batch: 9, store: "PINGO_DOCE", id: "1010209", name: "Papa de Aveia com Chocolate Branco e Coco", kind: null, why: "A porridge mix (sports-nutrition shelf), the cheapest chocolate cereal at 2.29 EUR/kg." },
+  { batch: 9, store: "CONTINENTE", id: "7798984", name: "Cuscuz Tradicional sem Glúten Sinhá", kind: "farinha", why: "Brazilian maize flour for cuscuz, on Continente's flour shelf, not couscous." },
+  { batch: 9, store: "CONTINENTE", id: "7212172", name: "Mix Pimentas com Sal Grosso Moinho Continente", kind: null, why: "A pepper-and-salt mix, compared with pure pepper at half its price per kilo." },
+  { batch: 9, store: "AUCHAN", id: "2007566", name: "MOLHO DOM DUARTE VINHA D'ALHO 200G", kind: null, why: "A vinha d'alho marinade, not a garlic sauce." },
+  { batch: 9, store: "AUCHAN", id: "3913031", name: "MOLHO PASSATA TOMATE GULOSO 210G", kind: "polpa-tomate", why: "Passata (tomato pulp, on Auchan's pulp shelf), the cheapest tomato sauce." },
+  { batch: 9, store: "AUCHAN", id: "3904417", name: "MOLHO AUCHAN BASE DE TOMATE COM LEGUMES 420 G", kind: null, why: "A Mexican-cooking sauce base, compared with a tomato and basil sauce." },
+  { batch: 9, store: "AUCHAN", id: "2143003", name: "CAFÉ DELTA MISTURA CEREAIS E CAFÉ SOLÚVEL 200G", kind: "bebida-cereais", why: "A cereal and coffee mix, compared with pure instant coffee." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009205", name: "Chá 0% Açúcar de Framboesa", kind: null, why: "A bottled kombucha (Captain Kombucha, 1 l), among dry teas." },
+  { batch: 9, store: "PINGO_DOCE", id: "647128", name: "Douradinhos de Frango Congelados", kind: "nugget", why: "Chicken fingers (on Pingo Doce's nuggets shelf), among fish fingers." },
+  { batch: 9, store: "PINGO_DOCE", id: "945057", name: "Douradinhos de Frango Congelados", kind: "nugget", why: "As 647128, another pack." },
+  { batch: 9, store: "AUCHAN", id: "3723825", name: "RAVIOLI AUCHAN 6 LEGUMES E MOLHO TOMATE 400G", kind: "refeicao", why: "A ravioli ready meal in tomato sauce (Auchan's ready-meals shelf), compared with fresh filled pasta." },
+  { batch: 9, store: "CONTINENTE", id: "7180150", name: "Batata Steakhouse Continente", kind: "batata-pre-frita", why: "Frozen fries, filed as boiling potatoes." },
+  { batch: 9, store: "PINGO_DOCE", id: "1003932", name: "Batata Original Crinckle", kind: "batata-pre-frita", why: "McCain frozen fries, filed as boiling potatoes." },
+  { batch: 9, store: "AUCHAN", id: "246177", name: "CARNE P/PICADINHO BOVINO KG", kind: "vaca", why: "Diced beef for stewing (picadinho), compared with minced beef; its cut is set below." },
+  // Their siblings, which took their place in the rows once they left (found
+  // measuring the changes on a copy of the 9 November night).
+  { batch: 9, store: "PINGO_DOCE", id: "1009203", name: "Chá 0% Açúcar de Gengibre", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009201", name: "Chá Biológico de Gengibre", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009138", name: "Chá Biológico de Gengibre", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009202", name: "Chá Biológico Original", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009206", name: "Chá Fermentado de Framboesa", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "PINGO_DOCE", id: "1009200", name: "Chá Biológico de Framboesa", kind: null, why: "A Captain Kombucha drink, as 1009205." },
+  { batch: 9, store: "CONTINENTE", id: "8885527", name: "Granola Bites Manteiga de Amendoim sem Glúten sem Adição de Açúcar Continente Equilíbrio", kind: null, why: "A 50 g snack, as 8885525." },
+  { batch: 9, store: "CONTINENTE", id: "8885528", name: "Granola Bites Maçã e Canela sem Glúten sem Adição de Açúcar Continente Equilíbrio", kind: null, why: "A 50 g snack, as 8885525." },
+  { batch: 9, store: "AUCHAN", id: "3680119", name: "RAVIOLI AUCHAN RECHEADOS COM CARNE 400G", kind: "refeicao", why: "Another ravioli ready meal on Auchan's ready-meals shelf, as 3723825." },
+];
+
+/**
+ * A product's place inside its kind - the cut or variety (sub-kind) and the
+ * labels - decided in review, where the name cannot say it. Applied after the
+ * tree's own rules (data/food-tree.ts), product by product, by the nightly step
+ * that writes kinds. `subKind` replaces the tree's; the labels are added to or
+ * taken from the tree's.
+ */
+export interface ReviewedTreePlace {
+  batch: number;
+  store: string;
+  /** the store's own product id */
+  id: string;
+  /** the name at review time, for a person reading this file */
+  name: string;
+  subKind?: string | null;
+  addLabels?: string[];
+  removeLabels?: string[];
+  why: string;
+}
+
+export const REVIEWED_TREE: ReviewedTreePlace[] = [
+  // 9 November 2026, the AI trial (see batch 9 above).
+  { batch: 9, store: "CONTINENTE", id: "7463615", name: "Alperce Extra Os Originais", addLabels: ["seco"], why: "Dried apricots (Continente's dried-fruit shelf), compared with fresh ones; the name does not say dried." },
+  { batch: 9, store: "AUCHAN", id: "3676688", name: "FIGO COM FARINHA AUCHAN 500 G", addLabels: ["seco"], why: "Dried figs, filed as fresh." },
+  { batch: 9, store: "CONTINENTE", id: "7261918", name: "Figo Preto Frusel", addLabels: ["seco"], why: "Dried figs (Continente's dried-fruit shelf), filed as fresh." },
+  { batch: 9, store: "CONTINENTE", id: "7820035", name: "Milho Amarelo para Canjica Sinhá", removeLabels: ["lata"], why: "Dry maize for canjica; Continente's tinned-goods shelf made it a tin." },
+  { batch: 9, store: "CONTINENTE", id: "7798984", name: "Cuscuz Tradicional sem Glúten Sinhá", subKind: "milho", why: "Maize flour (flocão); its name does not say maize." },
+  { batch: 9, store: "AUCHAN", id: "25730", name: "FERMENTO E LEVEDURAS ROYAL LATA 113G", subKind: "po", why: "Baking powder; \"leveduras\" in the name made it baker's yeast." },
+  { batch: 9, store: "AUCHAN", id: "1177967", name: "FERMENTO SCHAR SEM GLÚTEN 2X10G", subKind: "padeiro", why: "Baker's yeast: its page gives \"Saccharomyces cerevisiae\"; it was compared with baking powder." },
+  { batch: 9, store: "PINGO_DOCE", id: "989996", name: "Chouriço Preto Quiaios", subKind: "sangue", why: "Quiaios \"chouriço preto\" is a blood sausage, compared with meat chouriços." },
+  { batch: 9, store: "AUCHAN", id: "246177", name: "CARNE P/PICADINHO BOVINO KG", subKind: "estufar", why: "Diced beef for stewing." },
+  { batch: 9, store: "PINGO_DOCE", id: "1003931", name: "Filetes de Pescada Argentina sem Pele", addLabels: ["congelado"], why: "Pescanova's frozen fillets (900 g), filed as fresh: neither the name nor the shelf says frozen." },
+  { batch: 9, store: "PINGO_DOCE", id: "1010025", name: "Chouriço Ibérico", addLabels: ["fatiado"], why: "A 75 g sliced pack (46.53 EUR/kg), compared with whole chouriços." },
+  { batch: 9, store: "AUCHAN", id: "292541", name: "NOZES KG", addLabels: ["casca"], why: "Walnuts in the shell: its page describes it as \"NOZ COM CASCA\"; compared with shelled kernels." },
+  { batch: 9, store: "AUCHAN", id: "1080314", name: "TOMATE SECO PONTI 280G", addLabels: ["lata"], why: "Sun-dried tomatoes in oil, a 280 g jar (the same product is \"em Óleo\" at Continente), compared with dry ones in a bag." },
+  { batch: 9, store: "PINGO_DOCE", id: "708391", name: "Tomate Seco", addLabels: ["lata"], why: "As Auchan's 1080314: Ponti's 280 g jar in oil." },
+  { batch: 9, store: "AUCHAN", id: "3035265", name: "BANANA RODELAS AUCHAN 200 G", addLabels: ["seco"], why: "Dried banana slices (Auchan's dried-fruit shelf); it became the cheapest own-brand fresh banana once the Madeira banana left that row." },
+  { batch: 9, store: "CONTINENTE", id: "8112018", name: "Banana às Rodelas Continente", addLabels: ["seco"], why: "Dried banana slices (Continente's dried-fruit shelf), as Auchan's 3035265." },
 ];

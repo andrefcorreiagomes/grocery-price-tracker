@@ -188,7 +188,9 @@ function decodeEntities(text: string): string {
 function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   const match = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|g|l|ml|cl)/i);
   if (!match) return null;
-  const drained = text.match(/peso escorrido\s*(?:\d+\s*[x×]\s*)?([\d,]+)\s*(kg|g)/i);
+  // With or without a colon: "(peso escorrido: 425 gr)" was read as no drained
+  // weight at all (a mango tin, the AI trial of 9 November 2026).
+  const drained = text.match(/peso escorrido\s*:?\s*(?:\d+\s*[x×]\s*)?([\d,]+)\s*(kg|g)/i);
   const [qtyText, unitText] = drained ? [drained[1], drained[2]] : [match[2], match[3]];
 
   const count = match[1] ? Number(match[1]) : 1;

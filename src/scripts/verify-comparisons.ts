@@ -637,9 +637,9 @@ function verifyComparisonGroups(): number {
   check("two chains are enough to show a group", shownGroups(groups).length === 2 && MIN_CHAINS === 2);
   // The user's decision, 29 October 2026: "Outros" mixes unlike products.
   check("\"Outros\" is never shown, even with two chains", groups.some((g) => g.title === "Outros" && g.storesCompared === 2) && !shownGroups(groups).some((g) => g.others));
-  check("a kind with no sub-kinds is not \"Outros\"", !comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.others);
+  check("a kind with no sub-kinds is not \"Outros\"", !comparisonGroups("kiwi", [p("CONTINENTE", "Kiwi", 1, 1, null, null)])[0]?.others);
   check("the main group is plain before labelled", mainGroup(groups)?.title === "Peito e bifes");
-  check("a kind with no sub-kinds is titled by its own name", comparisonGroups("banana", [p("CONTINENTE", "Banana", 1, 1, null, null)])[0]?.title === "Banana");
+  check("a kind with no sub-kinds is titled by its own name", comparisonGroups("kiwi", [p("CONTINENTE", "Kiwi", 1, 1, null, null)])[0]?.title === "Kiwi");
   return failures - before;
 }
 

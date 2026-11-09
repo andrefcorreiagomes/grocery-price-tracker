@@ -191,6 +191,17 @@ export function verifyStorePages(): number {
   const corn = coTin("Milho Doce em Lata sem Glúten Continente", "emb. 3 x 150 gr (peso escorrido 3 x 140 gr)");
   check("Continente: a multipack's drained weight counts every tin", Math.abs((corn.packageSize ?? 0) - 0.42) < 1e-9, String(corn.packageSize));
   check("a fish tin with one weight on its label keeps it", coTin("Atum Posta em Azeite Santa Catarina", "emb. 80 gr").packageSize === 0.08);
+  // The AI trial, 9 November 2026: the mango tin's label, as on its page.
+  check("Continente: a drained weight written with a colon is read too",
+    coTin("Manga Fatiada em Calda Koala", "emb. 490 gr (peso escorrido: 425 gr)").packageSize === 0.425);
+  // Pingo Doce's lactose-free yoghurt pack (971481), as on its page that day.
+  const pdPack = parsePingoDocePage(
+    product("Iogurte Líquido Magro sem Lactose Frutos Tropicais Pack 4") +
+      `<h1 class="product-unit-measure">4 x0.17 Kg | 2,93 €/Kg</h1>` +
+      `<div class="row"> <div class="col-12"> <div class="prices"> <div class="price"> <span class="price-container"> <span class="sales"> <span class="value" content="1.99"></span> 1,99 &euro; </span> </span> </div> </div> </div> </div>`,
+    "pd-pack"
+  );
+  check("Pingo Doce: a multipack size \"4 x0.17 Kg\" is the whole pack", pdPack.packageSize === 0.68 && pdPack.packageUnit === "kg", `${pdPack.packageSize} ${pdPack.packageUnit}`);
   const tile = (price: string) =>
     `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));

@@ -230,7 +230,10 @@ export function parseSize(name: string): ParsedSize | null {
   // A MINIMUM is not a size either: "POLVO GRANDE CONGELADO (+6 KG)" is an
   // octopus weighing more than 6 kg, priced per kilo. Read as a 6 kg pack it
   // was EUR 2.83/kg, the cheapest octopus in the country.
-  if (/\(\s*\+\s*\d+(?:[.,]\d+)?\s*(?:kg|gr?s?|g)\s*\)/.test(flat)) return null;
+  // A MAXIMUM likewise: "POLVO CONGELADO AUCHAN (-1.5 KG)" is under 1.5 kg and
+  // priced 13,99 EUR per kilo (its page: one piece of about 1.2 kg is 16,79 EUR).
+  // Read as a 1.5 kg pack it was 9,33 EUR/kg. The AI trial, 9 November 2026.
+  if (/\(\s*[+-]\s*\d+(?:[.,]\d+)?\s*(?:kg|gr?s?|g)\s*\)/.test(flat)) return null;
 
   // Two digits with a leading zero before L is the dropped-decimal notation
   // below in a form it cannot decode: "PEPSI ZERO 1+05L OFERTA" is 1 L plus
@@ -397,4 +400,43 @@ export function sizesMatch(a: ParsedSize, b: ParsedSize, tolerance = 0.05): bool
   const hi = Math.max(a.total, b.total);
   const lo = Math.min(a.total, b.total);
   return hi > 0 && (hi - lo) / hi <= tolerance;
+}
+
+/**
+ * Tins: the same barcode at two stores, one giving the full weight and the
+ * other the drained one (the owner's choice (b), 9 November 2026). Both are then
+ * compared at the drained weight, the smaller, which is what tins compare by
+ * where it is known (the owner's rule of 31 October 2026). Row 1263 of the AI
+ * trial: one barcode, 400 g at Auchan and 240 g drained at Continente.
+ *
+ * Only for a tin (by its labels or its name), only in kilos, and only when the
+ * two sizes are between 1.15 and 3 times apart - the usual span between a tin's
+ * full and drained weights; a wider gap is more likely another error, left to
+ * the checks. Never changes what is stored: the store's own size stays in the
+ * database, and only the comparison uses the shared one.
+ */
+export const DRAINED_SHARE_RATIO = { min: 1.15, max: 3 };
+
+export function shareDrainedWeight<
+  T extends { store: string; eanNormalized?: string | null; packageSize: number | null; unit: string | null; name: string; labels?: string | null }
+>(rows: T[]): T[] {
+  const isTin = (r: T) => (r.labels ?? "").split(",").includes("lata") || isTinnedFood(r.name);
+  const byEan = new Map<string, T[]>();
+  for (const r of rows) {
+    // A size confirmed by hand (data/store-errors.ts) is left as it is.
+    if ((r as { sizeConfirmed?: boolean }).sizeConfirmed) continue;
+    if (!r.eanNormalized || r.unit !== "kg" || r.packageSize === null || !(r.packageSize > 0)) continue;
+    byEan.set(r.eanNormalized, [...(byEan.get(r.eanNormalized) ?? []), r]);
+  }
+  const shared = new Map<T, number>();
+  for (const same of byEan.values()) {
+    if (new Set(same.map((r) => r.store)).size < 2 || !same.some(isTin)) continue;
+    const sizes = same.map((r) => r.packageSize as number);
+    const lo = Math.min(...sizes);
+    const hi = Math.max(...sizes);
+    const ratio = hi / lo;
+    if (ratio < DRAINED_SHARE_RATIO.min || ratio > DRAINED_SHARE_RATIO.max) continue;
+    for (const r of same) if (r.packageSize !== lo) shared.set(r, lo);
+  }
+  return rows.map((r) => (shared.has(r) ? { ...r, packageSize: shared.get(r) as number } : r));
 }

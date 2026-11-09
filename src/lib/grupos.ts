@@ -12,6 +12,7 @@ import {
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { CATEGORIES } from "../../data/food-tree";
 import { withConfirmedSize } from "../../data/store-errors";
+import { shareDrainedWeight } from "./sizes";
 import { categoryOf } from "./food-tree";
 import {
   anyFormLines,
@@ -69,10 +70,10 @@ async function rowsFor(foodTypeId: string): Promise<TreeProduct[]> {
     select: {
       storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, subKind: true, labels: true, unavailableAt: true,
-      shownUnitPrice: true, shownUnitPriceUnit: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true, eanNormalized: true,
     },
   });
-  return rows.map((r) => forSaleNow(withConfirmedSize(r)));
+  return shareDrainedWeight(rows).map((r) => forSaleNow(withConfirmedSize(r)));
 }
 
 export interface FoodTypePage {
@@ -190,11 +191,11 @@ async function currentRowsByType(): Promise<Map<string, TreeProduct[]>> {
     select: {
       storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, foodType: true, subKind: true, labels: true, unavailableAt: true,
-      shownUnitPrice: true, shownUnitPriceUnit: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true, eanNormalized: true,
     },
   });
   const byType = new Map<string, TreeProduct[]>();
-  for (const row of rows.map((r) => forSaleNow(withConfirmedSize(r)))) {
+  for (const row of shareDrainedWeight(rows).map((r) => forSaleNow(withConfirmedSize(r)))) {
     const list = byType.get(row.foodType as string) ?? [];
     list.push(row);
     byType.set(row.foodType as string, list);
@@ -475,7 +476,7 @@ export async function getNamedGroups(
     select: {
       id: true, storeProductId: true, store: true, name: true, brand: true, url: true,
       price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
-      shownUnitPrice: true, shownUnitPriceUnit: true,
+      shownUnitPrice: true, shownUnitPriceUnit: true, eanNormalized: true,
     },
   });
   if (rows.length === 0) return { shown: [], comparable: 0, found: 0 };
@@ -514,11 +515,15 @@ export async function getNamedGroups(
       select: {
         id: true, storeProductId: true, store: true, name: true, brand: true, url: true,
         price: true, packageSize: true, unit: true, onPromotion: true, regularPrice: true, promoEndsAt: true, unavailableAt: true,
-        shownUnitPrice: true, shownUnitPriceUnit: true,
+        shownUnitPrice: true, shownUnitPriceUnit: true, eanNormalized: true,
       },
     });
     for (const o of others) byId.set(o.id, forSaleNow(withConfirmedSize(o)));
   }
+  // The same tin at two stores, one full weight and one drained: both at the
+  // drained weight (the owner's choice (b), 9 November 2026).
+  const ids = [...byId.keys()];
+  shareDrainedWeight([...byId.values()]).forEach((r, i) => byId.set(ids[i], r));
 
   const byGroup = new Map<string, ComparableProduct[]>();
   for (const m of allMembers) {

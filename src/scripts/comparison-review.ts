@@ -27,6 +27,7 @@ import {
 } from "../lib/comparison-review";
 import { REASONS, type Reason } from "../lib/error-report-choices";
 import { getComparableFoodTypes, getFoodTypePage } from "../lib/grupos";
+import { showsOwnBrandRow } from "../lib/comparison-groups";
 
 /**
  * Program one of the daily AI review of the comparisons (ai-review-plan.md in
@@ -161,7 +162,7 @@ async function todaysRows(): Promise<{ rows: ReviewRow[]; history: Map<string, {
       const same = (m: Map<string, Cell>) =>
         [...m].map(([s, c]) => `${s}:${c.kind === "price" ? c.product.storeProductId : c.kind === "no-size" ? c.example.storeProductId : "-"}`).sort().join();
       // The own-brand row often shows the very products of the cheapest row: one question, asked once.
-      if (same(g.ownBrand) !== same(g.cheapest)) add(`${page.id}|${g.key}|own`, page, g.title, g.key, "own brand", g.ownBrand);
+      if (showsOwnBrandRow(g) && same(g.ownBrand) !== same(g.cheapest)) add(`${page.id}|${g.key}|own`, page, g.title, g.key, "own brand", g.ownBrand);
     }
     for (const n of page.named) {
       for (const g of n.groups.shown) add(`${page.id}|${n.unit}|same|${g.name}`, page, g.name, `same|${g.name}`, "same product", g.cells);

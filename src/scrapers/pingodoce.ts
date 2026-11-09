@@ -131,15 +131,19 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
  * `ScrapeResult.packageSize` and the app's comparison base.
  */
 function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
+  // A multipack: "4 x0.17 Kg" is four bottles of 170 g, the total 0.68 kg (a
+  // lactose-free yoghurt pack, found by the AI trial of 9 November 2026; the
+  // label had read as no size at all).
   const match = text
     .trim()
-    .match(/^([\d.,]+)\s*(kg|g|gr|l|lt|ml|cl)\b/i);
+    .match(/^(?:(\d+)\s*[x×]\s*)?([\d.,]+)\s*(kg|g|gr|l|lt|ml|cl)\b/i);
   if (!match) return null;
 
-  const qty = Number(match[1].replace(",", "."));
+  const count = match[1] ? Number(match[1]) : 1;
+  const qty = count * Number(match[2].replace(",", "."));
   if (!Number.isFinite(qty) || qty <= 0) return null;
 
-  switch (match[2].toLowerCase()) {
+  switch (match[3].toLowerCase()) {
     case "kg":
       return { total: qty, unit: "kg" };
     case "l":
