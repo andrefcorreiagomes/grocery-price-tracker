@@ -20,6 +20,31 @@ import {
 } from "../lib/comparison";
 import { euros } from "../lib/money";
 import { packLine, sizeLabel, storeLink } from "../lib/pack";
+import {
+  answerProblem,
+  changesBetween,
+  emptyMemory,
+  factsFor,
+  FIRST_READING_PACE,
+  identityOf,
+  MAX_ANSWER_CHARS,
+  MAX_ANSWERS_BYTES,
+  MAX_FIELD_CHARS,
+  maxAnswerLines,
+  overLimit,
+  parseProposalNumbers,
+  QUESTIONS,
+  REREADS_PER_DAY,
+  selectRows,
+  takeInAnswers,
+  type Answer,
+  type Memory,
+  type ReviewRow,
+  type SentRow,
+  type StoreEntry,
+  type Verdict,
+  type Missing,
+} from "../lib/comparison-review";
 import { COMMENT_MAX, DAILY_LIMIT, ReportLimiter, validateReport, VISITOR_LIMIT, visitorKey } from "../lib/error-reports";
 import { promotionLine, promotionWarning } from "../scrapers/crawl/promo-watch";
 import { auchanTilePromotion, parseAuchanTilesDetailed } from "../scrapers/search/auchan";
@@ -297,6 +322,166 @@ function verifyComparison(): number {
   check(`at most ${DAILY_LIMIT} reports a day in all, however many visitors`, sent === DAILY_LIMIT, String(sent));
   check("a visitor's address is never kept, only an anonymous hash that changes each day",
     visitorKey("203.0.113.7", t0) !== visitorKey("203.0.113.7", later(24 * 60)) && !visitorKey("203.0.113.7", t0).includes("203"));
+
+  // The daily AI review of the comparisons (src/lib/comparison-review.ts).
+  const entry = (store: string, price: number, more: Partial<StoreEntry> = {}): StoreEntry => ({
+    store, id: `${store}-1`, name: `Arroz ${store}`, brand: null, size: 5, unit: "kg", price, perUnit: price / 5,
+    promotion: false, regularPrice: null, promoEndsAt: null, shelf: "Mercearia/Arroz", barcode: "560", url: null, ...more,
+  });
+  const reviewRow = (n: number, auchan = 5.99): ReviewRow => ({
+    id: `r${n}`, foodType: "arroz", foodLabel: "Arroz", comparison: `C${n}`, comparisonKey: `c${n}`, rowType: "cheapest",
+    stores: [entry("AUCHAN", auchan), entry("CONTINENTE", 7.99)], flags: [],
+  });
+  const manyRows = (n: number) => Array.from({ length: n }, (_, i) => reviewRow(i));
+  const noOrder = (id: string) => id;
+  const first = () => 0;
+  const readAll = (m: Memory, rows: ReviewRow[], on: string) => {
+    for (const r of rows) m.rows[r.id] = { contents: r.stores, readOn: on, conclusion: { verdict: "fine" }, rereadRound: 0 };
+  };
+  const idsOf = (s: { row: ReviewRow }[]) => s.map((x) => x.row.id);
+  const whyCount = (s: { why: string }[], why: string) => s.filter((x) => x.why === why).length;
+
+  check("nothing differs, no change; a new price, even by a cent, is a change, with before and after",
+    changesBetween(reviewRow(1).stores, reviewRow(1).stores).length === 0 &&
+      changesBetween(reviewRow(1).stores, reviewRow(1, 6).stores).some((c) => c.store === "AUCHAN" && c.field === "price" && c.before === 5.99 && c.after === 6));
+  check("another product, a new shelf, or a store leaving the row are changes too",
+    changesBetween(reviewRow(1).stores, [entry("AUCHAN", 5.99, { id: "other" }), entry("CONTINENTE", 7.99)]).some((c) => c.field === "id") &&
+      changesBetween(reviewRow(1).stores, [entry("AUCHAN", 5.99, { shelf: "Outra" }), entry("CONTINENTE", 7.99)]).some((c) => c.field === "shelf") &&
+      changesBetween(reviewRow(1).stores, [entry("CONTINENTE", 7.99)]).some((c) => c.store === "AUCHAN" && c.field === "in the row"));
+
+  const startMemory = emptyMemory();
+  const dayOne = selectRows(manyRows(1000), startMemory, "2026-11-16", noOrder, first);
+  check(`the first reading sends ${FIRST_READING_PACE} rows a day, and is not yet done`, dayOne.length === FIRST_READING_PACE && !startMemory.firstReadingDone && whyCount(dayOne, "first reading") === FIRST_READING_PACE);
+  const sameDayAgain = selectRows(manyRows(1000), emptyMemory(), "2026-11-17", noOrder, first);
+  check("unanswered rows come first again, in the same order", idsOf(dayOne).join() === idsOf(sameDayAgain).join());
+
+  const midFirst = emptyMemory();
+  readAll(midFirst, manyRows(10), "2026-11-16");
+  const changedMidFirst = selectRows([...manyRows(1000).slice(0, 10).map((r) => reviewRow(Number(r.id.slice(1)), 6.49)), ...manyRows(1000).slice(10)], midFirst, "2026-11-17", noOrder, first);
+  check("during the first reading a changed row is read as well, on top of the 300",
+    whyCount(changedMidFirst, "changed") === 10 && whyCount(changedMidFirst, "first reading") === FIRST_READING_PACE && whyCount(changedMidFirst, "read again") === 0);
+
+  const endFirst = emptyMemory();
+  readAll(endFirst, manyRows(800), "2026-11-20");
+  const lastBatch = selectRows(manyRows(1000), endFirst, "2026-11-21", noOrder, first);
+  check("the last rows of the first reading finish it, with no row read again on that day",
+    endFirst.firstReadingDone && whyCount(lastBatch, "first reading") === 200 && whyCount(lastBatch, "read again") === 0);
+
+  const reread = (readOn: string, today = "2026-12-10") => {
+    const m = emptyMemory();
+    m.firstReadingDone = true;
+    readAll(m, manyRows(200), readOn);
+    return selectRows(manyRows(200), m, today, noOrder, first);
+  };
+  check(`${REREADS_PER_DAY} rows are read again a day, and none is sent twice`,
+    whyCount(reread("2026-12-01"), "read again") === REREADS_PER_DAY && new Set(idsOf(reread("2026-12-01"))).size === REREADS_PER_DAY);
+  check("a row read in the last 2 days cannot be read again: read Monday, not Monday, Tuesday or Wednesday, but Thursday",
+    whyCount(reread("2026-12-07", "2026-12-07"), "read again") === 0 && whyCount(reread("2026-12-07", "2026-12-08"), "read again") === 0 &&
+      whyCount(reread("2026-12-07", "2026-12-09"), "read again") === 0 && whyCount(reread("2026-12-07", "2026-12-10"), "read again") === REREADS_PER_DAY);
+  const justChanged = emptyMemory();
+  justChanged.firstReadingDone = true;
+  readAll(justChanged, manyRows(2), "2026-12-09"); // r0, r1 read yesterday because of a change
+  for (const r of manyRows(100).slice(2)) justChanged.rows[r.id] = { contents: r.stores, readOn: "2026-12-01", conclusion: { verdict: "fine" }, rereadRound: 0 };
+  const noRecent = selectRows(manyRows(100), justChanged, "2026-12-10", noOrder, first);
+  check("a row the AI just read because it changed is not among the rows read again",
+    !idsOf(noRecent).includes("r0") && !idsOf(noRecent).includes("r1") && whyCount(noRecent, "read again") === REREADS_PER_DAY);
+
+  const round = emptyMemory();
+  round.firstReadingDone = true;
+  readAll(round, manyRows(100), "2026-11-20");
+  const drawnFirst = selectRows(manyRows(100), round, "2026-12-01", noOrder, first);
+  for (const s of drawnFirst) round.rows[s.row.id] = { ...round.rows[s.row.id], readOn: "2026-12-01", rereadRound: round.rereadRound };
+  const drawnNext = selectRows(manyRows(100), round, "2026-12-04", noOrder, first);
+  check("a row is not drawn again until the others have had their turn",
+    idsOf(drawnNext).filter((id) => !idsOf(drawnFirst).includes(id)).length === 25);
+  const quiet = emptyMemory();
+  quiet.firstReadingDone = true;
+  readAll(quiet, manyRows(100), "2026-12-09");
+  selectRows(manyRows(100), quiet, "2026-12-10", noOrder, first);
+  check("a day with nothing to read again does not start a new round of turns", quiet.rereadRound === 1);
+
+  const answerOf = (rowId: string, more: Partial<Answer> = {}): Answer => ({
+    rowId, verdict: "fine",
+    questions: Object.fromEntries(QUESTIONS.map((q) => [q, { answer: "yes", evidence: "same barcode 560" }])) as Answer["questions"],
+    ...more,
+  });
+  check("a bare \"fine\" is not an answer: each question needs an answer and its evidence",
+    answerProblem(answerOf("r1"), false) === null &&
+      answerProblem({ rowId: "r1", verdict: "fine" } as Answer, false) !== null &&
+      answerProblem(answerOf("r1", { questions: { ...answerOf("r1").questions, priceFitsPack: { answer: "yes", evidence: "" } } }), false) !== null &&
+      answerProblem(answerOf("r1", { verdict: "ok" as Verdict }), false) !== null);
+  check("a problem needs its cause, evidence, fix, sureness and number; a page check says what to look at; a report needs its answer",
+    answerProblem(answerOf("r1", { verdict: "problem" }), false) !== null &&
+      answerProblem(answerOf("r1", { verdict: "problem", cause: "size misread", evidence: "name says 500 g", fix: "correct the size", sure: "sure", proposal: 1 }), false) === null &&
+      answerProblem(answerOf("r1", { verdict: "needs_page" }), false) !== null &&
+      answerProblem(answerOf("r1"), true) !== null && answerProblem(answerOf("r1", { reportAnswer: "price confirmed by the data" }), true) === null);
+
+  const taken = emptyMemory();
+  taken.pendingReports = [{ at: "t1", foodType: "arroz", comparison: "c3", store: "", reason: "preco", comment: "x" }];
+  const sentRows: SentRow[] = [
+    { row: reviewRow(1), why: "first reading" },
+    { row: reviewRow(2), why: "first reading" },
+    { row: reviewRow(3), why: "visitor report", reports: taken.pendingReports },
+    { row: reviewRow(4), why: "first reading" },
+  ];
+  const takenStats = takeInAnswers(taken, "2026-11-16", sentRows, [
+    answerOf("r1"),
+    { rowId: "r2", verdict: "fine" } as Answer,
+    answerOf("r3", { reportAnswer: "the price is the store's" }),
+    answerOf("not-sent"),
+  ]);
+  check("an accepted answer is remembered with the row's contents; a rejected, foreign or missing one leaves the row unread",
+    taken.rows.r1?.conclusion.verdict === "fine" && taken.rows.r1.contents[0].price === 5.99 && taken.rows.r1.readOn === "2026-11-16" &&
+      !taken.rows.r2 && !taken.rows.r4 && takenStats.answered === 2 && takenStats.rejected === 2, JSON.stringify(takenStats));
+  check("an answered visitor's report is finished; an unanswered one stays", taken.pendingReports.length === 0);
+
+  const again = emptyMemory();
+  readAll(again, [reviewRow(1), reviewRow(2)], "2026-11-20");
+  const againStats = takeInAnswers(again, "2026-12-01",
+    [{ row: reviewRow(1), why: "read again" }, { row: reviewRow(2), why: "read again" }],
+    [answerOf("r1"), answerOf("r2", { verdict: "needs_page", pageToCheck: "the pack size", missing: "store page" })]);
+  check("reading a row again counts disagreement with its earlier conclusion", againStats.rereadsAnswered === 2 && againStats.rereadsDisagreeing === 1);
+  check("a page check must say what would have settled it, and that is counted (the owner, 8 November 2026)",
+    answerProblem(answerOf("r1", { verdict: "needs_page", pageToCheck: "the size" }), false) !== null &&
+      answerProblem(answerOf("r1", { verdict: "needs_page", pageToCheck: "the size", missing: "a guess" as Missing }), false) !== null &&
+      againStats.needsPageMissing["store page"] === 1 && againStats.needsPageMissing["price history"] === 0 && again.rows.r2.conclusion.missing === "store page");
+
+  const refused = emptyMemory();
+  readAll(refused, [reviewRow(1)], "2026-11-20");
+  refused.rows.r1.owner = { answer: "no", on: "2026-11-21", identity: identityOf(reviewRow(1).stores) };
+  takeInAnswers(refused, "2026-12-01", [{ row: reviewRow(1, 6.49), why: "changed" }], [answerOf("r1")]);
+  const keptRefusal = refused.rows.r1.owner?.answer === "no";
+  const otherProduct: ReviewRow = { ...reviewRow(1), stores: [entry("AUCHAN", 5.99, { id: "other" }), entry("CONTINENTE", 7.99)] };
+  takeInAnswers(refused, "2026-12-02", [{ row: otherProduct, why: "changed" }], [answerOf("r1")]);
+  check("the owner's refusal survives a change of price, and ends when the products change", keptRefusal && refused.rows.r1.owner === undefined);
+
+  const oldAnswer = emptyMemory();
+  readAll(oldAnswer, [reviewRow(1, 6.49)], "2026-12-05");
+  takeInAnswers(oldAnswer, "2026-12-01", [{ row: reviewRow(1), why: "changed" }], [answerOf("r1")]);
+  check("a late answer never moves a row back", oldAnswer.rows.r1.readOn === "2026-12-05" && oldAnswer.rows.r1.contents[0].price === 6.49);
+
+  // The size limits on what comes back from the AI's repository (the owner, 9 November 2026).
+  const limited = emptyMemory();
+  const longText = "x".repeat(MAX_FIELD_CHARS + 1);
+  const limitedStats = takeInAnswers(limited, "2026-11-16", [{ row: reviewRow(1), why: "first reading" }, { row: reviewRow(2), why: "first reading" }], [
+    answerOf("r1", { evidence: longText }),
+    answerOf("r2", { questions: { ...answerOf("r2").questions, sameProduct: { answer: "yes", evidence: longText } } }),
+  ]);
+  check("an answer with a text over 2,000 characters, at any depth, is refused and counted; the row stays unread",
+    limitedStats.overLimit === 2 && limitedStats.rejected === 2 && limitedStats.answered === 0 && !limited.rows.r1 && !limited.rows.r2, JSON.stringify(limitedStats));
+  const manyFields = answerOf("r1", Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`extra${i}`, "y".repeat(1_500)])) as Partial<Answer>);
+  check("an answer over 20,000 characters in all is refused, even with each text short; an honest answer passes",
+    overLimit(manyFields) && !overLimit(answerOf("r1", { evidence: "y".repeat(MAX_FIELD_CHARS) })) && MAX_ANSWER_CHARS === 20_000);
+  check("the whole answer file is refused over 10 MB; more than twice the rows sent, plus 20, raises the alarm",
+    MAX_ANSWERS_BYTES === 10_000_000 && maxAnswerLines(300) === 620);
+
+  const rice = factsFor(entry("AUCHAN", 6.49), entry("AUCHAN", 5.99), { low: 5.49, high: 6.49 });
+  const ended = factsFor(entry("AUCHAN", 1.99), entry("AUCHAN", 1.49, { promotion: true, regularPrice: 1.99 }), undefined);
+  const otherFacts = factsFor(entry("AUCHAN", 2, { id: "other" }), entry("AUCHAN", 1), undefined);
+  check("the facts: the change in percent, the price per kilo worked out, a promotion ending, the history; no percent across different products",
+    rice.priceChangePercent === 8.3 && rice.perUnitRecalculated === 1.3 && rice.historyLowest === 5.49 && rice.promotion === "off" && ended.promotion === "ended" && otherFacts.priceChangePercent === null,
+    JSON.stringify(rice));
+  check("the owner's answer: lists and ranges of numbers", parseProposalNumbers("1-3, 7").join() === "1,2,3,7");
 
   // The promotion early warning (promo-watch.ts). A misread marker reads as
   // "not on promotion", so only the share can show it broke.

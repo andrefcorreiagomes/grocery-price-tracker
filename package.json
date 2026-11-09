@@ -25,6 +25,7 @@
     "validate:comparisons": "tsx src/scripts/validate-comparisons.ts",
     "check:saves": "tsx src/scripts/check-saves.ts",
     "reports:errors": "tsx src/scripts/list-error-reports.ts",
+    "comparison:review": "tsx src/scripts/comparison-review.ts",
     "sitemap:test": "tsx src/scripts/sitemap-date-test.ts",
     "verify:nightly": "tsx src/scripts/verify-on-copy.ts",
     "verify:nightly:here": "tsx --expose-gc src/scripts/verify-nightly.ts",

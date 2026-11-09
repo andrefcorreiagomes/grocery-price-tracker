@@ -69,8 +69,31 @@ cat "logs/update-before-nightly-$DAY.log" > "$OUT/update.txt" 2>/dev/null || ech
   done
 } > "$OUT/logs-tail.txt"
 
+# The day's reading list for the AI review of the comparisons (the owner's plan,
+# 6 November 2026). Reads the database and the AI's answers, opens no store page.
+# The AI has only its own repository (REVIEW); its memory stays in the notes,
+# which it cannot open (the owner, 8 November 2026). A failure here stops
+# nothing: the night is still published, and the rows wait.
+# Its output goes into the night's folder too (comparison-review.txt): lines
+# starting "ALERT:" (answers over the size limits: someone may be disrupting the
+# review, the owner's request of 9 November 2026) are read by the morning review
+# of the night, which tells the owner's phone.
+REVIEW="$HOME/poupa-facil-comparison-review"
+if git -C "$REVIEW" pull -q --rebase; then
+  if npm run -s comparison:review -- --notes="$NOTES" --review="$REVIEW" --day="$DAY" > "$OUT/comparison-review.txt" 2>&1; then
+    cat "$OUT/comparison-review.txt"
+    git -C "$REVIEW" add -A
+    git -C "$REVIEW" commit -q -m "reading list of $DAY" && { git -C "$REVIEW" push -q && echo "reading list of $DAY published" || echo "reading list push failed"; }
+  else
+    cat "$OUT/comparison-review.txt"
+    echo "ALERT: the comparison review step failed; no reading list today, the night is still published" | tee -a "$OUT/comparison-review.txt"
+  fi
+else
+  echo "ALERT: could not update the comparison review repository; no reading list today" | tee "$OUT/comparison-review.txt"
+fi
+
 cd "$NOTES" || exit 0
-git add "nightly/$DAY"
+git add "nightly/$DAY" comparison-review
 git commit -q -m "nightly results of $DAY" || { echo "nothing new to publish"; exit 0; }
 git push -q && echo "published nightly/$DAY" || echo "push failed; next night tries again"
 exit 0
