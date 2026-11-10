@@ -20,6 +20,7 @@
     "catchup:auchan": "tsx src/scripts/auchan-catch-up.ts",
     "crawl:auchan:nightly": "tsx src/scripts/crawl-auchan-nightly.ts",
     "classify:food": "tsx src/scripts/classify-food-types.ts",
+    "tins:weights": "tsx src/scripts/tin-weights.ts",
     "discover": "tsx src/scripts/discover.ts",
     "backfill:sizes": "tsx src/scripts/backfill-sizes.ts",
     "validate:comparisons": "tsx src/scripts/validate-comparisons.ts",

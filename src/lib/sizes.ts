@@ -414,41 +414,6 @@ export function sizesMatch(a: ParsedSize, b: ParsedSize, tolerance = 0.05): bool
   return hi > 0 && (hi - lo) / hi <= tolerance;
 }
 
-/**
- * Tins: the same barcode at two stores, one giving the full weight and the
- * other the drained one (the owner's choice (b), 9 November 2026). Both are then
- * compared at the drained weight, the smaller, which is what tins compare by
- * where it is known (the owner's rule of 31 October 2026). Row 1263 of the AI
- * trial: one barcode, 400 g at Auchan and 240 g drained at Continente.
- *
- * Only for a tin (by its labels or its name), only in kilos, and only when the
- * two sizes are between 1.15 and 3 times apart - the usual span between a tin's
- * full and drained weights; a wider gap is more likely another error, left to
- * the checks. Never changes what is stored: the store's own size stays in the
- * database, and only the comparison uses the shared one.
- */
-export const DRAINED_SHARE_RATIO = { min: 1.15, max: 3 };
-
-export function shareDrainedWeight<
-  T extends { store: string; eanNormalized?: string | null; packageSize: number | null; unit: string | null; name: string; labels?: string | null }
->(rows: T[]): T[] {
-  const isTin = (r: T) => (r.labels ?? "").split(",").includes("lata") || isTinnedFood(r.name);
-  const byEan = new Map<string, T[]>();
-  for (const r of rows) {
-    // A size confirmed by hand (data/store-errors.ts) is left as it is.
-    if ((r as { sizeConfirmed?: boolean }).sizeConfirmed) continue;
-    if (!r.eanNormalized || r.unit !== "kg" || r.packageSize === null || !(r.packageSize > 0)) continue;
-    byEan.set(r.eanNormalized, [...(byEan.get(r.eanNormalized) ?? []), r]);
-  }
-  const shared = new Map<T, number>();
-  for (const same of byEan.values()) {
-    if (new Set(same.map((r) => r.store)).size < 2 || !same.some(isTin)) continue;
-    const sizes = same.map((r) => r.packageSize as number);
-    const lo = Math.min(...sizes);
-    const hi = Math.max(...sizes);
-    const ratio = hi / lo;
-    if (ratio < DRAINED_SHARE_RATIO.min || ratio > DRAINED_SHARE_RATIO.max) continue;
-    for (const r of same) if (r.packageSize !== lo) shared.set(r, lo);
-  }
-  return rows.map((r) => (shared.has(r) ? { ...r, packageSize: shared.get(r) as number } : r));
-}
+// The same tin at two stores, one full weight and one drained (the owner's
+// choice (b), 9 November 2026), is now one case of src/lib/tin-weights.ts: a
+// tin's missing weight placed from another store's label for the same barcode.

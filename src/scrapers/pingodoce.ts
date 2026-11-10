@@ -109,6 +109,7 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
     categoryPath: null,
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
+    tinWeights: pingoDoceTinWeights(label, $("#drained-net-weight").first().clone().children("b").remove().end().text()),
     ...parsePingoDocePromotion($, price),
     // The price itself when it is per kilo ("12,49 €/Kg"), otherwise the figure
     // after the size in the label ("0.1 Kg | 13,9 €/Kg").
@@ -130,6 +131,35 @@ export function parsePingoDocePage(html: string, url: string): ScrapeResult {
  * Volumes are returned in litres and weights in kilograms, matching
  * `ScrapeResult.packageSize` and the app's comparison base.
  */
+/**
+ * A tin's two weights, in kg. Pingo Doce gives the drained one in its own block
+ * lower on the page ("Peso Líquido Escorrido" then "210 g", "250.0 Grama", or a
+ * bare "720", grams), and the size line at the top is sometimes the full weight
+ * and sometimes that same drained one. Measured on the 275 tin pages read on 9
+ * November 2026: 133 have the block; on 116 the size line is the drained weight
+ * (equal, or within a few grams: "0.084 Kg" and "85 g"), on 14 it is larger -
+ * the full weight. So: the block is the drained weight; the size line is the
+ * full one only when clearly larger (3% or more); nothing without the block.
+ */
+export function pingoDoceTinWeights(sizeLine: string, drainedBlock: string): { full: number | null; drained: number | null } {
+  const none = { full: null, drained: null };
+  // Units as written on the 133 blocks of 9 November: "g" 50, "Grama" 60, a
+  // bare number 19 (grams), "Quilograma" 3 - "0.36 Quilograma" is 360 g.
+  const d = drainedBlock.trim().match(/^([\d.,]+)\s*(kg|quilogramas?|gramas?|gr|g)?\b/i);
+  if (!d) return none;
+  const unit = (d[2] ?? "g").toLowerCase();
+  const drainedEach = Number(d[1].replace(",", ".")) / (unit === "kg" || unit.startsWith("quilo") ? 1 : 1000);
+  // Under 5 g is no tin's drained weight: a unit misread, not a weight.
+  if (!(drainedEach >= 0.005)) return none;
+  const line = sizeLine.trim().match(/^(?:(\d+)\s*[x×]\s*)?([\d.,]+)\s*(kg|g|gr)\b/i);
+  const count = line?.[1] ? Number(line[1]) : 1;
+  const sizeTotal = line ? (count * Number(line[2].replace(",", "."))) / (line[3].toLowerCase() === "kg" ? 1 : 1000) : null;
+  // A multipack's block is one tin's weight when the line's is per tin too.
+  const drained = count > 1 && sizeTotal !== null && drainedEach * count <= sizeTotal * 1.03 ? drainedEach * count : drainedEach;
+  const full = sizeTotal !== null && sizeTotal >= drained * 1.03 ? sizeTotal : null;
+  return { full: full === null ? null : Number(full.toFixed(4)), drained: Number(drained.toFixed(4)) };
+}
+
 function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   // A multipack: "4 x0.17 Kg" is four bottles of 170 g, the total 0.68 kg (a
   // lactose-free yoghurt pack, found by the AI trial of 9 November 2026; the

@@ -45,6 +45,18 @@ export interface ComparableProduct {
    * by `withConfirmedSize` while the store's listing still bears it out.
    */
   sizeConfirmed?: boolean;
+  /** A tin's two weights and where each came from (src/lib/tin-weights.ts); absent when not loaded. */
+  fullWeight?: number | null;
+  fullWeightSource?: string | null;
+  drainedWeight?: number | null;
+  drainedWeightSource?: string | null;
+  /**
+   * Set by a row of tins when the weight compared was not on the product's own
+   * page or name: where it came from, as the site shows it (assumption 8.28).
+   */
+  weightNote?: string | null;
+  /** Set by a row of tins on a tin left out of it: the only weight it has, the row comparing the other. */
+  tinSitsOut?: "drained" | "full";
 }
 
 /** What one store has to say about one kind of food. */
@@ -172,7 +184,8 @@ function cheapestOf(
       best === null
         ? // One sized the other way (grams in a ranking per litre) says more than
           // one with no size at all: the page names how it is sold.
-          { kind: "no-size", example: here.find((p) => p.packageSize !== null && p.unit !== measuredIn && measuredIn !== undefined) ?? here[0] }
+          // A tin left out of a row of tins names why first (src/lib/tin-weights.ts).
+          { kind: "no-size", example: here.find((p) => p.tinSitsOut) ?? here.find((p) => p.packageSize !== null && p.unit !== measuredIn && measuredIn !== undefined) ?? here[0] }
         : { kind: "price", unitPrice: best.unitPrice, product: best.product }
     );
   }

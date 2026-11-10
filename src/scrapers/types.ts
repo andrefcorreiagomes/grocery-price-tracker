@@ -46,6 +46,12 @@ export interface ScrapeResult {
    * `packageSize` is.
    */
   packageUnit: "kg" | "l" | null;
+  /**
+   * A tin's full and drained weights in kg, each null unless the page LABELS
+   * it (src/lib/tin-weights.ts). Absent where the reader does not look (Auchan
+   * gives both in the name instead).
+   */
+  tinWeights?: { full: number | null; drained: number | null };
 
   /**
    * Whether `price` is a promotional price - a price cut, at every store (see

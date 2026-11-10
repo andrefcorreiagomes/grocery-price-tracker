@@ -49,10 +49,17 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
     // ("Kefir", "Maionese") showed "Sem peso indicado" for a jar sold by weight
     // in the ranking per litre, which blamed the store (29 October 2026).
     const other = cell.example.packageSize !== null && cell.example.unit !== unit ? cell.example.unit : null;
+    // A tin left out of a row of tins (src/lib/tin-weights.ts): the store sells
+    // it, but gives only the other weight (the owner's choice, 10 November 2026).
+    const sitsOut = cell.example.tinSitsOut;
     return (
       <div className={styles.cell}>
         <span className={styles.unknown}>
-          {other === "kg" ? "Vendido ao peso (kg)" : other === "l" ? "Vendido ao volume (L)" : "Sem peso indicado"}
+          {sitsOut === "drained"
+            ? "Não comparável: a loja só indica o peso escorrido"
+            : sitsOut === "full"
+              ? "Não comparável: a loja só indica o peso total"
+              : other === "kg" ? "Vendido ao peso (kg)" : other === "l" ? "Vendido ao volume (L)" : "Sem peso indicado"}
         </span>
         <span className={styles.product}>{cell.example.name}</span>
         <ProductFoot product={cell.example} unit={unit} />
@@ -69,6 +76,9 @@ function StoreCell({ cell, unit, best }: { cell: Cell; unit: string; best: boole
           the cheapest "queijo" is a children's dessert. */}
       <span className={styles.product}>{cell.product.name}</span>
       <ProductFoot product={cell.product} unit={unit} />
+      {/* A weight the store does not show, placed from another store's label
+          or by a checked judgement: always said (assumption 8.28, 10 November 2026). */}
+      {cell.product.weightNote && <span className={styles.weightNote}>{cell.product.weightNote}</span>}
       {promo && <PromoMark promo={promo} unit={unit} />}
     </div>
   );
@@ -162,6 +172,15 @@ function GroupBlock({ group, showUnit, kindId }: { group: ComparisonGroup; showU
           {group.products} produto{group.products === 1 ? "" : "s"}
         </span>
       </h2>
+      {group.tinBasis && (
+        <p className={styles.tinBasis}>
+          {/* Every tin of a row by the same weight (the owner's choice, 10
+              November 2026; src/lib/tin-weights.ts). */}
+          {group.tinBasis === "drained"
+            ? "Latas e frascos comparados pelo peso escorrido (sem o líquido)."
+            : "Latas e frascos comparados pelo peso total (com o líquido)."}
+        </p>
+      )}
       <Link
         href={`/grupos/${encodeURIComponent(kindId)}/historico/${comparisonSlug(group)}`}
         className={styles.historyLink}

@@ -87,6 +87,7 @@ export function enrichment(p: {
   packageSize?: number | null;
   unit?: string | null;
   sizeSource?: "page" | "listing";
+  tinWeights?: { full: number | null; drained: number | null };
   onPromotion?: boolean;
   regularPrice?: number | null;
   promoEndsAt?: Date | null;
@@ -100,6 +101,18 @@ export function enrichment(p: {
     ...(p.packageSize === undefined
       ? {}
       : { packageSize: p.packageSize ?? null, unit: p.unit ?? null, sizeSource: p.sizeSource ?? "page" }),
+    // A tin's two weights as the page labels them, written whenever the page was
+    // read - nulls included, so a label the store took away goes too. What the
+    // nightly works out from other stores (npm run tins:weights) is worked out
+    // again after every crawl, so writing over it here loses nothing.
+    ...(p.tinWeights === undefined
+      ? {}
+      : {
+          fullWeight: p.tinWeights.full,
+          fullWeightSource: p.tinWeights.full === null ? null : "page",
+          drainedWeight: p.tinWeights.drained,
+          drainedWeightSource: p.tinWeights.drained === null ? null : "page",
+        }),
     // Same rule for the promotion and the store's displayed unit price: written
     // only by a source that could see them, so a source that cannot (a listing
     // tile has no promotion) never erases what a page recorded.

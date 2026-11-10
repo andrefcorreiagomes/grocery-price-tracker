@@ -202,6 +202,34 @@ export function verifyStorePages(): number {
     "pd-pack"
   );
   check("Pingo Doce: a multipack size \"4 x0.17 Kg\" is the whole pack", pdPack.packageSize === 0.68 && pdPack.packageUnit === "kg", `${pdPack.packageSize} ${pdPack.packageUnit}`);
+
+  // A tin's two weights, as the pages read on 9 November 2026 label them
+  // (the owner's choice, 10 November 2026; src/lib/tin-weights.ts).
+  const w = (r: { tinWeights?: { full: number | null; drained: number | null } }) => JSON.stringify(r.tinWeights);
+  check("Continente: both weights kept when the label gives both, a multipack's too, \"escorrigo\" too; none from a lone \"emb.\"",
+    w(coTin("Pêssego em Calda Continente", "emb. 840 gr (peso escorrido 480 gr)")) === JSON.stringify({ full: 0.84, drained: 0.48 }) &&
+      w(corn) === JSON.stringify({ full: 0.45, drained: 0.42 }) &&
+      w(coTin("Polvo e Pota com Molho Tomate Continente", "emb. 120 gr (peso escorrigo 72 gr)")) === JSON.stringify({ full: 0.12, drained: 0.072 }) &&
+      w(coTin("Atum Posta em Azeite Santa Catarina", "emb. 80 gr")) === JSON.stringify({ full: null, drained: null }),
+    w(corn));
+  check("Continente: \"peso escorrigo\" gives the drained weight as the size too",
+    coTin("Polvo e Pota com Molho Tomate Continente", "emb. 120 gr (peso escorrigo 72 gr)").packageSize === 0.072);
+  const pdTin = (line: string, block: string | null) =>
+    parsePingoDocePage(
+      product("Atum em Azeite") +
+        `<h1 class="product-unit-measure">${line}</h1>` +
+        `<div class="row"> <div class="col-12"> <div class="prices"> <div class="price"> <span class="price-container"> <span class="sales"> <span class="value" content="1.99"></span> 1,99 &euro; </span> </span> </div> </div> </div> </div>` +
+        (block === null ? "" : `<div class="value content" id="drained-net-weight">\n<b>Peso L&iacute;quido Escorrido</b>\n${block}\n</div>`),
+      "pd-tin"
+    );
+  check("Pingo Doce: the drained-weight block is the drained weight; the size line is the full one only when clearly larger",
+    w(pdTin("0.35 Kg | 6,43 €/Kg", "210 g")) === JSON.stringify({ full: 0.35, drained: 0.21 }) &&
+      w(pdTin("0.084 Kg | 23,57 €/Kg", "85 g")) === JSON.stringify({ full: null, drained: 0.085 }) &&
+      w(pdTin("0.25 Kg", "250.0 Grama")) === JSON.stringify({ full: null, drained: 0.25 }) &&
+      w(pdTin("0.72 Kg", "720")) === JSON.stringify({ full: null, drained: 0.72 }) &&
+      w(pdTin("0.36 Kg | 8,28 €/Kg", "0.36 Quilograma")) === JSON.stringify({ full: null, drained: 0.36 }) &&
+      w(pdTin("0.12 Kg", null)) === JSON.stringify({ full: null, drained: null }),
+    w(pdTin("0.35 Kg | 6,43 €/Kg", "210 g")));
   const tile = (price: string) =>
     `<div data-gtm='{"id":"1","name":"PAO","price":"${price}","category":"alimentacao/padaria"}' data-urls='{"absoluteProductUrl":"https://www.auchan.pt/p/1.html"}'></div>`;
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));

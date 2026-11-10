@@ -240,6 +240,20 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-11-09",
     listedSize: { packageSize: 6, unit: "l" },
   },
+  // Two stores label one barcode's weights differently (5603697272498, the same
+  // price at both), so one is wrong; Continente's sits out until they agree (the
+  // owner's decision, 10 November 2026; assumption 8.39 in the private notes).
+  // Auchan's pair is the typical one for a 425 g tin of mango, and Auchan's own
+  // page states it, so Auchan's stays in.
+  {
+    store: "CONTINENTE",
+    storeProductId: "7682051",
+    name: "Manga Fatiada em Calda Koala",
+    problem: "Its label gives 490 g full and 425 g drained; Auchan's page for the same barcode gives 425 g full and 230 g drained. Compared at 425 g it was 5.86 €/kg against Auchan's 10.83 €/kg for the same tin at the same price.",
+    evidence: 'Continente: "emb. 490 gr (peso escorrido: 425 gr)" (page read 9 November 2026). Auchan 3536106: name "MANGA FATIADA KOALA EM CALDA 425G", page "Peso líquido escorrido 230 g" (read 10 November 2026). Both 2,49 €.',
+    checkedOn: "2026-11-10",
+    listedSize: { packageSize: 0.425, unit: "kg" },
+  },
   // Two Auchan products sold by the kilo or by the piece where its listing tile
   // cannot tell which, sized from their own pages (the AI trial, 9 November 2026).
   {

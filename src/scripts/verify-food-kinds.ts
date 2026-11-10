@@ -6,7 +6,9 @@ import { categoryOf, labelsOf, laterCategoryOf, subKindOf, treeProblems } from "
 import { FOOD_TYPES } from "../../data/food-types";
 import { LeftOutTally, SectionTally, compareSections, sectionProblems } from "../scrapers/crawl/section-watch";
 import { parseCategoryPaths } from "../scrapers/crawl/continente-categories";
-import { auchanTileSize, isTinnedFish, isTinnedFood, parseSize, reconcileTileSize, shareDrainedWeight, SOLD_PER_KG } from "../lib/sizes";
+import { auchanTileSize, isTinnedFish, isTinnedFood, parseSize, reconcileTileSize, SOLD_PER_KG } from "../lib/sizes";
+import { nameTinWeights, placeFrom, tinRow } from "../lib/tin-weights";
+import { REVIEWED_TIN_WEIGHTS, reviewedTinWeight } from "../../data/tin-weights";
 import { classifyCandidate, qualifierMismatch, type Candidate } from "../lib/matching";
 import { foldPlural, matchesTerm } from "../lib/text";
 import { productTokens } from "../lib/candidates";
@@ -1171,13 +1173,42 @@ function verifyFoodTree(): number {
     isNeverSameProduct({ store: "AUCHAN", storeProductId: "2662598" }, { store: "CONTINENTE", storeProductId: "8083233" }) &&
       isNeverSameProduct({ store: "CONTINENTE", storeProductId: "8083233" }, { store: "AUCHAN", storeProductId: "2662598" }) &&
       !isNeverSameProduct({ store: "AUCHAN", storeProductId: "2662598" }, { store: "CONTINENTE", storeProductId: "other" }));
-  const tinRow = (store: string, size: number, ean = "5608394426175", name = "FEIJAO EM LATA") => ({ store, eanNormalized: ean, packageSize: size, unit: "kg", name, labels: "lata" });
-  const shared = shareDrainedWeight([tinRow("AUCHAN", 0.4), tinRow("CONTINENTE", 0.24), tinRow("PINGO_DOCE", 0.3, "other")]);
-  const tooFar = shareDrainedWeight([tinRow("AUCHAN", 1), tinRow("CONTINENTE", 0.24)]);
-  const notTin = shareDrainedWeight([{ ...tinRow("AUCHAN", 0.4), labels: null, name: "QUEIJO" }, { ...tinRow("CONTINENTE", 0.24), labels: null, name: "Queijo" }]);
-  check("trial: one tin's barcode at two stores, full and drained weight: both compared at the drained one; not beyond 3 times apart, nor for a product that is not a tin",
-    shared[0].packageSize === 0.24 && shared[1].packageSize === 0.24 && shared[2].packageSize === 0.3 &&
-      tooFar[0].packageSize === 1 && notTin[0].packageSize === 0.4);
+  // Tins by one weight (the owner's choice, 10 November 2026; src/lib/tin-weights.ts).
+  check("tins: an Auchan name's two weights, in every way it writes them; one weight, a sauce or a multipack total give none",
+    JSON.stringify(nameTinWeights("PÊSSEGO EM CALDA AUCHAN METADES 840 (480)G")) === JSON.stringify({ full: 0.84, drained: 0.48 }) &&
+      JSON.stringify(nameTinWeights("LULA GENERAL RECHEADAS CALDEIRADA 115G (72G)")) === JSON.stringify({ full: 0.115, drained: 0.072 }) &&
+      JSON.stringify(nameTinWeights("PACK ERVILHAS BONDUELLE 3X75(65)G")) === JSON.stringify({ full: 0.225, drained: 0.195 }) &&
+      nameTinWeights("ATUM RAMIREZ EM TOMATE 120GR") === null && nameTinWeights("TOMATE FRITO HEINZ 350(210)G") === null &&
+      nameTinWeights("SNACK CHOCOLATE SNICKERS CREAMY 4X 36.5G (146G)") === null);
+  const both = { full: 0.12, drained: 0.078 };
+  const none = { full: null, drained: null };
+  check("tins: a single number is placed by another store's label only when it equals one of its weights; the label's other weight comes with it",
+    JSON.stringify(placeFrom(none, 0.078, both)) === JSON.stringify({ full: 0.12, drained: 0.078 }) &&
+      JSON.stringify(placeFrom(none, 0.12, both)) === JSON.stringify({ full: 0.12, drained: 0.078 }) &&
+      placeFrom(none, 0.1, both) === null &&
+      JSON.stringify(placeFrom({ full: null, drained: 0.079 }, 0.079, both)) === JSON.stringify({ full: 0.12, drained: 0.079 }) &&
+      JSON.stringify(placeFrom(none, 0.125, { full: 0.125, drained: 0.125 })) === JSON.stringify({ full: 0.125, drained: 0.125 }));
+  const tin = (name: string, size: number, w: { full?: number; drained?: number; src?: string }) => ({
+    name, labels: "lata", unit: "kg", packageSize: size,
+    fullWeight: w.full ?? null, fullWeightSource: w.full === undefined ? null : w.src ?? "page",
+    drainedWeight: w.drained ?? null, drainedWeightSource: w.drained === undefined ? null : w.src ?? "page",
+  });
+  const allDrained = tinRow([tin("A", 0.078, { full: 0.12, drained: 0.078 }), tin("B", 0.084, { drained: 0.084 }), tin("C", 0.08, {})]);
+  check("tins: every tin has a drained weight, or none labelled - the row goes by the drained one, the unplaced tin at its own number",
+    allDrained.basis === "drained" && allDrained.rows.map((r) => r.packageSize).join() === "0.078,0.084,0.08");
+  const toFull = tinRow([tin("A", 0.48, { full: 0.84, drained: 0.48 }), tin("B", 0.82, { full: 0.82 }), tin("C", 0.6, {})]);
+  check("tins: one tin with only its full weight - the row goes by the full one, the unplaced tin stays at its own number",
+    toFull.basis === "full" && toFull.rows.map((r) => r.packageSize).join() === "0.84,0.82,0.6");
+  const mixed = tinRow([tin("A", 0.48, { full: 0.84 }), tin("B", 0.82, { full: 0.82 }), tin("C", 0.3, { drained: 0.3 })]);
+  check("tins: some only full, some only drained - the row goes by what more tins have, and a tin proven of the other kind sits out",
+    mixed.basis === "full" && mixed.rows.map((r) => `${r.name}:${r.packageSize}`).join() === "A:0.84,B:0.82,C:null" && mixed.rows[2].tinSitsOut === "drained");
+  const marked = tinRow([tin("A", 0.078, { full: 0.12, drained: 0.078, src: "barcode:CONTINENTE" }), tin("B", 0.084, { drained: 0.084 })]);
+  check("tins: a weight from another store's label is marked; one from the product's own page is not",
+    (marked.rows[0].weightNote ?? "").includes("Continente") && !marked.rows[1].weightNote);
+  check("tins: nothing changes in a row with no tins", tinRow([{ name: "Arroz Agulha", labels: null, unit: "kg", packageSize: 1 }]).basis === null);
+  const judged = REVIEWED_TIN_WEIGHTS[0];
+  check("tins: a checked judgement holds only while the store shows the number it was made on",
+    judged !== undefined && reviewedTinWeight(judged.store, judged.id, judged.shows) === judged && reviewedTinWeight(judged.store, judged.id, judged.shows + 0.01) === null);
   const cheese = STORE_ERRORS.find((e) => e.storeProductId === "3554673");
   const coconut = STORE_ERRORS.find((e) => e.storeProductId === "234185");
   const milk = STORE_ERRORS.find((e) => e.storeProductId === "8168224");

@@ -151,6 +151,21 @@ model CatalogueProduct {
   /// which means the store's figure showed the size cannot be known.
   sizeSource    String?
 
+  /// A tin's or jar's two weights, in kg, when known (the owner's choice for
+  /// tins, 10 November 2026; src/lib/tin-weights.ts): the FULL weight, with
+  /// the liquid, and the DRAINED one ("peso escorrido"). `packageSize` stays
+  /// what it was; these only decide which weight a comparison of tins uses.
+  /// Each has where it came from: "page" (the store's own page labels it),
+  /// "name" (the store's product name gives both, Auchan's "840 (480)G"),
+  /// "barcode:<STORE>" or "same-product:<STORE>" (that store's label for the
+  /// same barcode, or for the product our matcher grouped with it), or
+  /// "reviewed" (judged by hand, data/tin-weights.ts). The last three are
+  /// worked out again every night (npm run tins:weights) and marked on the site.
+  fullWeight          Float?
+  fullWeightSource    String?
+  drainedWeight       Float?
+  drainedWeightSource String?
+
   /// Promotion state as the store showed it at the last crawl that could see it.
   /// Null means "not known", never "not on promotion": only a product page shows
   /// it (Continente, Pingo Doce), and Auchan's listing tiles have not been

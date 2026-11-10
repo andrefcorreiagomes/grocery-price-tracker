@@ -80,6 +80,9 @@ const AFTER: { script: string; what: string; log?: string; needs?: string }[] = 
   { script: "match", what: "identical products grouped", log: "match-1" },
   { script: "barcodes:auchan", what: "Auchan barcodes read", needs: "AUCHAN" },
   { script: "match", what: "identical products grouped again, with the new barcodes", log: "match-2" },
+  // After the matcher, whose groups it reads: a tin's two weights placed from
+  // another store's label (the owner's choice, 10 November 2026).
+  { script: "tins:weights", what: "tins' full and drained weights placed" },
   { script: "review:kinds", what: "uncertain kinds counted" },
   { script: "verify:nightly", what: "automatic checks, including the verified kinds" },
   { script: "validate:comparisons", what: "comparison check" },

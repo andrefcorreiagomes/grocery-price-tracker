@@ -11,6 +11,7 @@ import {
 } from "./comparison";
 import { FOOD_TYPE_BY_ID } from "./food-types";
 import { labelName } from "./food-tree";
+import { tinRow, type Basis } from "./tin-weights";
 
 /**
  * Which products may be compared with each other, inside one kind of food.
@@ -54,6 +55,11 @@ export interface ComparisonGroup {
   storesCompared: number;
   /** the lowest price per unit across the chains, or null */
   cheapestPrice: number | null;
+  /**
+   * For a row of tins, the weight they are compared by: "drained" or "full"
+   * (src/lib/tin-weights.ts); null when it holds no tins sold by weight.
+   */
+  tinBasis: Basis | null;
   /**
    * Never shown: "Outros" (the products of a kind with sub-kinds that fit none
    * of them), or a catch-all kind or sub-kind (CATCH_ALL_KINDS in the tree)
@@ -125,9 +131,13 @@ export function comparisonGroups(kind: string, rows: TreeProduct[]): ComparisonG
 
   const groups: ComparisonGroup[] = [];
   for (const b of ordered) {
+    // Tins by one weight, all drained or all full (the owner's choice, 10
+    // November 2026): a tin whose known weights are not of that kind sits out.
+    const tins = tinRow(b.rows);
     for (const unit of unitsFor(kind, b.rows)) {
-      const cheapest = cheapestPerStore(b.rows, kind, unit);
-      const ownBrand = ownBrandPerStore(b.rows, kind, unit);
+      const rowsHere = unit === "kg" ? tins.rows : b.rows;
+      const cheapest = cheapestPerStore(rowsHere, kind, unit);
+      const ownBrand = ownBrandPerStore(rowsHere, kind, unit);
       let lowest: number | null = null;
       for (const cell of cheapest.values()) {
         if (cell.kind === "price" && (lowest === null || cell.unitPrice < lowest)) lowest = cell.unitPrice;
@@ -145,6 +155,7 @@ export function comparisonGroups(kind: string, rows: TreeProduct[]): ComparisonG
         ownBrandWinners: cheapestStores(ownBrand),
         storesCompared: comparableStoreCount(cheapest),
         cheapestPrice: lowest,
+        tinBasis: unit === "kg" ? tins.basis : null,
         others:
           (b.subKind === null && SUB_KINDS[kind] !== undefined) ||
           CATCH_ALL_KINDS.has(kind) ||

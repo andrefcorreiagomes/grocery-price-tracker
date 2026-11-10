@@ -170,6 +170,7 @@ export async function fetchPingoDoceProducts(
       ean: product.ean,
       packageSize: product.packageSize,
       unit: product.packageUnit,
+      tinWeights: product.tinWeights,
       onPromotion: product.onPromotion,
       regularPrice: product.regularPrice,
       promoEndsAt: product.promoEndsAt,

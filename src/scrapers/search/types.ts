@@ -40,6 +40,12 @@ export interface SearchHit {
    * never a barcode. See `auchanTileSize` in src/lib/sizes.ts.
    */
   sizeSource?: "page" | "listing";
+  /**
+   * A tin's two weights as its product page labels them (ScrapeResult's
+   * `tinWeights`). `undefined`: this source does not read them, so nothing is
+   * written; nulls: the page was read and labels none, so a stale pair goes.
+   */
+  tinWeights?: { full: number | null; drained: number | null };
 
   /**
    * Promotion state, from a product page - and, since 22 October 2026, from an

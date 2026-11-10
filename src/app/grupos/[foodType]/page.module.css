@@ -274,3 +274,18 @@
   font-weight: 400;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
 }
+
+/* A weight the store does not show itself (src/lib/tin-weights.ts). */
+.weightNote {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 30%, transparent);
+  padding-left: 0.4rem;
+}
+
+.tinBasis {
+  margin: 0.1rem 0 0.4rem;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+}

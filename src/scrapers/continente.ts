@@ -90,6 +90,7 @@ export function parseContinentePage(html: string, url: string): ScrapeResult {
     categoryPath: parseCategoryPath(html),
     packageSize: size?.total ?? null,
     packageUnit: size?.unit ?? null,
+    tinWeights: continenteTinWeights($(".ct-pdp--unit").first().text().trim()),
     ...parsePromotion(html, price),
     // Usually the line under the price; for goods sold by weight, the price
     // itself is per kilo ("2,49€/kg") and the line under it is per item.
@@ -185,12 +186,36 @@ function decodeEntities(text: string): string {
  * Continente's own per-kilo figure is on the drained weight for 6 of them;
  * not for peaches in syrup, which it prices on the full 840 g.
  */
+/**
+ * A tin's two weights from the same label, in kg: "emb. 820 gr (peso escorrido
+ * 520 gr)" is 0.82 full and 0.52 drained; "emb. 3 x 150 gr (peso escorrido 3 x
+ * 140 gr)" 0.45 and 0.42. Both null unless the label gives the drained one: a
+ * lone "emb. 400 gr" does not say which it is (of 42 such Continente and Auchan
+ * tins settled by a barcode on 10 November 2026, 9 were the drained weight).
+ * Measured on the 405 tin pages read on 9 November: 251 give both, 28 the same
+ * number twice ("125 gr (peso escorrido 125 gr)", sardines in tomato), 123 one.
+ */
+export function continenteTinWeights(text: string): { full: number | null; drained: number | null } {
+  const none = { full: null, drained: null };
+  const pack = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|gr|g)\b/i);
+  const net = text.match(/peso escorri[dg]o\s*:?\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|gr|g)\b/i);
+  if (!pack || !net) return none;
+  const kg = (qty: string, unit: string) => Number(qty.replace(",", ".")) / (unit.toLowerCase() === "kg" ? 1 : 1000);
+  const count = pack[1] ? Number(pack[1]) : 1;
+  const full = count * kg(pack[2], pack[3]);
+  const drained = (net[1] ? Number(net[1]) : count) * kg(net[2], net[3]);
+  if (!(full > 0) || !(drained > 0) || drained > full * 1.001) return none;
+  return { full: Number(full.toFixed(4)), drained: Number(drained.toFixed(4)) };
+}
+
 function parsePackageSize(text: string): { total: number; unit: "kg" | "l" } | null {
   const match = text.match(/emb\.\s*(?:(\d+)\s*[x×]\s*)?([\d,]+)\s*(kg|g|l|ml|cl)/i);
   if (!match) return null;
   // With or without a colon: "(peso escorrido: 425 gr)" was read as no drained
   // weight at all (a mango tin, the AI trial of 9 November 2026).
-  const drained = text.match(/peso escorrido\s*:?\s*(?:\d+\s*[x×]\s*)?([\d,]+)\s*(kg|g)/i);
+  // "escorrigo" too: one Continente page spells it so ("Polvo e Pota com Molho
+  // Tomate Continente", "emb. 120 gr (peso escorrigo 72 gr)", 9 November 2026).
+  const drained = text.match(/peso escorri[dg]o\s*:?\s*(?:\d+\s*[x×]\s*)?([\d,]+)\s*(kg|g)/i);
   const [qtyText, unitText] = drained ? [drained[1], drained[2]] : [match[2], match[3]];
 
   const count = match[1] ? Number(match[1]) : 1;
