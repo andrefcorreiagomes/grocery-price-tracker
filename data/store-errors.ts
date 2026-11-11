@@ -254,6 +254,30 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-11-10",
     listedSize: { packageSize: 0.425, unit: "kg" },
   },
+  // Two Indomie packets at Pingo Doce whose page gives ten times their weight
+  // (11 November 2026, found when instant noodles got their own comparison):
+  // one packet at 0,89 € listed as 0.7 and 0.75 kg, 1.27 and 1.19 €/kg - the
+  // cheapest instant noodles by far. Continente sells the same packets as 70 g
+  // and 75 g. They sit out until Pingo Doce corrects them (the owner's rule for
+  // a store's wrong data; noted in the private TODO).
+  {
+    store: "PINGO_DOCE",
+    storeProductId: "980991",
+    name: "Noodles Sabor a Frango (Indomie)",
+    problem: "One 70 g packet at 0,89 € listed as 0.7 kg, so 1,27 €/kg instead of about 12,7 €/kg.",
+    evidence: 'Pingo Doce\'s page: "0.7 Kg | 1,27 €/Kg" beside 0,89 €; Continente\'s "Noodles Frango Indómie" single packet is 70 g.',
+    checkedOn: "2026-11-11",
+    listedSize: { packageSize: 0.7, unit: "kg" },
+  },
+  {
+    store: "PINGO_DOCE",
+    storeProductId: "980993",
+    name: "Noodles Sabor a Vegetais (Indomie)",
+    problem: "One 75 g packet at 0,89 € listed as 0.75 kg, so 1,19 €/kg instead of about 11,9 €/kg.",
+    evidence: 'Pingo Doce\'s page: "0.75 Kg | 1,19 €/Kg" beside 0,89 €; Continente\'s "Noodles Vegetais Indómie" single packet is 75 g.',
+    checkedOn: "2026-11-11",
+    listedSize: { packageSize: 0.75, unit: "kg" },
+  },
   // Two Auchan products sold by the kilo or by the piece where its listing tile
   // cannot tell which, sized from their own pages (the AI trial, 9 November 2026).
   {

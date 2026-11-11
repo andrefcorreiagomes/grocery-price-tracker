@@ -283,6 +283,14 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("agulha", "Agulha", /agulha|\blongo\b/), // x0.62
   ],
   massa: [
+    // Noodles, two kinds apart (the owner, 11 November 2026): instant noodles,
+    // one portion with its flavour sachet (Koka, Maggi, Indomie, Nissin, "sabor
+    // a galinha"), and plain Asian noodles (egg, rice, udon, soba, wok). Food
+    // classifications put noodles under pasta, and both stores shelve them
+    // with it. Konjac "noodles" and ready noodle dishes are neither.
+    s("instantaneo", "Noodles instantâneos", /^(?!.*(konjac|shirataki|cozinha continente|cook it up|orient plaza))(?=.*(noodle|ramen|ramyun|\bsoba\b|yakisoba|mi goreng))(?=.*(sabor|instant|\bcup\b|\bcopo\b|\bpot\b|koka|maggi|indomie|nissin|samyang|nongshim|banzai|kung food|wai wai|x-?press|adria|demae|saucy|fusian|fusion|knorr|naked noodle|ezy cook|cozinha rapida|galinha|frango|camarao|carne|caril|vitela|vegetais|legumes|cogumelos|tomate|queijo|kimchi|picante|chil+i|teriyaki|yakitori|tom yum|agridoce|masala))/),
+    // "Massa Espirais Wok Milaneza" is a spiral shape, with the spirals below.
+    s("noodles", "Noodles e massa oriental", /^(?!.*(konjac|shirataki|cozinha continente|cook it up|orient plaza|espira|fusilli))(?=.*(noodle|ramen|\budon\b|\bsoba\b|somen|vermicelli|massa chinesa|massa de arroz|\bwok\b|pad thai|bifum))/),
     // Stuffed pasta apart from plain fresh pasta: a fresh tagliatelle was
     // compared with a vegetable ravioli in tomato sauce. 29 October 2026.
     s("recheada", "Recheada", /tortellini|ravioli|recheada|girasoli|tortelloni|cappelletti|agnolotti|panzerotti/),
