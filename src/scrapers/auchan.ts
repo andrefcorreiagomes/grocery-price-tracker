@@ -166,3 +166,27 @@ function parsePromotion(priceValidUntil: string | undefined): Pick<
   }
   return { onPromotion: true, regularPrice: null, promoEndsAt };
 }
+
+/**
+ * A tin's two weights from its Auchan product page, in kg (the owner's choice
+ * for tins, 10 November 2026; src/lib/tin-weights.ts). Auchan's page lists
+ * "Peso líquido escorrido" - the drained weight - under its characteristics
+ * ("230 g" on the Koala mango, whose name says 425G). The full weight is the
+ * one in the name, when clearly larger (3% or more); its "Quantidade Liquida"
+ * is not used, as it showed the drained 0.23 KG on that same page.
+ * Nightly crawls read Auchan's listings, not its pages, so these are read once
+ * (npm run tins:auchan-pages) and kept while Auchan shows the same size.
+ */
+export function auchanTinWeights(name: string, html: string): { full: number | null; drained: number | null } {
+  const none = { full: null, drained: null };
+  const m = html.match(/Peso l(?:&iacute;|í)quido escorrido\s*<\/h3>\s*<ul[^>]*>\s*<li[^>]*>\s*([^<]+)</i);
+  if (!m) return none;
+  const d = m[1].trim().match(/^([\d.,]+)\s*(kg|quilogramas?|gramas?|gr|g)?\b/i);
+  if (!d) return none;
+  const unit = (d[2] ?? "g").toLowerCase();
+  const drained = Number(d[1].replace(",", ".")) / (unit === "kg" || unit.startsWith("quilo") ? 1 : 1000);
+  if (!(drained >= 0.005)) return none;
+  const named = parseSize(name);
+  const full = named && named.unit === "kg" && named.total >= drained * 1.03 ? named.total : null;
+  return { full: full === null ? null : Number(full.toFixed(4)), drained: Number(drained.toFixed(4)) };
+}

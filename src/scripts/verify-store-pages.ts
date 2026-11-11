@@ -3,6 +3,7 @@ import { struckPricePromotion } from "../scrapers/struck-price";
 import { sellablePrice } from "../scrapers/types";
 import { parseContinentePage } from "../scrapers/continente";
 import { parseAuchanTilesDetailed } from "../scrapers/search/auchan";
+import { auchanTinWeights } from "../scrapers/auchan";
 
 /**
  * The store page readers, on pieces of real pages. No network, no database.
@@ -235,6 +236,20 @@ export function verifyStorePages(): number {
   const zeroTile = parseAuchanTilesDetailed(tile("0.00"));
   check("Auchan: a tile priced 0 is skipped as unpriced, like one with no price", zeroTile.hits.length === 0 && zeroTile.unpriced === 1);
   check("Auchan: a real price still reads", parseAuchanTilesDetailed(tile("1.29")).hits[0]?.price === 1.29);
+  // The Koala mango's page as read on 10 November 2026 (the owner's choice for tins).
+  const auTin = (block: string) =>
+    `<h3 class="attribute-name auc-pdp-attribute-title">
+ Peso l&iacute;quido escorrido
+ </h3>
+ <ul class="auc-pdp__attribute-values">
+ <li class="attribute-values auc-pdp-regular">
+ ${block}
+ </li></ul>`;
+  check("Auchan: a tin page's drained weight, with the full weight from the name; no block, no weights",
+    JSON.stringify(auchanTinWeights("MANGA FATIADA KOALA EM CALDA 425G", auTin("230 g"))) === JSON.stringify({ full: 0.425, drained: 0.23 }) &&
+      JSON.stringify(auchanTinWeights("ATUM RAMIREZ EM AZEITE 84G", auTin("84 g"))) === JSON.stringify({ full: null, drained: 0.084 }) &&
+      JSON.stringify(auchanTinWeights("MANGA FATIADA KOALA EM CALDA 425G", "<h3>Ingredientes</h3>")) === JSON.stringify({ full: null, drained: null }),
+    JSON.stringify(auchanTinWeights("MANGA FATIADA KOALA EM CALDA 425G", auTin("230 g"))));
 
   // Out of stock on a listing tile: the hot-dog sausages' tile on the pork-
   // sausage shelf, 31 October 2026 - still priced 1,29 EUR at 3,69 EUR/kg, a

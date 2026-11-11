@@ -1,5 +1,5 @@
 import { prisma } from "../lib/db";
-import { isTin, nameTinWeights, placeFrom, type Weights } from "../lib/tin-weights";
+import { isTin, nameTinWeights, placeFrom, sameWeight, type Weights } from "../lib/tin-weights";
 import { reviewedTinWeight } from "../../data/tin-weights";
 
 /**
@@ -34,7 +34,18 @@ type Placed = { fullWeight: number | null; fullWeightSource: string | null; drai
 function labelled(r: Row): { weights: Weights; source: string | null } {
   if (r.store === "AUCHAN") {
     const w = nameTinWeights(r.name);
-    return { weights: w ?? { full: null, drained: null }, source: w ? "name" : null };
+    if (w) return { weights: w, source: "name" };
+    // Read once from Auchan's product page (npm run tins:auchan-pages), not
+    // nightly: kept only while Auchan still shows one of those weights as the
+    // size, so a page that changed lets it go.
+    const fits = (x: number | null) => x !== null && r.packageSize !== null && sameWeight(x, r.packageSize);
+    if (r.drainedWeightSource === "page" && (fits(r.drainedWeight) || fits(r.fullWeight))) {
+      return {
+        weights: { full: r.fullWeightSource === "page" ? r.fullWeight : null, drained: r.drainedWeight },
+        source: "page",
+      };
+    }
+    return { weights: { full: null, drained: null }, source: null };
   }
   return {
     weights: {
