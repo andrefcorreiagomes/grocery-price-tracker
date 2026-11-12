@@ -1,4 +1,4 @@
-import { classifyFoodType, isFoodSection } from "../lib/food-types";
+import { classifyFoodType, isFoodSection, kindFromName } from "../lib/food-types";
 import { sectionKey, sectionOf } from "../lib/store-sections";
 import { keepInCatalogue } from "../lib/catalogue-filter";
 import { capsuleCountFromName, eggCountFromName, eggCountFromUnitPrice, itemCount } from "../lib/egg-count";
@@ -1216,6 +1216,18 @@ function verifyFoodTree(): number {
     cheese !== undefined && confirmedSize(cheese, { name: cheese.name, price: 6.75, packageSize: 1, unit: "kg", shownUnitPrice: 6.75, shownUnitPriceUnit: "kg" })?.packageSize === 0.225 &&
       coconut !== undefined && confirmedSize(coconut, { name: coconut.name, price: 3.29, packageSize: null, unit: null, shownUnitPrice: 3.29, shownUnitPriceUnit: "un" })?.packageSize === 1 &&
       milk !== undefined && milk.trueSize === undefined);
+
+  // The odd-price check of 12 November 2026.
+  check("odd-price check: yerba mate apart from tea; a plain mixed-milk cheese is mixed milk, a fresh, flavoured or board one is not",
+    sub("cha", "Erva-Mate Chimarrão Nativa Leão") === "mate" && sub("cha", "CHÁ MATTE LEÃO SAQUETAS 40G") === "mate" && sub("cha", "Chá Verde Saquetas Cem Porcento") === "cha" &&
+      sub("queijo", "Queijo de Mistura Curado Continente") === "mistura" && sub("queijo", "Queijo Fresco de Mistura Balcão Queijaria Licínia") === "fresco" &&
+      sub("queijo", "Queijo de Mistura Curado com Pimentão Herdade da Maia") !== "mistura" && sub("queijo", "TÁBUA DE QUEIJOS MISTURA PAIVA 3X80G") !== "mistura");
+  check("odd-price check: dried herbs and freeze-dried fruit are dried; fresh herbs are not",
+    labelsOf("manjericao", "Manjericão Folha em Frasco Continente").includes("seco") && labelsOf("salsa", "SALSA MARGÃO FOLHAS 6G").includes("seco") &&
+      !labelsOf("manjericao", "Manjericão Fresco Continente").includes("seco") && !labelsOf("coentros", "Coentros Frescos Continente").includes("seco") &&
+      labelsOf("morango", "Morango Liofilizado Summmer").includes("seco") && !labelsOf("morango", "Morango Continente").includes("seco"));
+  check("odd-price check: the wines Pera Doce and Pêra-Manca are not pears", kindFromName("Pera Doce Alentejano Vinho Branco", "CONTINENTE") !== "pera" &&
+    kindFromName("Pera Rocha Continente", "CONTINENTE") === "pera");
 
   // The trial's follow-ups, found by measuring its fixes (9 November 2026).
   check("trial follow-ups: flavoured mayonnaise apart from plain; light first",

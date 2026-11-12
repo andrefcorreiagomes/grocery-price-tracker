@@ -172,7 +172,8 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "ervilha", label: "Ervilha", unit: "kg", heads: ["ervilha"] },
   // Not "Cebola Frita Crocante", a topping. 20 October 2026.
   { id: "cebola", label: "Cebola", unit: "kg", heads: ["cebola"], exclude: /\bfrita\b|crocante/i },
-  { id: "pera", label: "Pera", unit: "kg", heads: ["pera"] },
+  // Not the Alentejo wines "Pera Doce" and "Pêra-Manca" (17 of them, 12 November 2026).
+  { id: "pera", label: "Pera", unit: "kg", heads: ["pera"], exclude: /\bvinho\b/i },
   // Stuffed peppers (with cod) are a ready dish, not peppers. 29 October 2026.
   { id: "pimento", label: "Pimento", unit: "kg", heads: ["pimento"], exclude: /recheado/i },
   { id: "melao", label: "Melão", unit: "kg", heads: ["melao"] },

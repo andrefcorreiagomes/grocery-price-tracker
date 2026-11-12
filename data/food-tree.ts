@@ -253,7 +253,11 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     // With or without the "e": "QUEIJO FONTE MOURISCA MISTURA VACA OVELHA KG"
     // became the cheapest sheep's cheese once the cheese-and-ham pack left
     // that row (9 November 2026).
-    s("mistura", "Mistura de leites", /(vaca|ovelha|cabra),? (?:e )?(vaca|ovelha|cabra)\b/),
+    // And a cheese named only "de mistura" (about 90 were hidden in "Outros",
+    // 12 November 2026) - not a fresh one (with "Fresco" below), not a board
+    // of several cheeses (kept as they are, the owner's decision of 11
+    // November), not a flavoured one (pepper, chilli, truffle, herbs).
+    s("mistura", "Mistura de leites", /(vaca|ovelha|cabra),? (?:e )?(vaca|ovelha|cabra)\b|^(?!.*(\bfresc|\btabua|\bcesto|\btapas|\bsabores|pimenta|piment|malagueta|picante|trufa|ervas|manjeric|tomilho|azeitona|alho|oregao|especiaria)).*\bmistura\b/),
     s("cabra", "Cabra", /^(?!.*\bfresc).*cabra/), // x1.43
     s("ovelha", "Ovelha", /^(?!.*\bfresc).*(ovelha|serra da estrela|azeitao|evora|nisa|serpa)/), // x1.35
     s("fresco", "Fresco", /fresco/), // x0.70
@@ -456,6 +460,12 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     s("padrao", "Pimento padrón", /padrao|padron/),
     s("pimento", "Pimento", /./),
   ],
+  // Yerba mate (chimarrão, tereré) apart from tea: a 1 kg bag of chimarrão at
+  // 5.99 EUR was the cheapest "tea" (the odd-price check, 12 November 2026).
+  cha: [
+    s("mate", "Erva-mate (chimarrão, tereré)", /\b(erva[- ]?)?mate\b|\bmatte\b|chimarrao|terere/),
+    s("cha", "Chá", /./),
+  ],
   maionese: [
     s("light", "Light", /light|\bleve\b|magra|reduzid/),
     // Flavoured ones apart (the trial's follow-ups, 9 November 2026): once the
@@ -612,6 +622,14 @@ export const LABELS: Label[] = [
   { id: "vegetal", label: "Vegetal", match: PLANT, categories: ["charcutaria"] },
   // Desiccated coconut strips and flakes against fresh coconut pieces. 29 October 2026.
   { id: "seco", label: "Seco ou desidratado", match: /ralad|\btiras\b|\bflocos?\b/, kinds: ["coco"] },
+  // Dried herbs in a jar or sachet (5-15 g, Margão and the stores' own) apart
+  // from fresh ones: Continente's dried basil, 12 g at 65.83 EUR/kg, was in the
+  // basil row with fresh basil (the odd-price check, 12 November 2026: 12 of
+  // 25 parsley products, 8 of 14 basil, 3 of 17 coriander were dried).
+  { id: "seco", label: "Seco ou desidratado", match: /margao|\bem folhas?\b|\bfolhas?\b.*\b(frasco|saquetas?)\b|\bfrasco\b|\bsaquetas?\b|desidratad/, unless: /fresc/,
+    kinds: ["coentros", "salsa", "manjericao", "hortela", "cebolinho", "aneto", "alecrim", "tomilho", "salva", "estragao"] },
+  // Freeze-dried fruit (Continente's "Liofilizado Summmer", 11 g) apart from fresh.
+  { id: "seco", label: "Seco ou desidratado", match: /liofiliz/, categories: ["fruta"] },
   // Fresh cod is not the salted dried "bacalhau" Portugal means: "BACALHAU
   // FRESCO KG" at 5.99 was the cheapest whole salted cod. 29 October 2026.
   { id: "fresco", label: "Fresco (não salgado)", match: /\bfresco\b/, kinds: ["bacalhau"] },

@@ -254,6 +254,29 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-11-10",
     listedSize: { packageSize: 0.425, unit: "kg" },
   },
+  // Two sizes the stores' own per-kilo figures prove wrong (the odd-price
+  // check, 12 November 2026): compared at the size the figure gives, while it
+  // still gives it.
+  {
+    store: "CONTINENTE",
+    storeProductId: "7613828",
+    name: "Douradinhos de Frango Capitão Iglo",
+    problem: "Its label says 1,075 g (one gram) for a box of 38 chicken fingers, so 10,99 € read as 10.220 €/kg.",
+    evidence: 'Its page: "emb. 1,075 gr (38 un)" beside 10,99 € and "10,22 €/kg" - 1.075 kg (page read 12 November 2026).',
+    checkedOn: "2026-11-12",
+    listedSize: { packageSize: 0.001075, unit: "kg" },
+    trueSize: { packageSize: 1.075, unit: "kg", holdsWhile: "store-figure" },
+  },
+  {
+    store: "AUCHAN",
+    storeProductId: "3552322",
+    name: "SALPICÃO DE PORCO BÍSARO CRIADO NO CAMPO 0.70 G",
+    problem: "Its name says 0.70 G, read as 0.7 g, so 3,49 € read as 4.986 €/kg.",
+    evidence: 'Auchan\'s own figure "49.86 €/Kg" beside 3,49 € - 70 g (listing of 12 November 2026).',
+    checkedOn: "2026-11-12",
+    listedSize: { packageSize: 0.0007, unit: "kg" },
+    trueSize: { packageSize: 0.07, unit: "kg", holdsWhile: "store-figure" },
+  },
   // Two Indomie packets at Pingo Doce whose page gives ten times their weight
   // (11 November 2026, found when instant noodles got their own comparison):
   // one packet at 0,89 € listed as 0.7 and 0.75 kg, 1.27 and 1.19 €/kg - the
