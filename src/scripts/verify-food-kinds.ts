@@ -1226,6 +1226,13 @@ function verifyFoodTree(): number {
     labelsOf("manjericao", "Manjericão Folha em Frasco Continente").includes("seco") && labelsOf("salsa", "SALSA MARGÃO FOLHAS 6G").includes("seco") &&
       !labelsOf("manjericao", "Manjericão Fresco Continente").includes("seco") && !labelsOf("coentros", "Coentros Frescos Continente").includes("seco") &&
       labelsOf("morango", "Morango Liofilizado Summmer").includes("seco") && !labelsOf("morango", "Morango Continente").includes("seco"));
+  check("tea is the tea plant: a 'Chá' naming a tea or yerba mate is tea; camomile, lime blossom or a slimming blend is an infusion; the beef cut 'chã de fora' and boxes are neither",
+    kindFromName("Chá Verde Saquetas Cem Porcento", "CONTINENTE") === "cha" && kindFromName("CHÁ TWININGS LADY GREY 25 SAQ", "AUCHAN") === "cha" &&
+      kindFromName("CHÁ CHIMARRÃO LEÃO VACUO 1KG", "AUCHAN") === "cha" &&
+      kindFromName("CHÁ SALUTEM EM SACO CAMOMILA 40G", "AUCHAN") === "infusao" && kindFromName("Chá Tília Flor Folha Happyflora", "CONTINENTE") === "infusao" &&
+      kindFromName("CHÁ PLANTANATUR BARRIGUINHA 10 SAQ", "AUCHAN") === "infusao" &&
+      kindFromName("Chá de Fora de Novilho Fatiada no Balcão Angus", "CONTINENTE") !== "cha" && kindFromName("Chá de Fora de Novilho Fatiada no Balcão Angus", "CONTINENTE") !== "infusao" &&
+      kindFromName("CHÁS BECKY'S CAIXA COM 4 SABORES 12 UN", "AUCHAN") === null);
   check("odd-price check: the wines Pera Doce and Pêra-Manca are not pears", kindFromName("Pera Doce Alentejano Vinho Branco", "CONTINENTE") !== "pera" &&
     kindFromName("Pera Rocha Continente", "CONTINENTE") === "pera");
 

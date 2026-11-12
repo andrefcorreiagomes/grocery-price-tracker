@@ -771,7 +771,13 @@ export const FOOD_TYPES: readonly FoodType[] = [
     // ...nor a roasted cereal drink, "Mistura Torrada Moída de Cereais", nor
     // energy balls. 20 October 2026.
     exclude: /\bbarr(a|as|inha|inhas|ita|itas)\b|whey|\bproteina\b.*\bpo\b|clara de ovo|\bbolsas?\b|torrad[ao] moid|\bbebida|energetic|tiras de fruta/i },
-  { id: "cha", label: "Chá", unit: "kg", heads: ["cha"] },
+  // Tea is the tea plant: a "Chá" whose name names a tea (green, black, white,
+  // Earl or Lady Grey, English Breakfast, oolong, matcha...) or yerba mate. Every
+  // other "Chá" - camomile, lime blossom, fennel, horsetail, "Nº6 sem barriga" -
+  // is an herbal infusion and goes to `infusao` below (the owner, 12 November
+  // 2026: of 275 "teas", 137 named a tea, 16 yerba mate, 122 were herbal).
+  { id: "cha", label: "Chá", unit: "kg", heads: ["cha"],
+    require: /\b(verde|preto|branco|vermelho|earl|lady|grey|greay|breakfast|breskf|engl|english|oolong|matcha|chai|darjeeling|ceylon|ceilao|assam|sencha|jasmim|jasmine|pu.?erh|lapsang|gunpowder|kukicha|bancha|genmaicha|black|green|white|yellow label|erva.?mate|mate|matte|chimarrao|terere)\b/i },
   // Capsules and pods ("cápsulas", "pastilhas") are coffee only when the name
   // shows it: a coffee word, or a coffee-machine system or brand. Not on the
   // head word alone, because "pastilha" is also a lozenge - the shelf "Gomas,
@@ -797,7 +803,11 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "cafe", label: "Café", unit: "kg", heads: ["cafe", "capsula", "pastilha"],
     require: new RegExp(COFFEE_WORDS, "i"), exclude: COFFEE_EXCLUDE },
   { id: "sumo", label: "Sumo", hidden: "drinks", unit: "l", heads: ["sumo"] },
-  { id: "infusao", label: "Infusão", unit: "kg", heads: ["infusao"] },
+  // And a "Chá" that names no tea (see `cha` above), except the beef cut "Chã de
+  // Fora" (written "Chá de Fora de Novilho"), a box of several teas, and an
+  // instant powdered drink ("Chá Fresh ... Solúvel").
+  { id: "infusao", label: "Infusão", unit: "kg", heads: ["infusao", "cha"],
+    exclude: /novilho|bovino|vitela|\bcaneca\b|\bcaixa\b|\bpack\b|selection|sabores|winter tea|soluvel|cem porcento fresh|fresh cem porcento/i },
   { id: "espumante", label: "Espumante", hidden: "drinks", unit: "l", heads: ["espumante"] },
   { id: "licor", label: "Licor", hidden: "drinks", unit: "l", heads: ["licor"] },
   { id: "whisky", label: "Whisky", hidden: "drinks", unit: "l", heads: ["whisky"] },
