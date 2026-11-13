@@ -15,11 +15,14 @@ mkdir -p logs
 exec >>"logs/publish-nightly-$(date +%F).log" 2>&1
 echo "=== $(date '+%F %T')"
 
-# Tonight's folder: started today, in the hour after midnight. Not "-00-05"
-# exactly: when the update before the night has new code to test, the night
-# starts a minute later, and on 31 October 2026 its folder "-00-06" was missed
-# and the night before published again.
-NIGHT_DIR=$(ls -d "logs/nightly-$(date +%F)-00-"* 2>/dev/null | sort | tail -1)
+# Tonight's folder: the newest run started today. Not "-00-05" exactly: when
+# the update before the night has new code to test, the night starts a minute
+# later, and on 31 October 2026 its folder "-00-06" was missed and the night
+# before published again. Nor only the hour after midnight: on 13 November
+# 2026 an automatic system update restarted the night at 06:28, and the
+# complete second run ("-06-28") was missed for the cut-off first one.
+# NIGHT_DIR may be given, to publish a chosen run again by hand.
+NIGHT_DIR="${NIGHT_DIR:-$(ls -d "logs/nightly-$(date +%F)-"* 2>/dev/null | sort | tail -1)}"
 [ -n "$NIGHT_DIR" ] || { echo "no nightly folder found"; exit 0; }
 DAY=$(basename "$NIGHT_DIR" | sed -E 's/^nightly-([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/')
 OUT="$NOTES/nightly/$DAY"
