@@ -278,7 +278,10 @@ export function selectRows(
 
   // Re-reading starts the day after the last rows of the first reading went out.
   const mayReread = memory.firstReadingDone;
-  const sorted = [...unread].sort((a, b) => order(a.id).localeCompare(order(b.id)));
+  // The rows that look odd first (the owner, 13 November 2026), so likely
+  // problems come out on the first days rather than spread over the week;
+  // then the fixed order.
+  const sorted = [...unread].sort((a, b) => Number(looksOdd(b)) - Number(looksOdd(a)) || order(a.id).localeCompare(order(b.id)));
   if (!memory.firstReadingDone && sorted.length <= FIRST_READING_PACE) memory.firstReadingDone = true;
   for (const row of memory.firstReadingDone ? sorted : sorted.slice(0, FIRST_READING_PACE)) take(row, mayReread ? "new row" : "first reading");
 
@@ -436,6 +439,20 @@ export function parseProposalNumbers(text: string): number[] {
 }
 
 /** The biggest price per unit in a row against the smallest, for the facts. */
+/** The dearest store at more than this many times the cheapest per unit makes a row look odd. */
+export const ODD_GAP = 3;
+
+/**
+ * A row that looks odd to the program's own tests: an automatic check flagged
+ * it, or the dearest store costs more than ODD_GAP times the cheapest per
+ * unit. 452 of the 1,786 rows on 12 November 2026. Read first in the first
+ * reading (the owner, 13 November 2026).
+ */
+export function looksOdd(row: ReviewRow): boolean {
+  const gap = gapOf(row.stores);
+  return row.flags.length > 0 || (gap !== null && gap > ODD_GAP);
+}
+
 export function gapOf(stores: StoreEntry[]): number | null {
   const prices = stores.map((s) => s.perUnit).filter((p): p is number => p !== null && p > 0);
   if (prices.length < 2) return null;

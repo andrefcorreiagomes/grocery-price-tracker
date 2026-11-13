@@ -359,6 +359,13 @@ function verifyComparison(): number {
   const sameDayAgain = selectRows(manyRows(1000), emptyMemory(), "2026-11-17", noOrder, first);
   check("unanswered rows come first again, in the same order", idsOf(dayOne).join() === idsOf(sameDayAgain).join());
 
+  // The odd-looking rows first (the owner, 13 November 2026): a flagged row and
+  // one whose dearest store is over 3 times the cheapest, among plain rows.
+  const plainAndOdd = [...manyRows(400), { ...reviewRow(900), flags: ["form word: x"] }, reviewRow(901, 30)];
+  const oddFirst = selectRows(plainAndOdd, emptyMemory(), "2026-11-16", noOrder, first);
+  check("the first reading sends the rows that look odd first: flagged, or the dearest store over 3 times the cheapest",
+    idsOf(oddFirst).slice(0, 2).sort().join() === "r900,r901" && oddFirst.length === FIRST_READING_PACE);
+
   const midFirst = emptyMemory();
   readAll(midFirst, manyRows(10), "2026-11-16");
   const changedMidFirst = selectRows([...manyRows(1000).slice(0, 10).map((r) => reviewRow(Number(r.id.slice(1)), 6.49)), ...manyRows(1000).slice(10)], midFirst, "2026-11-17", noOrder, first);
