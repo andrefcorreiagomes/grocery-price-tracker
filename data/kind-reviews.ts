@@ -2039,6 +2039,11 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 11, store: "CONTINENTE", id: "8997539", name: "Noodles Camarão Picante Pot Koala", kind: "massa", why: "Instant noodles with their flavour sachet: pasta, in the instant-noodles group (the owner, 11 November 2026)." },
   { batch: 11, store: "CONTINENTE", id: "6939210", name: "Noodles Carne Pot Koala", kind: "massa", why: "Instant noodles with their flavour sachet: pasta, in the instant-noodles group (the owner, 11 November 2026)." },
   { batch: 11, store: "CONTINENTE", id: "6939206", name: "Noodles de Galinha Pot Koala", kind: "massa", why: "Instant noodles with their flavour sachet: pasta, in the instant-noodles group (the owner, 11 November 2026)." },
+  // Batch 12, 18 November 2026: verified as no kind (data/kind-gold.json), read
+  // as ready meals from the night of 17 November; the nightly check of verified
+  // kinds failed on both nights. Meal-replacement drinks, not a meal.
+  { batch: 12, store: "CONTINENTE", id: "8716984", name: "Meal to Go Refeição Completa Chocolate e Banana Alpro", kind: null, why: "A meal-replacement drink (Alpro, a bottle), not a ready meal; verified as no kind." },
+  { batch: 12, store: "CONTINENTE", id: "8716985", name: "Meal to Go Refeição Completa Manga e Maracujá Alpro", kind: null, why: "As 8716984." },
 ];
 
 /**
