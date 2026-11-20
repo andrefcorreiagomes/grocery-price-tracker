@@ -4,6 +4,7 @@ import {
   CONTINENTE_FOOD_SECTIONS,
   CONTINENTE_SECTION_SLUGS,
   auditCategorySlugs,
+  categorySitemapFrom,
   parseCategoryPaths,
   parseCategorySlugs,
   withoutSupermercado,
@@ -110,6 +111,15 @@ export function verifyContinentePages(): number {
     parseCategoryPaths(sitemap).join()
   );
   check("and its top sections are read the same way", parseCategorySlugs(sitemap).join() === "mercearia,garrafeira");
+  // The index as Continente served it on 20 November 2026 (shortened): the
+  // category file renumbered from 23 to 15 on 19 November.
+  const index = ["sitemap-custom_sitemap_1-product.xml", "sitemap-custom_sitemap_10-image.xml", "sitemap-custom_sitemap_15-category.xml", "sitemap-custom_sitemap_16-categoryRefinements.xml"]
+    .map((f) => `<sitemap>
+<loc>https://www.continente.pt/${f}</loc>
+</sitemap>`)
+    .join("");
+  check("the category sitemap is the one the index names, not a fixed number; not a category-refinements file",
+    categorySitemapFrom(index) === "https://www.continente.pt/sitemap-custom_sitemap_15-category.xml" && categorySitemapFrom("<sitemapindex/>") === null);
   check(
     "every top section the test run of 19 October found is decided",
     auditCategorySlugs(["beleza", "cultura-e-lazer", "destaques", "garrafeira", "folhetos-pesquisa", "sugestoes-continente", "mercearia", "peixaria"]).length === 0

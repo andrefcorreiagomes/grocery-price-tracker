@@ -78,7 +78,24 @@ export interface CategoryAudit {
  * 2026 - code review M10. The ids it checked had been out of date since
  * Continente's reorganisation of 18 October.)
  */
-const CATEGORY_SITEMAP = "https://www.continente.pt/sitemap-custom_sitemap_23-category.xml";
+const CATEGORY_SITEMAP_FALLBACK = "https://www.continente.pt/sitemap-custom_sitemap_23-category.xml";
+
+/**
+ * The category sitemap's address, as the sitemap index lists it. Continente
+ * numbers its sitemap files and renumbers them: on 19 November 2026 the
+ * category file moved from "..._23-category.xml" (then "not found") to
+ * "..._15-category.xml", and the section watch read nothing for two nights.
+ * Null when the index lists none.
+ */
+export function categorySitemapFrom(indexXml: string): string | null {
+  for (const match of indexXml.matchAll(/<loc>\s*([^<\s]+-category\.xml)\s*<\/loc>/g)) return match[1];
+  return null;
+}
+
+/** Read per call (as continente-products.ts does), so a test can point it elsewhere. */
+function sitemapIndexUrl(): string {
+  return process.env.CONTINENTE_SITEMAP_URL ?? "https://www.continente.pt/sitemap_index.xml";
+}
 
 /**
  * Every top-level section data/store-sections.ts decides, by slug. Anything
@@ -129,7 +146,9 @@ export function parseCategoryPaths(xml: string): string[] {
 
 /** The category sitemap's paths. One request, about 361 KB. */
 export async function discoverCategoryPaths(): Promise<string[]> {
-  return parseCategoryPaths(await fetchHtml(CATEGORY_SITEMAP));
+  // Two requests: the index (about 3 KB), then the file it names.
+  const listed = categorySitemapFrom(await fetchHtml(sitemapIndexUrl()));
+  return parseCategoryPaths(await fetchHtml(listed ?? CATEGORY_SITEMAP_FALLBACK));
 }
 
 /** Published slugs we do not recognise - the same question the cgid audit asks. */
