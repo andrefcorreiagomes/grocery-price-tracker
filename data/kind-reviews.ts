@@ -2044,6 +2044,7 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   // kinds failed on both nights. Meal-replacement drinks, not a meal.
   { batch: 12, store: "CONTINENTE", id: "8716984", name: "Meal to Go Refeição Completa Chocolate e Banana Alpro", kind: null, why: "A meal-replacement drink (Alpro, a bottle), not a ready meal; verified as no kind." },
   { batch: 12, store: "CONTINENTE", id: "8716985", name: "Meal to Go Refeição Completa Manga e Maracujá Alpro", kind: null, why: "As 8716984." },
+  { batch: 12, store: "PINGO_DOCE", id: "952249", name: "Mini Folhados com Queijo Emmental", kind: "bolacha", why: "A 90 g cheese snack on Pingo Doce's biscuit shelf, verified as a biscuit; renamed from \"Mini Palmiers com Emmental\" on 19 November 2026, the new name read it as puff pastry and the nightly check of verified kinds failed." },
 ];
 
 /**
