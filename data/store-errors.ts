@@ -363,8 +363,8 @@ export const STORE_ERRORS: StoreError[] = [
     problem:
       "The store contradicts itself: the name says 30 x 30 g (900 g) and Auchan's own figure implies 300 g; " +
       "at EUR 1.10 either would be chocolate at a few euros a kilo, so the price is most likely for one 30 g bar.",
-    evidence: 'price 1.10 €, name "30X30G", Auchan\'s per-kilo figure "3.67 €/Kg" on its product page',
-    checkedOn: "2026-10-04",
+    evidence: 'price 1.10 €, name "30X30G", Auchan\'s per-kilo figure "3.67 €/Kg" on its product page; looked at again on 22 November 2026: "0.3 KG", 3.3 €/Kg, 0,99 € on promotion (PVP recomendado 1,10 €), sold by the unit - still one 30 g bar',
+    checkedOn: "2026-11-22",
     listedSize: { packageSize: 0.9, unit: "kg" },
     // Continente sells the same barcode (8445291111165) as one 30 g bar, at the same 1.10 €.
     trueSize: {
@@ -383,8 +383,8 @@ export const STORE_ERRORS: StoreError[] = [
     // Re-checked 22 October 2026: the price rose to 1.45 €, and the size worked
     // out from Auchan's own figure moved from 0.75 to 0.751 kg - rounding, the
     // same error.
-    evidence: 'price 0.99 € (1.45 € on 22 Oct), name "1UN", Auchan\'s per-kilo figure 1.32 €/Kg on its listing tile',
-    checkedOn: "2026-10-22",
+    evidence: 'price 0.99 € (1.45 € on 22 Oct), name "1UN", Auchan\'s per-kilo figure 1.32 €/Kg on its listing tile; looked at again on 22 November 2026: "0.75 KG", 1.93 €/Kg, 1,45 € on promotion, sold by the unit - still ten times one croissant',
+    checkedOn: "2026-11-22",
     listedSize: { packageSize: 0.751, unit: "kg" },
     // Continente sells the same barcode (5601028125420) as 75 g, at the same 0.99 €.
     trueSize: {
