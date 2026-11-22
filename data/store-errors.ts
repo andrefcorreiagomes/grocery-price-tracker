@@ -163,6 +163,22 @@ export function storeErrorStatus(entry: StoreError, stored: StoredState | null):
 }
 
 /**
+ * What the nightly check says about an entry, and whether it needs a person.
+ * A product no longer sold "rests": its entry stays (if the product comes back
+ * under the same id with the same fault, it is still wanted) but is not counted
+ * among those to look at again; when the product returns, its last look is
+ * old and it comes up as due (the owner, 22 November 2026: the organic milk
+ * delisted by Continente was flagged every night for nothing).
+ */
+export function storeErrorVerdict(status: StoreErrorStatus, checkedOn: string, recheckAfterDays: number, today = new Date()): { text: string; needsLook: boolean } {
+  const age = Math.floor((today.getTime() - new Date(`${checkedOn}T00:00:00Z`).getTime()) / 86_400_000);
+  if (status.kind === "changed") return { text: `STORE DATA CHANGED: ${status.was} then, ${status.now} now - look at the page again`, needsLook: true };
+  if (status.kind === "gone") return { text: "resting - no longer sold; looked at again only if it comes back", needsLook: false };
+  if (age > recheckAfterDays) return { text: `RE-CHECK DUE: unchanged, but last looked at ${age} days ago`, needsLook: true };
+  return { text: `unchanged since ${checkedOn}`, needsLook: false };
+}
+
+/**
  * The entry's true size, if what the store shows now still bears it out; null
  * when the entry has none or it no longer holds. Null is the safe answer: the
  * product sits out of comparisons, as every store error did before.

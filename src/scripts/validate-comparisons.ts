@@ -1,4 +1,4 @@
-import { confirmedSize, RECHECK_AFTER_DAYS, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
+import { confirmedSize, RECHECK_AFTER_DAYS, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, storeErrorVerdict, withConfirmedSize } from "../../data/store-errors";
 import { prisma } from "../lib/db";
 import {
   cheapestPerStore,
@@ -294,15 +294,7 @@ async function main() {
       e,
       row ? { packageSize: row.packageSize, unit: row.unit, delisted: row.delistedAt !== null } : null
     );
-    const age = Math.floor((Date.now() - new Date(`${e.checkedOn}T00:00:00Z`).getTime()) / 86_400_000);
-    const verdict =
-      status.kind === "changed"
-        ? `STORE DATA CHANGED: ${status.was} then, ${status.now} now - look at the page again`
-        : status.kind === "gone"
-          ? "NO LONGER IN THE CATALOGUE - the entry can probably be removed"
-          : age > RECHECK_AFTER_DAYS
-            ? `RE-CHECK DUE: unchanged, but last looked at ${age} days ago`
-            : `unchanged since ${e.checkedOn}`;
+    const verdict = storeErrorVerdict(status, e.checkedOn, RECHECK_AFTER_DAYS).text;
     console.log(`  ${e.store.padEnd(11)} ${e.storeProductId.padEnd(9)} ${e.name}`);
     console.log(`    ${e.problem}`);
     console.log(`    ${verdict}`);

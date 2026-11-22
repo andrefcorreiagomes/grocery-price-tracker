@@ -19,7 +19,7 @@ import { cheapestPerStore, comparable, ownBrandPerStore, unitsFor, type Cell, ty
 import { showsOwnBrandRow } from "../lib/comparison-groups";
 import { reviewedTreePlace } from "../lib/kind-decisions";
 import { promotionOf } from "../lib/promotion";
-import { confirmedSize, isNeverSameProduct, isStoreError, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, withConfirmedSize } from "../../data/store-errors";
+import { confirmedSize, isNeverSameProduct, isStoreError, sameBarcodeProblem, STORE_ERRORS, storeErrorStatus, storeErrorVerdict, withConfirmedSize } from "../../data/store-errors";
 
 /**
  * Checks of the kinds of food: the classifier, the stores' food sections, the
@@ -579,6 +579,13 @@ function verifyFoodTypes(): number {
   check("a delisted or missing product is reported as gone",
     storeErrorStatus(entry, { packageSize: 3.36, unit: "kg", delisted: true }).kind === "gone" &&
       storeErrorStatus(entry, null).kind === "gone");
+  const day = new Date("2026-11-22T12:00:00Z");
+  check("a product no longer sold rests, not counted as to look at again; a changed size and an old look still are (the owner, 22 November 2026)",
+    !storeErrorVerdict({ kind: "gone" }, "2026-11-09", 30, day).needsLook &&
+      storeErrorVerdict({ kind: "changed", was: "6 l", now: "1 l" }, "2026-11-20", 30, day).needsLook &&
+      storeErrorVerdict({ kind: "unchanged" }, "2026-10-04", 30, day).needsLook &&
+      !storeErrorVerdict({ kind: "unchanged" }, "2026-11-20", 30, day).needsLook &&
+      !/RE-CHECK DUE|STORE DATA CHANGED|CONFIRMED SIZE NO LONGER HOLDS/.test(storeErrorVerdict({ kind: "gone" }, "2026-11-09", 30, day).text));
   check("every entry is dated, evidenced and unique",
     STORE_ERRORS.every((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.checkedOn) && e.evidence.length > 0 && e.problem.length > 0) &&
       new Set(STORE_ERRORS.map((e) => `${e.store}:${e.storeProductId}`)).size === STORE_ERRORS.length);
