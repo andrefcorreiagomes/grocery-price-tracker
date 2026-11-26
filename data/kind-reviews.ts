@@ -2045,6 +2045,7 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 12, store: "CONTINENTE", id: "8716984", name: "Meal to Go Refeição Completa Chocolate e Banana Alpro", kind: null, why: "A meal-replacement drink (Alpro, a bottle), not a ready meal; verified as no kind." },
   { batch: 12, store: "CONTINENTE", id: "8716985", name: "Meal to Go Refeição Completa Manga e Maracujá Alpro", kind: null, why: "As 8716984." },
   { batch: 12, store: "PINGO_DOCE", id: "952249", name: "Mini Folhados com Queijo Emmental", kind: "bolacha", why: "A 90 g cheese snack on Pingo Doce's biscuit shelf, verified as a biscuit; renamed from \"Mini Palmiers com Emmental\" on 19 November 2026, the new name read it as puff pastry and the nightly check of verified kinds failed." },
+  { batch: 12, store: "CONTINENTE", id: "2003379", name: "5 Bagas em Frasco com Moinho Margão", kind: "pimenta", why: "A grinder jar of five peppercorns on Continente's spices shelf, verified as pepper; renamed from \"Mistura de Pimenta e Especiarias 5 Bagas com Moinho em Frasco Margão\" on 26 November 2026, the new name no longer says pimenta, so it was read as no kind and the nightly check of verified kinds failed." },
 ];
 
 /**
