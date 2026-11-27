@@ -15,7 +15,7 @@ import {
 } from "../scrapers/crawl/auchan-health";
 import { MIN_ATTEMPTED, isPriceChurnStorm, PRICE_CHURN_LIMIT } from "../scrapers/crawl/reidentification";
 import { parseAuchanTilesDetailed, parseAuchanTotal } from "../scrapers/search/auchan";
-import { auchanStatusFromHtml, parseAuchanPage } from "../scrapers/auchan";
+import { auchanSoldBy, auchanStatusFromHtml, parseAuchanPage } from "../scrapers/auchan";
 import { openCatalogueWriter } from "../scrapers/crawl/persist";
 import { recordDead, recordUnavailable, touchChecked, UNAVAILABLE_RECHECK_DAYS } from "../scrapers/crawl/product-checks";
 import { recordRun } from "../scrapers/crawl/history";
@@ -302,6 +302,13 @@ export async function verifyAuchanNightly(): Promise<number> {
       return p.price === null && p.name === "MEL HPERFECT CANELA 130G" && p.packageSize === 0.13;
     })()
   );
+  // How Auchan sells a "KG" product, from its page (assumption 8.48, 26 November 2026).
+  const qty = (context: string, measure: string, byUnit: string) =>
+    `<div class="auc-qty-selector   auc-qty-selector__full-width"    data-from-store-id="null"    data-context="${context}"    data-unit-measure="${measure}"    data-step-quantity="1.0"    data-purchased-by-unit="${byUnit}"    data-min-quantity="1.0">`;
+  check("a page whose own quantity selector says KG, not by unit, is sold by the kilo", auchanSoldBy(`<html>${qty("pdp", "KG", "false")}</html>`) === "kilo");
+  check("a page sold by the piece is not", auchanSoldBy(`<html>${qty("pdp", "UN", "true")}</html>`) === "unit");
+  check("a carousel tile's selector is not the product's own", auchanSoldBy(`<html>${qty("carousel", "KG", "false")}</html>`) === "no-mark");
+  check("a page with no selector (not for sale online) says nothing", auchanSoldBy("<html><title>PIMENTO VERDE KG</title></html>") === "no-mark");
   check(
     "a product with no availability stated reads as alive",
     auchanStatusFromHtml(ldPage({ "@type": "Product", name: "X", offers: { price: "1.99" } })) === "alive"

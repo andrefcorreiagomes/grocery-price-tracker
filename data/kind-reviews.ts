@@ -2054,6 +2054,18 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 13, store: "PINGO_DOCE", id: "421154", name: "Canjinha de Frango do Campo Embalada", kind: null, why: "As Continente's 7069750: raw chicken pieces for soup (Talho/Aves/Frango), compared as a ready soup." },
   { batch: 13, store: "CONTINENTE", id: "8953730", name: "Tapas Salpicão e Paio Continente", kind: null, why: "A tray of two different sliced sausages (salpicão and paio), compared with whole paio." },
   { batch: 13, store: "AUCHAN", id: "3753640", name: "LENTILHAS AUCHAN COM LEGUMES EM LATA 430G", kind: null, why: "A ready meal of lentils with vegetables, weighed with its sauce (Auchan's ready-meals shelf), compared with plain cooked lentils." },
+  // The soup kind split (the owner's yes, 26 November 2026; src/lib/food-types.ts,
+  // soupOrNot): ready soups on the powder-soup shelves stay soup, and powder
+  // packets on other shelves whose names give no size become instant soup.
+  { batch: 14, store: "CONTINENTE", id: "4312958", name: "Sopa de Tomate Heinz", kind: "sopa", why: "A 400 g tin of ready soup, on Continente's powder-soup shelf (Preparados de Sopas)." },
+  { batch: 14, store: "AUCHAN", id: "3704308", name: "CREME DE TOMATE AUCHAN 1L", kind: "sopa", why: "A 1 L carton of ready soup, on Auchan's powder-soup shelf (sopas-em-pó-e-pré-preparadas)." },
+  { batch: 14, store: "PINGO_DOCE", id: "876939", name: "Sopa de Rabo de Boi", kind: "sopa-instantanea", why: "A 74 g powder packet, listed under 'As Nossas Marcas' (the same product as 1000716 on the instant-soup shelf)." },
+  { batch: 14, store: "PINGO_DOCE", id: "880523", name: "Sopa de Cebola", kind: "sopa-instantanea", why: "A 51 g powder packet, listed under 'As Nossas Marcas'." },
+  { batch: 14, store: "PINGO_DOCE", id: "690340", name: "Sopa Cozido", kind: "sopa-instantanea", why: "A 69 g powder packet, listed under a promotions shelf." },
+  // Simpler or no kind for single products (the owner's yes, 26 November 2026;
+  // listed in the private notes, simplifications.md, to come back to).
+  { batch: 14, store: "AUCHAN", id: "3986357", name: "FLOCOS ESPELTA RINATURA INTEGRAL BIO 500G", kind: null, why: "Rolled spelt grain for porridge, compared with toasted corn flakes at 2.1 times (the AI review, 16 November 2026); was verified as cereais." },
+  { batch: 14, store: "PINGO_DOCE", id: "950020", name: "Leite UHT Magro com Coco sem Lactose", kind: null, why: "Skimmed cow's milk with coconut, not coconut milk; it was in the coconut-milk comparison." },
 ];
 
 /**

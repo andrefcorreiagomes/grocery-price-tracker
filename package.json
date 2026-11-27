@@ -12,6 +12,7 @@
     "sections:check": "tsx src/scripts/check-sections.ts",
     "enrich": "tsx src/scripts/enrich-candidates.ts",
     "barcodes:auchan": "tsx src/scripts/read-auchan-barcodes.ts",
+    "auchan:kilo-pages": "tsx src/scripts/auchan-kilo-pages.ts",
     "backfill:prices": "tsx src/scripts/backfill-price-history.ts",
     "crawl:pingodoce": "tsx src/scripts/crawl-pingodoce.ts",
     "crawl:pingodoce:nightly": "tsx src/scripts/crawl-pingodoce-nightly.ts",

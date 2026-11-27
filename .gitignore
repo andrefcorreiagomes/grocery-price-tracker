@@ -65,3 +65,7 @@ reports/
 
 # visitors' error reports from the site (src/lib/error-reports.ts): never uploaded
 /user-reports/
+
+# Which Auchan "KG" product pages were read and what they said (src/scripts/auchan-kilo-pages.ts); server state
+/auchan-kilo-pages.json
+/auchan-kilo-pages.json.tmp

@@ -64,9 +64,10 @@ const STORES = [
 ];
 
 /**
- * The steps after the crawls, in this order. All offline but one:
- * `barcodes:auchan` reads a few Auchan product pages, so it runs only on a
- * night Auchan itself was crawled (its robots.txt checked and unchanged).
+ * The steps after the crawls, in this order. All offline but two:
+ * `barcodes:auchan` and `auchan:kilo-pages` read a few Auchan product pages, so
+ * they run only on a night Auchan itself was crawled (its robots.txt checked and
+ * unchanged).
  *
  * Matching runs every night since 22 October 2026 (the user's decision, code
  * review finding H6): candidates, then the matcher, then the barcodes of Auchan
@@ -75,6 +76,10 @@ const STORES = [
  */
 const AFTER: { script: string; what: string; log?: string; needs?: string }[] = [
   { script: "backfill:sizes", what: "pack sizes filled in" },
+  // Auchan "KG" products with no size, sized 1 kg where their page says sold by
+  // the kilo (the owner's yes, 26 November 2026): about 104 pages the first
+  // night, then a few; the rest from the file of earlier answers.
+  { script: "auchan:kilo-pages", what: "Auchan products sold by the kilo sized", needs: "AUCHAN" },
   { script: "classify:food", what: "kinds of food written" },
   { script: "candidates", what: "match candidates rebuilt" },
   { script: "match", what: "identical products grouped", log: "match-1" },

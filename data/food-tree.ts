@@ -166,7 +166,11 @@ export const SUB_KINDS: Record<string, SubKind[]> = {
     // their own. The AI trial, 9 November 2026.
     s("lombinho", "Lombinho", /lombinho/),
     s("lombo", "Lombo", /lombo/), // x1.14
-    s("entrecosto", "Entrecosto e entremeada", /entrecosto|costela|entremeada|barriga/), // x0.93
+    // Belly apart from ribs (the owner's yes, 26 November 2026, after the AI
+    // review of 16-17 November): 21 and 34 products on 26 November. Belly first:
+    // "Entremeada de Porco com Entrecosto" is belly with its ribs.
+    s("entremeada", "Entremeada e barriga", /entremeada|barriga/),
+    s("entrecosto", "Entrecosto", /entrecosto|costela/), // x0.93
     s("febras", "Febras e bifanas", /febra|bifana|bife/), // x0.86
     s("lagartos", "Lagartos", /lagarto/),
     s("secretos", "Secretos, plumas e presas", /secret|pluma|presa|abanico/), // x2.43
@@ -667,4 +671,23 @@ export const LABELS: Label[] = [
     match: /porco preto|iberic|alentejan|bolota|montanheira|pata negra/,
     kinds: ["porco", "presunto", "chourico", "paio", "farinheira", "linguica", "salpicao", "fiambre", "salame", "morcela", "bacon", "alheira"],
   },
+  // Forms the AI review found compared together (16-18 November 2026), each
+  // split off with the owner's yes of 26 November 2026; product counts of the
+  // 26 November data. Listed in the private notes, simplifications.md.
+  // Shredded pollock (9, often desalted, sold to replace bacalhau) apart from
+  // fillets and loins (12): reported six times.
+  { id: "desfiado", label: "Desfiado", match: /desfiad|\bmigas\b/, kinds: ["paloco"] },
+  // Wholegrain mustard (9) apart from smooth: Pingo Doce's own brand was its
+  // wholegrain one, 1.88 times the others.
+  { id: "graos", label: "Com grãos ou à antiga", match: /\bgraos?\b|\bgrao\b|antiga|ancienne/, kinds: ["mostarda"] },
+  // Light coconut milk (11) apart from full-fat: Auchan's 6% light was the
+  // organic row's cheapest against full-fat.
+  { id: "light", label: "Light", match: /\blight\b/, kinds: ["leite-coco"] },
+  // Salmon fish fingers (7) apart from white fish ones.
+  { id: "salmao", label: "De salmão", match: /salmao/, kinds: ["douradinho"] },
+  // Small or sweet snack cucumbers (7, 200-250 g) apart from ordinary ones.
+  { id: "mini", label: "Mini ou doce", match: /\bmini\b|\bdoce\b/, kinds: ["pepino"] },
+  // Kalamata olives (3) apart from ordinary green or black ones: Auchan's deli
+  // Kalamata was 3.76 times Continente's green olives.
+  { id: "kalamata", label: "Kalamata", match: /kalamata/, kinds: ["azeitona"] },
 ];

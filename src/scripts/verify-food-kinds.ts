@@ -355,7 +355,13 @@ function verifyFoodTypes(): number {
   is("MIX PEQUENO ALMOÇO SHINE KIDS MAÇÃ BIO 300G", "AUCHAN", "biológicos-e-alternativas/biológicos/biológicos-mercearia/cereais-e-pequeno-almoço", null);
   // Raw chicken for making soup, not soup (the owner's yes, 26 November 2026).
   is("Canjinha de Frango do Campo Continente Seleção", "CONTINENTE", "Marcas/Marcas Continente/Continente Seleção", null);
-  is("Canja de Galinha Continente", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Preparados de Sopas", "sopa");
+  // The soup split (the owner's yes, 26 November 2026): powder packets are
+  // instant soup, Auchan's vegetable bags for soup no kind, ready soup is soup.
+  is("Canja de Galinha Continente", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Preparados de Sopas", "sopa-instantanea");
+  is("SOPA KNORR CEBOLA 50G", "AUCHAN", "alimentação/mercearia/refeições,-sopas-e-puré/sopas-em-pó-e-pré-preparadas", "sopa-instantanea");
+  is("SOPAS MISO KIKKOMAN AKA 3X10G", "AUCHAN", "alimentação/sabores-do-mundo/cozinha-asiática/preparados-e-refeições-rápidas", "sopa-instantanea");
+  is("SOPA JULIANA AUCHAN 350G", "AUCHAN", "produtos-frescos/legumes/saladas-embaladas-e-preparados-para-sopas", null);
+  is("Sopa de Feijão Verde Cozinha Continente", "CONTINENTE", "Refeições Práticas/Sopas", "sopa");
   is("Mix para Panquecas Proteicas", "PINGO_DOCE", "Mercearia/Farinha Fermento e Acucar/Farinha Fermento e Pao Ralado", null);
   is("Mistura Torrada Moída de Cereais Peninsular", "PINGO_DOCE", "Café, Chá e Achocolatados/Bebidas de Cereais", null);
   is("Grelhada Mista de Porco Continente", "CONTINENTE", "Talho/Porco", "porco");
@@ -1215,6 +1221,14 @@ function verifyFoodTree(): number {
   check("tins: a weight from another store's label is marked; one from the product's own page is not",
     (marked.rows[0].weightNote ?? "").includes("Continente") && !marked.rows[1].weightNote);
   check("tins: nothing changes in a row with no tins", tinRow([{ name: "Arroz Agulha", labels: null, unit: "kg", packageSize: 1 }]).basis === null);
+  // The owner's yes, 26 November 2026: a jar whose name does not say so, given
+  // its weights from another chain's jar with the same barcode, is compared as one.
+  const dittmann = tinRow([
+    tin("AZEITONA VERDE DITTMANN 140G", 0.09, { full: 0.14, drained: 0.09 }),
+    { ...tin("Azeitona Verde com Queijo Fresco Dittmann", 0.14, { full: 0.14, drained: 0.09, src: "barcode:AUCHAN" }), labels: null },
+  ]);
+  check("tins: a product with weights from a same-barcode tin is compared as a tin, by the row's weight",
+    dittmann.basis === "drained" && dittmann.rows.map((r) => r.packageSize).join() === "0.09,0.09" && (dittmann.rows[1].weightNote ?? "").includes("Auchan"));
   const judged = REVIEWED_TIN_WEIGHTS[0];
   check("tins: a checked judgement holds only while the store shows the number it was made on",
     judged !== undefined && reviewedTinWeight(judged.store, judged.id, judged.shows) === judged && reviewedTinWeight(judged.store, judged.id, judged.shows + 0.01) === null);
@@ -1273,6 +1287,17 @@ function verifyFoodTree(): number {
     labelsOf("espinafre", "ESPINAFRES AUCHAN FOLHAS PORÇÕES 1KG", "congelados/legumes-e-fruta/legumes").includes("congelado") &&
     !labelsOf("espinafre", "Espinafres Embalados", "Frutas e Vegetais/Legumes").includes("congelado"));
   // The owner's decision, 26 November 2026: thawed is its own label, on any shelf.
+  // The AI review's forms, split off with the owner's yes of 26 November 2026.
+  check("shredded pollock, wholegrain mustard, light coconut milk, salmon fingers, snack cucumbers and Kalamata olives each carry their label",
+    labelsOf("paloco", "PALOCO DO PACIFICO AUCHAN DESFIADO 400GR").includes("desfiado") && !labelsOf("paloco", "Filetes de Escamudo-do-Alasca").includes("desfiado") &&
+    labelsOf("mostarda", "Mostarda com Grãos em Frasco").includes("graos") && labelsOf("mostarda", "MOSTARDA L`ANCIENNE AUCHAN 190G").includes("graos") && !labelsOf("mostarda", "Mostarda Continente").includes("graos") &&
+    labelsOf("leite-coco", "Leite de Coco Light Koala").includes("light") && !labelsOf("leite-coco", "Leite de Coco Continente").includes("light") &&
+    labelsOf("douradinho", "Douradinhos de Salmão").includes("salmao") && !labelsOf("douradinho", "Douradinhos de Peixe Continente").includes("salmao") &&
+    labelsOf("pepino", "PEPINO DOCE 200G").includes("mini") && labelsOf("pepino", "Mini Pepino").includes("mini") && !labelsOf("pepino", "Pepino Continente").includes("mini") &&
+    labelsOf("azeitona", "AZEITONAS KALAMATA DÍMITRA KG").includes("kalamata") && !labelsOf("azeitona", "Azeitona Verde Continente").includes("kalamata"));
+  check("pork belly apart from pork ribs",
+    subKindOf("porco", "Entremeada com Osso Continente") === "entremeada" && subKindOf("porco", "Entremeada de Porco com Entrecosto") === "entremeada" &&
+    subKindOf("porco", "Tiras de Entrecosto de Porco Continente") === "entrecosto" && subKindOf("porco", "COSTELA DE PORCO AUCHAN KG") === "entrecosto");
   check("a thawed product is thawed, not frozen, even on a frozen shelf",
     labelsOf("atum", "Lombos de Atum Descongelado", "Peixaria/Peixe Fresco/Atum").join() === "descongelado" &&
     labelsOf("lula", "LULA DESCONGELADA KG", "congelados/peixe").join() === "descongelado" &&

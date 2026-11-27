@@ -20,6 +20,7 @@ import { CATEGORIES } from "../../data/food-tree";
 import { isFoodSection } from "./store-sections";
 import { HOUSE_LABELS } from "./candidates";
 import { foldPlural, normalizeName, stripAccents } from "./text";
+import { parseSize } from "./sizes";
 
 /**
  * Deciding what KIND of food a product is, so "where are potatoes cheapest" has
@@ -169,7 +170,7 @@ export function classifyFoodType(
 export type FoodTypeStep = "head" | "cut" | "shelf";
 export type FoodTypeExplanation =
   | { id: string; step: FoodTypeStep }
-  | { id: null; step: null; why: "not a food section" | "shelf names several foods" | "open shelf" | "a mix of several foods" | "prepared or cooked" | "nothing recognised" };
+  | { id: null; step: null; why: "not a food section" | "shelf names several foods" | "open shelf" | "a mix of several foods" | "prepared or cooked" | "vegetables for soup" | "nothing recognised" };
 
 export function explainFoodType(
   name: string,
@@ -177,7 +178,32 @@ export function explainFoodType(
   categoryPath: string | null
 ): FoodTypeExplanation {
   if (!isFoodSection(store, categoryPath)) return { id: null, step: null, why: "not a food section" };
-  return explainFromName(name, store, categoryPath);
+  const found = explainFromName(name, store, categoryPath);
+  return found.id === "sopa" ? soupOrNot(found, name, categoryPath) : found;
+}
+
+/**
+ * The soup kind held three foods (the owner's decision, 26 November 2026;
+ * assumption 8.51): ready soups, powder packets (Knorr, Maggi, own brands, 30-107
+ * g) and Auchan's bags of cut raw vegetables for making soup. A packet of powder
+ * cannot be compared per kilo with ready soup: Pingo Doce's own-brand row put a
+ * 74 g packet at 12.03 €/kg beside a vegetable bag at 2.40 €/kg.
+ *   - on a chain's powder-soup shelf, or under 120 g by the name: instant soup
+ *     (the ready soups on those shelves, a 400 g tin and a 1 L carton, are kept
+ *     as soup in data/kind-reviews.ts, batch 14);
+ *   - on Auchan's vegetable shelf for soup: no kind, as Continente's and Pingo
+ *     Doce's "Preparado para Sopa" bags already had none.
+ */
+const POWDER_SOUP_SHELF = /sopas-em-po|preparados de sopas|sopas instantaneas/;
+const SOUP_VEGETABLES_SHELF = /legumes\/saladas-embaladas-e-preparados-para-sopas/;
+
+function soupOrNot(found: FoodTypeExplanation, name: string, categoryPath: string | null): FoodTypeExplanation {
+  const shelf = stripAccents(categoryPath ?? "").toLowerCase();
+  if (SOUP_VEGETABLES_SHELF.test(shelf)) return { id: null, step: null, why: "vegetables for soup" };
+  const size = parseSize(name);
+  const small = size !== null && size.unit === "kg" && size.total < 0.12;
+  if (POWDER_SOUP_SHELF.test(shelf) || small) return { id: "sopa-instantanea", step: "shelf" };
+  return found;
 }
 
 /**

@@ -1015,7 +1015,7 @@
 {"store":"AUCHAN","id":"3985683","name":"FLOCOS CEREAIS BIO DOVES FARM SEM GLÚTEN 375G","kind":"cereais"},
 {"store":"AUCHAN","id":"3985684","name":"FLOCOS FIBRA BIO DOVES FARM SEM GLÚTEN 375G","kind":"cereais"},
 {"store":"AUCHAN","id":"3986316","name":"YAKITORI AUCHAN FRANGO COM MOLHO SOJA 8UN 210G","kind":"refeicao"},
-{"store":"AUCHAN","id":"3986357","name":"FLOCOS ESPELTA RINATURA INTEGRAL BIO 500G","kind":"cereais"},
+{"store":"AUCHAN","id":"3986357","name":"FLOCOS ESPELTA RINATURA INTEGRAL BIO 500G","kind":null},
 {"store":"AUCHAN","id":"3986358","name":"PREPARADO FALAFEL RINATURA GRÃO BICO BIO 150G","kind":null},
 {"store":"AUCHAN","id":"3986629","name":"ROSÁRIOS DE PORCO AUCHAN KG","kind":"porco"},
 {"store":"AUCHAN","id":"3986632","name":"ENTREMEADA INTEIRA DE PORCO AUCHAN KG","kind":"porco"},

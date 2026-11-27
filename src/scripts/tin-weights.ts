@@ -78,6 +78,19 @@ async function main() {
     if (!r.eanNormalized || !both(r)) continue;
     byEan.set(r.eanNormalized, [...(byEan.get(r.eanNormalized) ?? []), r]);
   }
+  // A product whose name and shelf do not say tin or jar, but whose barcode is
+  // another chain's tin with both weights known, is that tin: Continente's
+  // "Azeitona Verde com Queijo Fresco Dittmann" (140 g full) was compared with
+  // Auchan's same jar by its 90 g drained weight, 1.56 times apart (the AI
+  // review, 16 November 2026; the owner's yes, 26 November). 3 such pairs on 26
+  // November.
+  for (const r of rows) {
+    if (tinIds.has(r.id) || !r.eanNormalized) continue;
+    if (!(byEan.get(r.eanNormalized) ?? []).some((o) => o.store !== r.store)) continue;
+    tins.push(r);
+    tinIds.add(r.id);
+    own.set(r.id, labelled(r));
+  }
   const live = new Set((await prisma.productGroup.findMany({ where: { retiredAt: null }, select: { id: true } })).map((g) => g.id));
   const members = (await prisma.productGroupMember.findMany({ select: { groupId: true, productId: true } })).filter((m) => live.has(m.groupId));
   const groupOf = new Map<string, string[]>();

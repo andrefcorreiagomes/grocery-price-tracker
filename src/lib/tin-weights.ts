@@ -132,7 +132,11 @@ export function weightNote(basis: Basis, source: string | null | undefined): str
  * page says why. Every other product is passed through untouched.
  */
 export function tinRow<T extends TinFields>(rows: T[]): { basis: Basis | null; rows: (T & { weightNote?: string | null; tinSitsOut?: Basis })[] } {
-  const tins = rows.filter((r) => r.unit === "kg" && !r.sizeConfirmed && isTin(r));
+  // A tin by its name or shelf, or by the weights the nightly gave it from a tin
+  // with the same barcode at another chain (src/scripts/tin-weights.ts; the
+  // owner's yes, 26 November 2026).
+  const hasWeights = (r: T) => (r.fullWeight ?? null) !== null || (r.drainedWeight ?? null) !== null;
+  const tins = rows.filter((r) => r.unit === "kg" && !r.sizeConfirmed && (isTin(r) || hasWeights(r)));
   if (tins.length === 0) return { basis: null, rows };
   const unplaced = (r: T) => (r.fullWeight ?? null) === null && (r.drainedWeight ?? null) === null;
   const hasDrained = (r: T) => (r.drainedWeight ?? null) !== null || unplaced(r);

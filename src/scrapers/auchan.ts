@@ -104,6 +104,25 @@ export async function scrapeAuchan(url: string): Promise<ScrapeResult> {
   return parseAuchanPage(await fetchHtml(url), url);
 }
 
+/**
+ * How Auchan sells the product, from its page's own quantity selector (the one
+ * with data-context="pdp"; carousels carry none): "kilo" when it is sold by
+ * weight in kilos (data-unit-measure="KG", data-purchased-by-unit="false"),
+ * "unit" when by the piece, "no-mark" when the page has no selector - a product
+ * not for sale online that day. Measured 26 November 2026 on 104 pages of "KG"
+ * products with no size: 82 "kilo", each showing its price "€ /Kg" beside a
+ * typical weight of one item ("Quant. Mínima = 400g (1 un) 0.60 €/un 1,49 €
+ * /Kg"); 22 "no-mark" (assumption 8.48).
+ */
+export function auchanSoldBy(html: string): "kilo" | "unit" | "no-mark" {
+  const selector = html.match(/<div[^>]*class="auc-qty-selector[^"]*"[^>]*data-context="pdp"[^>]*>/)?.[0];
+  if (!selector) return "no-mark";
+  const measure = selector.match(/data-unit-measure="([^"]*)"/)?.[1];
+  const byUnit = selector.match(/data-purchased-by-unit="([^"]*)"/)?.[1];
+  if (measure === "KG" && byUnit === "false") return "kilo";
+  return measure || byUnit ? "unit" : "no-mark";
+}
+
 /** Reading a page, apart from fetching it, so it can be checked on a saved one. */
 export function parseAuchanPage(html: string, url: string): ScrapeResult {
   const product = extractLdJsonBlocks(html).find(
