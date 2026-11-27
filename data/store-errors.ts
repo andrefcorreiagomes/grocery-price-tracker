@@ -270,6 +270,19 @@ export const STORE_ERRORS: StoreError[] = [
     checkedOn: "2026-11-10",
     listedSize: { packageSize: 0.425, unit: "kg" },
   },
+  // Pingo Doce's own two figures for the organic Genuine Coconut disagree, and
+  // both disagree with the other two chains (the owner's decision, 26 November
+  // 2026): it sits out until they agree. The AI review had found the row's gap
+  // of 2.07 coming from the weights alone (17 November 2026).
+  {
+    store: "PINGO_DOCE",
+    storeProductId: "883058",
+    name: "Coco Fresco Biológico",
+    problem: "Its page gives 0.4 kg, but its own price per kilo, 4.38 €/kg at 2.19 €, gives 0.5 kg; Continente (7137196) and Auchan (3511377) give the same Genuine Coconut 0.75 kg. Compared at 0.4 kg it was 5.48 €/kg against 2.65 €/kg.",
+    evidence: 'Its page: "0.4 Kg | 4,38 €/Kg" beside 2,19 € and "1 Un" (page read 26 November 2026). Continente "Coco Fresco Biológico Genuine Coconut" 0.75 kg 1.99 €; Auchan "COCO FRESCO GENUINE COCONUT BIO 750 G" 1.99 €.',
+    checkedOn: "2026-11-26",
+    listedSize: { packageSize: 0.4, unit: "kg" },
+  },
   // Two sizes the stores' own per-kilo figures prove wrong (the odd-price
   // check, 12 November 2026): compared at the size the figure gives, while it
   // still gives it.

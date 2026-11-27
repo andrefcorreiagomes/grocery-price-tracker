@@ -1220,7 +1220,7 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 4, store: "AUCHAN", id: "634544", name: "CARABINEIRO MOÇAMBIQUE 8/12 CONGELADO KG", kind: null, why: "carabineiro" },
   { batch: 4, store: "PINGO_DOCE", id: "1011750", name: "Dose de Fruta Maçã, Banana, Laranja e Ananás Kids +3 Anos", kind: "fruta-saqueta", why: "fruit purée pouches" },
   { batch: 4, store: "PINGO_DOCE", id: "985619", name: "Dose de Fruta Maçã, Banana, Laranja e Ananás Kids +3 Anos", kind: "fruta-saqueta", why: "fruit purée pouches" },
-  { batch: 4, store: "CONTINENTE", id: "7599265", name: "Cachaço de Porco Fatiado Bísaro", kind: "paio", why: "cured pork neck" },
+  { batch: 4, store: "CONTINENTE", id: "7599265", name: "Cachaço de Porco Fatiado Bísaro", kind: null, why: "Cured pork neck, not paio (Continente files it under Presunto); was paio until the owner's yes of 26 November 2026, after the AI review of 16 November." },
   { batch: 4, store: "CONTINENTE", id: "7640142", name: "Coppa Stagionata Fatiado Levoni", kind: "paio", why: "cured pork neck" },
   { batch: 4, store: "AUCHAN", id: "3682982", name: "TABUA DE CHARCUTARIA ARGAL CHAROLA 330 G", kind: null, why: "a charcuterie board" },
   { batch: 4, store: "AUCHAN", id: "3944904", name: "BRESAOLA BERETTA ITALIANA 70G", kind: null, why: "bresaola, cured beef" },
@@ -1496,7 +1496,7 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 10, store: "AUCHAN", id: "3524581", name: "IOGURTE YOPRO SÓLIDO MORANGO 160G", kind: "iogurte", why: "Drinkable or protein yoghurt (Actimel, Danacol, Yopro, Lindahls). Same barcode as Continente 7646228." },
   { batch: 10, store: "AUCHAN", id: "3528527", name: "CALDEIRADA BACALHAU RIBERALVES MSC 700G", kind: "bacalhau", why: "Cod stew; the same product at Continente was verified as cod (kind-gold)." },
   { batch: 10, store: "AUCHAN", id: "3546708", name: "TABUA DE QUEIJOS SANTIAGO SELEÇÃO CUNHAS 250G", kind: "queijo", why: "A cheese board, as the same products at Auchan were verified (kind-gold). Same barcode as Continente 7679951." },
-  { batch: 10, store: "AUCHAN", id: "3552276", name: "CACHAÇO DE PORCO BÍSARO 70G", kind: "paio", why: "Cured pork neck." },
+  { batch: 10, store: "AUCHAN", id: "3552276", name: "CACHAÇO DE PORCO BÍSARO 70G", kind: null, why: "Cured pork neck, a different cured meat from paio; it sat on the paio page (was paio until the owner's yes of 26 November 2026, after the AI review of 16 November)." },
   { batch: 10, store: "AUCHAN", id: "3553560", name: "IOGURTE BIFIDUS ACTIVIA CEREAIS 8 X115G", kind: "bifidus", why: "Activia bifidus, as Continente has it." },
   { batch: 10, store: "AUCHAN", id: "3555801", name: "LOMBOS RIBERALVES 4M CURA UNIDOSE MSC 240G", kind: "bacalhau", why: "Cod loins." },
   { batch: 10, store: "AUCHAN", id: "3570803", name: "MOLHO ZERO PROZIS KETCHUP 355G", kind: "ketchup", why: "Ketchup." },
@@ -1718,7 +1718,7 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 10, store: "CONTINENTE", id: "4961652", name: "Nestum Mel com Cereais Integrais +3A", kind: "cereais", why: "Nestum flakes or a protein granola, as the same products at Auchan were verified (kind-gold)." },
   { batch: 10, store: "CONTINENTE", id: "4988569", name: "Farinha para Creme Custard Baunilha Condi", kind: null, why: "Custard powder, sago, an infant cereal or tapioca, not flour. Same barcode as Auchan 1127712." },
   { batch: 10, store: "CONTINENTE", id: "4997140", name: "Farinha Fuba de Milho Nacional", kind: "farinha", why: "Maize flour (fubá, flocão). Same barcode as Auchan 1035830." },
-  { batch: 10, store: "CONTINENTE", id: "5009656", name: "Boqueirão em Azeite Virgem Extra Lorea", kind: "anchova", why: "Anchovies in olive oil." },
+  { batch: 10, store: "CONTINENTE", id: "5009656", name: "Boqueirão em Azeite Virgem Extra Lorea", kind: null, why: "Chilled anchovies marinated in vinegar (boquerones), kept beside the smoked salmon, compared with tinned salted anchovy fillets; was anchova until the owner's yes of 26 November 2026, after the AI review of 17 November." },
   { batch: 10, store: "CONTINENTE", id: "5020771", name: "Argolas do Mar Ultracongeladas Pescanova", kind: "refeicao", why: "A ready meal. Same barcode as Auchan 2143557." },
   { batch: 10, store: "CONTINENTE", id: "5025117", name: "Queijinho Polpa Morango Maxi Infantil Danonino Danone", kind: "iogurte", why: "Children's petit-suisse, as the other store has them: compared with yoghurts, not cheese." },
   { batch: 10, store: "CONTINENTE", id: "5031522", name: "Fiambre de Peito de Peru Forno de Lenha Fatiado Campofrio", kind: "fiambre", why: "Sliced turkey or chicken breast (fiambre). Same barcode as Auchan 1136889." },
@@ -2046,6 +2046,14 @@ export const REVIEWED_PRODUCTS: ReviewedProduct[] = [
   { batch: 12, store: "CONTINENTE", id: "8716985", name: "Meal to Go Refeição Completa Manga e Maracujá Alpro", kind: null, why: "As 8716984." },
   { batch: 12, store: "PINGO_DOCE", id: "952249", name: "Mini Folhados com Queijo Emmental", kind: "bolacha", why: "A 90 g cheese snack on Pingo Doce's biscuit shelf, verified as a biscuit; renamed from \"Mini Palmiers com Emmental\" on 19 November 2026, the new name read it as puff pastry and the nightly check of verified kinds failed." },
   { batch: 12, store: "CONTINENTE", id: "2003379", name: "5 Bagas em Frasco com Moinho Margão", kind: "pimenta", why: "A grinder jar of five peppercorns on Continente's spices shelf, verified as pepper; renamed from \"Mistura de Pimenta e Especiarias 5 Bagas com Moinho em Frasco Margão\" on 26 November 2026, the new name no longer says pimenta, so it was read as no kind and the nightly check of verified kinds failed." },
+  // The AI review's problems of 16-18 November 2026, still on the site on 26
+  // November, approved by the owner on 26 November 2026.
+  { batch: 13, store: "PINGO_DOCE", id: "1001296", name: "Folhados com Framboesa", kind: "bolacha", why: "Sweet raspberry biscuits on Pingo Doce's biscuit shelf (Bolachas e Biscoitos), compared with sausage and meat puff pastries at 2.2 times their price." },
+  { batch: 13, store: "PINGO_DOCE", id: "956115", name: "Infusão Ananás H20", kind: null, why: "A Prozis flavoured drink powder from the sports-nutrition shelf, not a herbal infusion; it made the infusion row 2.6 times." },
+  { batch: 13, store: "CONTINENTE", id: "7069750", name: "Canjinha de Galinha Continente", kind: null, why: "Raw chicken pieces for making soup, on the butcher's chicken shelf (Talho/Frango), sold by the kilo; it was compared as a ready soup." },
+  { batch: 13, store: "PINGO_DOCE", id: "421154", name: "Canjinha de Frango do Campo Embalada", kind: null, why: "As Continente's 7069750: raw chicken pieces for soup (Talho/Aves/Frango), compared as a ready soup." },
+  { batch: 13, store: "CONTINENTE", id: "8953730", name: "Tapas Salpicão e Paio Continente", kind: null, why: "A tray of two different sliced sausages (salpicão and paio), compared with whole paio." },
+  { batch: 13, store: "AUCHAN", id: "3753640", name: "LENTILHAS AUCHAN COM LEGUMES EM LATA 430G", kind: null, why: "A ready meal of lentils with vegetables, weighed with its sauce (Auchan's ready-meals shelf), compared with plain cooked lentils." },
 ];
 
 /**

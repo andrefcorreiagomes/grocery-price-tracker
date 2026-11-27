@@ -578,7 +578,10 @@ export const FOOD_TYPES: readonly FoodType[] = [
   { id: "pate", label: "Paté", nameOnly: true, unit: "kg", heads: ["pate"] },
   // "Canja"/"Canjinha" is chicken broth: a soup, not chicken. 20 October 2026.
   // Not instant soup, a packet of powder (see sopa-instantanea). 21 October 2026.
-  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja", "canjinha"], exclude: /instantane/i },
+  // Not "canjinha": every one is raw chicken for making soup, sold by the kilo on
+  // the butcher's shelf (5 at the three chains, 26 November 2026; the AI review,
+  // 16 November). "Canja" is the soup itself.
+  { id: "sopa", label: "Sopa", unit: "kg", heads: ["sopa", "canja"], exclude: /instantane/i },
   // Soup powders and sachets: a packet of powder cannot be compared per kilo
   // with ready soup. No heads yet - their names ("Creme de Marisco Knorr")
   // read like ready soups - so only review assigns it (data/kind-reviews.ts).
@@ -806,8 +809,12 @@ export const FOOD_TYPES: readonly FoodType[] = [
   // And a "Chá" that names no tea (see `cha` above), except the beef cut "Chã de
   // Fora" (written "Chá de Fora de Novilho"), a box of several teas, and an
   // instant powdered drink ("Chá Fresh ... Solúvel").
+  // Not the sports drink powders sold as "Infusão ... H2O" (Prozis) or "Z-Fresh"
+  // (Zumub), on the sports-nutrition shelves: 11 at Continente and Pingo Doce,
+  // one of them 2.6 times the herbal teas (the AI review, 17 November 2026;
+  // the owner's yes, 26 November).
   { id: "infusao", label: "Infusão", unit: "kg", heads: ["infusao", "cha"],
-    exclude: /novilho|bovino|vitela|\bcaneca\b|\bcaixa\b|\bpack\b|selection|sabores|winter tea|soluvel|cem porcento fresh|fresh cem porcento/i },
+    exclude: /novilho|bovino|vitela|\bcaneca\b|\bcaixa\b|\bpack\b|selection|sabores|winter tea|soluvel|cem porcento fresh|fresh cem porcento|\bh2o\b|\bh20\b|z-fresh/i },
   { id: "espumante", label: "Espumante", hidden: "drinks", unit: "l", heads: ["espumante"] },
   { id: "licor", label: "Licor", hidden: "drinks", unit: "l", heads: ["licor"] },
   { id: "whisky", label: "Whisky", hidden: "drinks", unit: "l", heads: ["whisky"] },

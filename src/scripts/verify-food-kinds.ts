@@ -353,7 +353,9 @@ function verifyFoodTypes(): number {
   is("TIRAS DE FRUTA BOB SNAIL MAÇÃ E MORANGO 84 G", "AUCHAN", "alimentação/mercearia/cereais-e-barras/barras-cereais", null);
   is("MIX FRUTAS AGROAGUIAR BANANA AÇAÍFRT VERMELHOS 300G", "AUCHAN", "congelados/legumes-e-fruta/fruta", null);
   is("MIX PEQUENO ALMOÇO SHINE KIDS MAÇÃ BIO 300G", "AUCHAN", "biológicos-e-alternativas/biológicos/biológicos-mercearia/cereais-e-pequeno-almoço", null);
-  is("Canjinha de Frango do Campo Continente Seleção", "CONTINENTE", "Marcas/Marcas Continente/Continente Seleção", "sopa");
+  // Raw chicken for making soup, not soup (the owner's yes, 26 November 2026).
+  is("Canjinha de Frango do Campo Continente Seleção", "CONTINENTE", "Marcas/Marcas Continente/Continente Seleção", null);
+  is("Canja de Galinha Continente", "CONTINENTE", "Mercearia/Molhos, Temperos e Sal/Preparados de Sopas", "sopa");
   is("Mix para Panquecas Proteicas", "PINGO_DOCE", "Mercearia/Farinha Fermento e Acucar/Farinha Fermento e Pao Ralado", null);
   is("Mistura Torrada Moída de Cereais Peninsular", "PINGO_DOCE", "Café, Chá e Achocolatados/Bebidas de Cereais", null);
   is("Grelhada Mista de Porco Continente", "CONTINENTE", "Talho/Porco", "porco");
@@ -1270,6 +1272,11 @@ function verifyFoodTree(): number {
   check("a frozen shelf makes a product frozen, though its name does not say so",
     labelsOf("espinafre", "ESPINAFRES AUCHAN FOLHAS PORÇÕES 1KG", "congelados/legumes-e-fruta/legumes").includes("congelado") &&
     !labelsOf("espinafre", "Espinafres Embalados", "Frutas e Vegetais/Legumes").includes("congelado"));
+  // The owner's decision, 26 November 2026: thawed is its own label, on any shelf.
+  check("a thawed product is thawed, not frozen, even on a frozen shelf",
+    labelsOf("atum", "Lombos de Atum Descongelado", "Peixaria/Peixe Fresco/Atum").join() === "descongelado" &&
+    labelsOf("lula", "LULA DESCONGELADA KG", "congelados/peixe").join() === "descongelado" &&
+    labelsOf("atum", "BIFES DE ATUM AUCHAN ULTRACONGELADOS 400G").includes("congelado"));
   check("fruit in syrup and peeled tomatoes are tinned",
     labelsOf("pessego", "Pêssego em Calda").includes("lata") && labelsOf("tomate", "Tomate Pelado Inteiro").includes("lata") &&
     !labelsOf("tomate", "Tomate Chucha Continente").includes("lata"));

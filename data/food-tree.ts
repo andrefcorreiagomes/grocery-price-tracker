@@ -546,7 +546,12 @@ export const LABELS: Label[] = [
   // The shelf too: a frozen bag's name often does not say so ("Espinafres em
   // Folha Continente", Auchan's "ERVILHAS EXTRAFINAS 1KG"), and those were
   // the cheapest FRESH spinach, peas and green beans. 21 October 2026.
-  { id: "congelado", label: "Congelado", match: /congelad/, shelf: /congelad/ },
+  // Not "descongelado": thawed fish and seafood are sold chilled at the counter,
+  // and were in the frozen rows (18 products, assumption 5.8). They get their
+  // own label, compared only with other thawed products (the owner's decision,
+  // 26 November 2026), whatever shelf they sit on.
+  { id: "congelado", label: "Congelado", match: /(?<!des)congelad/, shelf: /congelad/, unless: /descongelad/ },
+  { id: "descongelado", label: "Descongelado", match: /descongelad/ },
   {
     id: "lata", label: "Em lata ou frasco",
     // In fish, "em azeite" and a drained weight "120 (84) G" mean a tin; in
